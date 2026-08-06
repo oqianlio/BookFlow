@@ -1,8 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import ePub, { Book as EpubBook, Rendition } from "epubjs";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
+import { addAnnotation, deleteAnnotation, listAnnotations } from "../services/api";
+import { applyAnnotations, installSelectionHandler, removeHighlight, type StoredAnnotation } from "./epubAnnotation";
 
 export default function EpubReader({ path, bookId }: { path: string; bookId: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -16,12 +18,21 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
     void renditionRef.current?.display(loc);
   });
 
+  const [annotations, setAnnotations] = useState<StoredAnnotation[]>([]);
+  const [renditionKey, setRenditionKey] = useState(0);
+  const appliedRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     if (!hostRef.current) return;
     const book = ePub(convertFileSrc(path));
     bookRef.current = book;
     const rendition = book.renderTo(hostRef.current, { flow: "paginated", width: "100%", height: "100%" });
     renditionRef.current = rendition;
+    appliedRef.current = new Set();
+    installSelectionHandler(rendition, async (text, cfiRange) => {
+      const id = await addAnnotation({ bookId, format: "epub", location: cfiRange, text, color: "yellow" });
+      setAnnotations((prev) => [...prev, { id, location: cfiRange, text, color: "yellow" }]);
+    });
     const w = window as any;
     w.__requestBookmark = () => {
       const loc = (rendition.currentLocation() as any)?.start?.cfi;
@@ -45,12 +56,49 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
         await rendition.display();
       }
     })();
+    setRenditionKey((k) => k + 1);
     return () => {
       rendition.destroy();
       book.destroy();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, loaded]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const list = (await listAnnotations(bookId)) as any[];
+      if (!cancelled) {
+        setAnnotations(list.map((a) => ({ id: a.id, location: a.location, text: a.text, color: a.color })));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [bookId]);
+
+  useEffect(() => {
+    const r = renditionRef.current;
+    if (!r) return;
+    const applied = appliedRef.current;
+    for (const loc of [...applied]) {
+      if (!annotations.some((a) => a.location === loc)) {
+        removeHighlight(r, loc);
+        applied.delete(loc);
+      }
+    }
+    const seen = new Set<string>();
+    const fresh = annotations.filter((a) => {
+      if (applied.has(a.location) || seen.has(a.location)) return false;
+      seen.add(a.location);
+      return true;
+    });
+    if (fresh.length > 0) {
+      applyAnnotations(r, fresh, (id) => {
+        void deleteAnnotation(id);
+        setAnnotations((prev) => prev.filter((a) => a.id !== id));
+      });
+      for (const a of fresh) applied.add(a.location);
+    }
+  }, [annotations, renditionKey]);
 
   return <div className="reader-host" ref={hostRef} />;
 }
