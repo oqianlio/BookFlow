@@ -17,8 +17,20 @@ fn book_crud_and_progress() {
     let p = get_progress(&conn, id).unwrap().unwrap();
     assert_eq!(p.0, "epubcfi(/6/4)");
     assert!((p.1 - 0.33).abs() < 1e-9);
+    add_annotation(&conn, &NewAnnotation {
+        book_id: id, format: "epub".into(), location: "cfi1".into(),
+        text: "高亮文本".into(), note: None, color: "yellow".into(),
+    }).unwrap();
+    add_bookmark(&conn, &NewBookmark {
+        book_id: id, location: "cfi2".into(), label: "第一章".into(),
+    }).unwrap();
+    assert_eq!(list_annotations(&conn, id).unwrap().len(), 1);
+    assert_eq!(list_bookmarks(&conn, id).unwrap().len(), 1);
     delete_book(&conn, id).unwrap();
     assert!(list_books(&conn).unwrap().is_empty());
+    assert!(get_progress(&conn, id).unwrap().is_none());
+    assert!(list_annotations(&conn, id).unwrap().is_empty());
+    assert!(list_bookmarks(&conn, id).unwrap().is_empty());
     drop(conn);
     fs::remove_dir_all(dir.path()).unwrap();
 }

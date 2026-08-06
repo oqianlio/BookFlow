@@ -69,6 +69,7 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
     let conn = Connection::open(path)?;
     conn.execute_batch(
         r#"
+        PRAGMA foreign_keys = ON;
         CREATE TABLE IF NOT EXISTS books (
             id INTEGER PRIMARY KEY,
             title TEXT NOT NULL,
