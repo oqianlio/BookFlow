@@ -50,6 +50,30 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
     return () => window.removeEventListener("request-bookmark", onRequestBookmark);
   }, [book.id]);
 
+  useEffect(() => {
+    const locateMatch = (text: string) => {
+      if (book.format === "epub" || book.format === "pdf") return;
+      const t = setTimeout(() => {
+        try {
+          (window as any).find(text, false, false, false, false, true, true);
+        } catch { /* window.find 不可用时忽略 */ }
+      }, 250);
+      return () => clearTimeout(t);
+    };
+    const w = window as any;
+    const pending = w.__searchJump as { text?: string } | undefined;
+    if (pending?.text) {
+      w.__searchJump = undefined;
+      locateMatch(pending.text);
+    }
+    const onSearchJump = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { text?: string } | undefined;
+      if (detail?.text) locateMatch(detail.text);
+    };
+    window.addEventListener("search-jump", onSearchJump);
+    return () => window.removeEventListener("search-jump", onSearchJump);
+  }, [book.format]);
+
   return (
     <div className="reader-page">
       <header className="reader-toolbar">

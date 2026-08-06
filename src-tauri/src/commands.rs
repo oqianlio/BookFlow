@@ -163,3 +163,15 @@ pub fn set_setting_cmd(key: String, value: String, state: State<'_, AppState>) -
 pub fn get_setting_cmd(key: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
     get_setting(&state.db.lock().unwrap(), &key).map_err(|e| e.to_string())
 }
+
+use crate::search::SearchHit;
+
+#[tauri::command]
+pub fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<SearchHit>, String> {
+    crate::search::search(&state.app_data_dir, &query, 100)
+}
+
+#[tauri::command]
+pub fn reindex(state: State<'_, AppState>) -> Result<(), String> {
+    crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())
+}

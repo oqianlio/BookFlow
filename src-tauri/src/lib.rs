@@ -2,6 +2,7 @@
 pub mod db;
 pub mod import;
 pub mod commands;
+pub mod search;
 
 use commands::*;
 use tauri::Manager;
@@ -35,6 +36,7 @@ pub fn run() {
             add_annotation_cmd, list_annotations_cmd, delete_annotation_cmd,
             add_bookmark_cmd, list_bookmarks_cmd, delete_bookmark_cmd,
             read_file_content, set_setting_cmd, get_setting_cmd,
+            search_books, reindex,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

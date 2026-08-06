@@ -129,3 +129,14 @@ button {
 .btn-primary { padding: 8px 18px; border: none; border-radius: 6px; background: #2f6fed; color: #fff; cursor: pointer; }
 .btn-primary:disabled { opacity: .5; }
 .btn-secondary { padding: 8px 18px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; margin: 16px 24px; }
+.library-actions { display: flex; align-items: center; gap: 12px; }
+.library-actions .btn-secondary { margin: 0; }
+.search-panel { max-width: 720px; margin: 0 auto 24px; padding: 16px 20px; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.search-panel h3 { margin: 0 0 8px; }
+.search-panel .panel-add { display: flex; flex-direction: row; gap: 8px; margin-top: 8px; }
+.search-panel .panel-add input { flex: 1; }
+.search-panel ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.search-panel li { padding: 10px; border-radius: 6px; background: #fafafa; margin-bottom: 8px; }
+.search-panel li:hover { background: #f0f4ff; }
+.hit-title { margin: 0 0 4px; font-weight: 600; cursor: pointer; color: #2f6fed; }
+.hit-text { margin: 0; color: #666; font-size: 13px; line-height: 1.6; }
