@@ -19,6 +19,13 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
     bookRef.current = book;
     const rendition = book.renderTo(hostRef.current, { flow: "paginated", width: "100%", height: "100%" });
     renditionRef.current = rendition;
+    const w = window as any;
+    w.__requestBookmark = () => {
+      const loc = (rendition.currentLocation() as any)?.start?.cfi;
+      if (!loc) return;
+      w.__bookmarkLocation = loc;
+      w.dispatchEvent(new CustomEvent("request-bookmark", { detail: loc }));
+    };
     rendition.on("relocated", (locationObj: any) => {
       const start = locationObj.start?.cfi;
       if (!start) return;
