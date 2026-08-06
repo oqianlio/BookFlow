@@ -131,6 +131,11 @@ pub fn build_index(app_data_dir: &Path, conn: &Connection) -> Result<(), String>
     Ok(())
 }
 
+/// 索引是否已构建（以 tantivy 写入的 meta.json 是否存在为准）
+pub fn index_exists(app_data_dir: &Path) -> bool {
+    app_data_dir.join("index").join("meta.json").is_file()
+}
+
 pub fn search(app_data_dir: &Path, query: &str, limit: usize) -> Result<Vec<SearchHit>, String> {
     let index_dir = app_data_dir.join("index");
     let (_schema, id_f, title_f, text_f) = schema();

@@ -174,14 +174,11 @@ use crate::search::SearchHit;
 
 #[tauri::command]
 pub fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<SearchHit>, String> {
-    match crate::search::search(&state.app_data_dir, &query, 100) {
-        Ok(hits) => Ok(hits),
-        Err(_) => {
-            // 索引尚未构建（首次搜索）时自动重建
-            crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())?;
-            crate::search::search(&state.app_data_dir, &query, 100)
-        }
+    // 懒构建：仅当索引缺失（如首次搜索）时自动重建；查询语法等真实错误原样返回
+    if !crate::search::index_exists(&state.app_data_dir) {
+        crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())?;
     }
+    crate::search::search(&state.app_data_dir, &query, 100)
 }
 
 #[tauri::command]
