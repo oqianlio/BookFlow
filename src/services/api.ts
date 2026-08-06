@@ -37,6 +37,10 @@ export async function removeBook(id: number): Promise<void> {
   await invoke("remove_book", { id });
 }
 
+export async function readFileContent(path: string): Promise<string> {
+  return invoke<string>("read_file_content", { path });
+}
+
 export async function saveProgress(bookId: number, location: string, percent: number): Promise<void> {
   await invoke("save_progress_cmd", { bookId, location, percent });
 }

@@ -34,7 +34,7 @@ pub fn run() {
             save_progress_cmd, get_progress_cmd,
             add_annotation_cmd, list_annotations_cmd, delete_annotation_cmd,
             add_bookmark_cmd, list_bookmarks_cmd, delete_bookmark_cmd,
-            set_setting_cmd, get_setting_cmd,
+            read_file_content, set_setting_cmd, get_setting_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

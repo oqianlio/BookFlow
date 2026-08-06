@@ -117,6 +117,15 @@ pub fn delete_bookmark_cmd(id: i64, state: State<'_, AppState>) -> Result<(), St
 }
 
 #[tauri::command]
+pub fn read_file_content(path: String) -> Result<String, String> {
+    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {e}"))?;
+    let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| {
+        String::from_utf8_lossy(&bytes).into_owned()
+    });
+    Ok(text)
+}
+
+#[tauri::command]
 pub fn set_setting_cmd(key: String, value: String, state: State<'_, AppState>) -> Result<(), String> {
     set_setting(&state.db.lock().unwrap(), &key, &value).map_err(|e| e.to_string())
 }
