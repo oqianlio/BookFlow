@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, Result};
 use std::path::Path;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Book {
     pub id: i64,
     pub title: String,
@@ -20,7 +20,7 @@ pub struct NewBook {
     pub cover_path: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Annotation {
     pub id: i64,
     pub book_id: i64,
@@ -42,7 +42,7 @@ pub struct NewAnnotation {
     pub color: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Bookmark {
     pub id: i64,
     pub book_id: i64,
