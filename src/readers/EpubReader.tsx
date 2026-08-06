@@ -6,10 +6,12 @@ import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { addAnnotation, deleteAnnotation, listAnnotations } from "../services/api";
 import { applyAnnotations, installSelectionHandler, removeHighlight, type StoredAnnotation } from "./epubAnnotation";
 
-export default function EpubReader({ path, bookId }: { path: string; bookId: number }) {
+export default function EpubReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<EpubBook | null>(null);
   const renditionRef = useRef<Rendition | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
   const saveDebouncedRef = useRef(saveDebounced);
   saveDebouncedRef.current = saveDebounced;
@@ -18,6 +20,7 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
     void renditionRef.current?.display(loc);
   });
 
+  const [error, setError] = useState<string | null>(null);
   const [annotations, setAnnotations] = useState<StoredAnnotation[]>([]);
   const [renditionKey, setRenditionKey] = useState(0);
   const appliedRef = useRef<Set<string>>(new Set());
@@ -49,11 +52,18 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
       saveDebouncedRef.current(start, pct);
     });
     void (async () => {
-      await rendition.book.locations.generate(1600).catch(() => {});
-      if (loaded && location) {
-        await rendition.display(location);
-      } else {
-        await rendition.display();
+      try {
+        await book.ready;
+        await rendition.book.locations.generate(1600).catch(() => {});
+        if (loaded && location) {
+          await rendition.display(location);
+        } else {
+          await rendition.display();
+        }
+      } catch (e) {
+        const msg = String(e);
+        setError(msg);
+        onErrorRef.current?.(msg);
       }
     })();
     setRenditionKey((k) => k + 1);
@@ -73,6 +83,16 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
       }
     })();
     return () => { cancelled = true; };
+  }, [bookId]);
+
+  useEffect(() => {
+    const onAnnotationsChanged = () => {
+      void listAnnotations(bookId).then((list) => {
+        setAnnotations((list as any[]).map((a) => ({ id: a.id, location: a.location, text: a.text, color: a.color })));
+      });
+    };
+    window.addEventListener("annotation-changed", onAnnotationsChanged);
+    return () => window.removeEventListener("annotation-changed", onAnnotationsChanged);
   }, [bookId]);
 
   useEffect(() => {
@@ -100,5 +120,10 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
     }
   }, [annotations, renditionKey]);
 
-  return <div className="reader-host" ref={hostRef} />;
+  return (
+    <div className="epub-reader">
+      {error && <p className="error">{error}</p>}
+      <div className="reader-host" ref={hostRef} />
+    </div>
+  );
 }

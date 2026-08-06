@@ -6,12 +6,23 @@ import TxtReader from "../readers/TxtReader";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
-import { addBookmark, type Book } from "../services/api";
+import { addBookmark, removeBook, type Book } from "../services/api";
 import "./ReaderPage.css";
 
 export default function ReaderPage({ book, onBack }: { book: Book; onBack: () => void }) {
   const [panel, setPanel] = useState<"annotations" | "bookmarks" | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const jumpKey = useRef(0);
+
+  const handleRemoveBroken = async () => {
+    try {
+      await removeBook(book.id);
+    } catch (e) {
+      setOpenError(String(e));
+      return;
+    }
+    onBack();
+  };
 
   const jump = useCallback((loc: string) => {
     const w = window as any;
@@ -86,10 +97,17 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
       </header>
       <div className="reader-body">
         <main className="reader-main">
-          {book.format === "epub" && <EpubReader path={book.path} bookId={book.id} />}
-          {book.format === "pdf" && <PdfReader path={book.path} bookId={book.id} />}
-          {book.format === "md" && <MdReader path={book.path} bookId={book.id} />}
-          {book.format === "txt" && <TxtReader path={book.path} bookId={book.id} />}
+          {openError && (
+            <div className="error-box">
+              <p>文件缺失或已损坏</p>
+              <p className="error-detail">{openError}</p>
+              <button className="btn-primary" onClick={handleRemoveBroken}>移除该书</button>
+            </div>
+          )}
+          {!openError && book.format === "epub" && <EpubReader path={book.path} bookId={book.id} onError={setOpenError} />}
+          {!openError && book.format === "pdf" && <PdfReader path={book.path} bookId={book.id} onError={setOpenError} />}
+          {!openError && book.format === "md" && <MdReader path={book.path} bookId={book.id} onError={setOpenError} />}
+          {!openError && book.format === "txt" && <TxtReader path={book.path} bookId={book.id} onError={setOpenError} />}
         </main>
         {panel === "annotations" && (
           <AnnotationPanel bookId={book.id} onJump={jump} onChanged={() => jumpKey.current += 1} />

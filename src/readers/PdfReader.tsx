@@ -6,12 +6,20 @@ import { useJumpTarget, useSaveOnLocationChange } from "./common";
 
 GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
-export default function PdfReader({ path, bookId }: { path: string; bookId: number }) {
+export default function PdfReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1.0);
   const [error, setError] = useState<string | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  const reportError = (e: unknown) => {
+    const msg = String(e);
+    setError(msg);
+    onErrorRef.current?.(msg);
+  };
   const { location, percent, loaded, save } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
   const pageRef = useRef(page);
@@ -54,7 +62,7 @@ export default function PdfReader({ path, bookId }: { path: string; bookId: numb
         setNumPages(pdf.numPages);
         await renderPage(pageRef.current, zoom);
       } catch (e) {
-        setError(String(e));
+        reportError(e);
       }
     })();
     return () => { cancelled = true; };
@@ -62,7 +70,7 @@ export default function PdfReader({ path, bookId }: { path: string; bookId: numb
   }, [path, loaded]);
 
   useEffect(() => {
-    void renderPage(page, zoom).catch((e) => setError(String(e)));
+    void renderPage(page, zoom).catch(reportError);
     save(String(page), page / Math.max(1, numPages));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, zoom, numPages]);

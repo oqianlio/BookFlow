@@ -4,8 +4,9 @@ import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readFileContent } from "../services/api";
 
-export default function MdReader({ path, bookId }: { path: string; bookId: number }) {
+export default function MdReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const [html, setHtml] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,8 +23,14 @@ export default function MdReader({ path, bookId }: { path: string; bookId: numbe
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const text = await readFileContent(path);
-      if (!cancelled) setHtml(marked.parse(text) as string);
+      try {
+        const text = await readFileContent(path);
+        if (!cancelled) setHtml(marked.parse(text) as string);
+      } catch (e) {
+        if (cancelled) return;
+        setError(String(e));
+        onError?.(String(e));
+      }
     })();
     return () => { cancelled = true; };
   }, [path]);
@@ -53,6 +60,7 @@ export default function MdReader({ path, bookId }: { path: string; bookId: numbe
 
   return (
     <div className="md-reader" ref={containerRef} onScroll={onScroll}>
+      {error && <p className="error">{error}</p>}
       <div className="md-content" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );

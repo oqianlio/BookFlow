@@ -25,6 +25,7 @@ export default function AnnotationPanel({ bookId, format, onJump, onChanged }: {
     setText("");
     await refresh();
     onChanged();
+    window.dispatchEvent(new CustomEvent("annotation-changed"));
   };
 
   function locationHref(): string {
@@ -36,6 +37,7 @@ export default function AnnotationPanel({ bookId, format, onJump, onChanged }: {
     await deleteAnnotation(id);
     await refresh();
     onChanged();
+    window.dispatchEvent(new CustomEvent("annotation-changed"));
   };
 
   return (

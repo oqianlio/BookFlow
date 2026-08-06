@@ -27,12 +27,14 @@ export default function BookmarkPanel({ bookId, onJump, onChanged }: {
     await addBookmark({ bookId, location: loc, label: `书签 ${items.length + 1}` });
     await refresh();
     onChanged();
+    window.dispatchEvent(new CustomEvent("annotation-changed"));
   };
 
   const handleDelete = async (id: number) => {
     await deleteBookmark(id);
     await refresh();
     onChanged();
+    window.dispatchEvent(new CustomEvent("annotation-changed"));
   };
 
   return (

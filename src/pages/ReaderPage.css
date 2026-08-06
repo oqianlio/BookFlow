@@ -27,3 +27,6 @@
 .annotation-pink { border-left: 4px solid #ea7cbb; }
 .tts-bar { display: flex; align-items: center; gap: 10px; }
 .tts-bar input[type=range] { width: 120px; }
+.error-box { margin: 40px auto; padding: 24px; max-width: 480px; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-bg); }
+.error-box p { margin: 0 0 12px; }
+.error-detail { color: #999; font-size: 13px; word-break: break-all; }

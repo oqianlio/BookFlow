@@ -5,17 +5,24 @@ import { readFileContent } from "../services/api";
 
 const LINES_PER_PAGE = 40;
 
-export default function TxtReader({ path, bookId }: { path: string; bookId: number }) {
+export default function TxtReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const [lines, setLines] = useState<string[]>([]);
   const [page, setPage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const { location, percent, loaded, save } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const text = await readFileContent(path);
-      if (!cancelled) setLines(text.split(/\r?\n/));
+      try {
+        const text = await readFileContent(path);
+        if (!cancelled) setLines(text.split(/\r?\n/));
+      } catch (e) {
+        if (cancelled) return;
+        setError(String(e));
+        onError?.(String(e));
+      }
     })();
     return () => { cancelled = true; };
   }, [path]);
@@ -45,6 +52,7 @@ export default function TxtReader({ path, bookId }: { path: string; bookId: numb
 
   return (
     <div className="txt-reader">
+      {error && <p className="error">{error}</p>}
       <div className="txt-page" key={page}>
         {lines.slice(page * LINES_PER_PAGE, (page + 1) * LINES_PER_PAGE).map((l, i) => (
           <p key={i}>{l || "\u00A0"}</p>
