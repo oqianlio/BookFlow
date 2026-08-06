@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import { useReaderProgress } from "./useReaderProgress";
-import { useSaveOnLocationChange } from "./common";
+import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readFileContent } from "../services/api";
 
 export default function MdReader({ path, bookId }: { path: string; bookId: number }) {
@@ -9,6 +9,15 @@ export default function MdReader({ path, bookId }: { path: string; bookId: numbe
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useJumpTarget((loc) => {
+    const el = containerRef.current;
+    if (!el) return;
+    const pct = parseFloat(loc);
+    if (Number.isFinite(pct)) {
+      el.scrollTop = pct * (el.scrollHeight - el.clientHeight);
+    }
+  });
 
   useEffect(() => {
     let cancelled = false;

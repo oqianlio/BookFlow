@@ -5,7 +5,7 @@ import MdReader from "../readers/MdReader";
 import TxtReader from "../readers/TxtReader";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
-import type { Book } from "../services/api";
+import { addBookmark, type Book } from "../services/api";
 import "./ReaderPage.css";
 
 export default function ReaderPage({ book, onBack }: { book: Book; onBack: () => void }) {
@@ -16,6 +16,7 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
     const w = window as any;
     w.__jumpTo = loc;
     jumpKey.current += 1;
+    w.dispatchEvent(new CustomEvent("reader-jump", { detail: loc }));
   }, []);
 
   useEffect(() => {
@@ -35,6 +36,19 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    const onRequestBookmark = (e: Event) => {
+      const w = window as any;
+      const detail = (e as CustomEvent).detail as string | undefined;
+      const loc = detail || w.__bookmarkLocation || "";
+      if (!loc) return;
+      void addBookmark({ bookId: book.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
+      w.dispatchEvent(new CustomEvent("bookmark-changed"));
+    };
+    window.addEventListener("request-bookmark", onRequestBookmark);
+    return () => window.removeEventListener("request-bookmark", onRequestBookmark);
+  }, [book.id]);
 
   return (
     <div className="reader-page">

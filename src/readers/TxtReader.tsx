@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useReaderProgress } from "./useReaderProgress";
-import { useSaveOnLocationChange } from "./common";
+import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readFileContent } from "../services/api";
 
 const LINES_PER_PAGE = 40;
@@ -34,6 +34,14 @@ export default function TxtReader({ path, bookId }: { path: string; bookId: numb
     setPage(clamped);
     save(String(clamped), clamped / pageCount);
   };
+
+  const goRef = useRef(go);
+  goRef.current = go;
+
+  useJumpTarget((loc) => {
+    const p = parseInt(loc, 10);
+    if (Number.isFinite(p)) goRef.current(p);
+  });
 
   return (
     <div className="txt-reader">

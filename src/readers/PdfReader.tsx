@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useReaderProgress } from "./useReaderProgress";
-import { useSaveOnLocationChange } from "./common";
+import { useJumpTarget, useSaveOnLocationChange } from "./common";
 
 GlobalWorkerOptions.workerSrc = "/pdf.worker.mjs";
 
@@ -16,6 +16,14 @@ export default function PdfReader({ path, bookId }: { path: string; bookId: numb
   useSaveOnLocationChange(bookId, location, percent, save);
   const pageRef = useRef(page);
   pageRef.current = page;
+  const numPagesRef = useRef(numPages);
+  numPagesRef.current = numPages;
+
+  useJumpTarget((loc) => {
+    const p = parseInt(loc, 10);
+    if (!Number.isFinite(p)) return;
+    setPage(Math.min(Math.max(1, p), numPagesRef.current || p));
+  });
 
   useEffect(() => {
     if (loaded && location != null) {

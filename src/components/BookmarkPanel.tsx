@@ -14,6 +14,12 @@ export default function BookmarkPanel({ bookId, onJump, onChanged }: {
   }, [bookId]);
   useEffect(() => { void refresh(); }, [refresh]);
 
+  useEffect(() => {
+    const onChanged = () => { void refresh(); };
+    window.addEventListener("bookmark-changed", onChanged);
+    return () => window.removeEventListener("bookmark-changed", onChanged);
+  }, [refresh]);
+
   const handleAdd = async () => {
     const w = window as any;
     const loc = w.__readerLocation ?? "";

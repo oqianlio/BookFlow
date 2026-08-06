@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import ePub, { Book as EpubBook, Rendition } from "epubjs";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useReaderProgress } from "./useReaderProgress";
-import { useSaveOnLocationChange } from "./common";
+import { useJumpTarget, useSaveOnLocationChange } from "./common";
 
 export default function EpubReader({ path, bookId }: { path: string; bookId: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -12,6 +12,9 @@ export default function EpubReader({ path, bookId }: { path: string; bookId: num
   const saveDebouncedRef = useRef(saveDebounced);
   saveDebouncedRef.current = saveDebounced;
   useSaveOnLocationChange(bookId, location, percent, save);
+  useJumpTarget((loc) => {
+    void renditionRef.current?.display(loc);
+  });
 
   useEffect(() => {
     if (!hostRef.current) return;
