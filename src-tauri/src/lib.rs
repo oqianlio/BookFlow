@@ -1,4 +1,6 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+pub mod db;
+
 use tauri_plugin_dialog;
 use tauri_plugin_fs;
 use tauri_plugin_opener;
