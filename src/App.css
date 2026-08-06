@@ -114,3 +114,18 @@ button {
     background-color: #0f0f0f69;
   }
 }
+
+.library-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; }
+.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; padding: 0 24px 40px; }
+.book-card { position: relative; cursor: pointer; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.book-cover { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; }
+.book-cover-placeholder { display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #5b8def, #7c5bde); color: #fff; font-size: 28px; font-weight: 700; }
+.book-meta { padding: 8px 10px; }
+.book-meta h3 { margin: 0 0 4px; font-size: 14px; }
+.book-meta span { color: #888; font-size: 12px; }
+.book-remove { position: absolute; top: 4px; right: 4px; border: none; background: rgba(0,0,0,.5); color: #fff; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; }
+.empty { text-align: center; color: #999; margin-top: 80px; }
+.error { color: #d33; padding: 0 24px; }
+.btn-primary { padding: 8px 18px; border: none; border-radius: 6px; background: #2f6fed; color: #fff; cursor: pointer; }
+.btn-primary:disabled { opacity: .5; }
+.btn-secondary { padding: 8px 18px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; margin: 16px 24px; }
