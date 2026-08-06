@@ -1,7 +1,6 @@
 use std::fs;
 use tempfile::tempdir;
 use yd_lib::import::import_file;
-use yd_lib::db::init_db;
 
 #[test]
 fn import_copy_and_format_detect() {

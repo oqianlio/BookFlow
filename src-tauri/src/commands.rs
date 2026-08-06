@@ -21,7 +21,6 @@ impl AppState {
 pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Vec<Book>, String> {
     let books_root = state.books_dir();
     fs::create_dir_all(&books_root).map_err(|e| e.to_string())?;
-    let conn = state.db.lock().unwrap();
     let mut imported = Vec::new();
     for f in &files {
         let src = PathBuf::from(f);
@@ -38,14 +37,14 @@ pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Ve
             path: imported_file.dest.to_string_lossy().into_owned(),
             cover_path: None,
         };
-        if let Ok(id) = upsert_book(&conn, &new_book) {
-            let book = list_books(&conn)
-                .unwrap_or_default()
-                .into_iter()
-                .find(|b| b.id == id);
-            if let Some(b) = book {
-                imported.push(b);
-            }
+        let id = upsert_book(&state.db.lock().unwrap(), &new_book).map_err(|e| {
+            eprintln!("写入数据库失败 {}: {}", src.display(), e);
+            format!("导入失败 {}: {}", src.display(), e)
+        })?;
+        match get_book(&state.db.lock().unwrap(), id) {
+            Ok(Some(b)) => imported.push(b),
+            Ok(None) => eprintln!("导入后未找到记录 {}: {}", src.display(), id),
+            Err(e) => eprintln!("读取导入记录失败 {}: {}", src.display(), e),
         }
     }
     Ok(imported)

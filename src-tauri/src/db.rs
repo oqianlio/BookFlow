@@ -140,6 +140,23 @@ pub fn list_books(conn: &Connection) -> Result<Vec<Book>> {
     rows.collect()
 }
 
+pub fn get_book(conn: &Connection, id: i64) -> Result<Option<Book>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, format, path, cover_path, added_at, last_opened_at
+         FROM books WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query([id])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(Book {
+            id: r.get(0)?, title: r.get(1)?, format: r.get(2)?,
+            path: r.get(3)?, cover_path: r.get(4)?, added_at: r.get(5)?,
+            last_opened_at: r.get(6)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
 pub fn delete_book(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM books WHERE id = ?1", [id])?;
     Ok(())
