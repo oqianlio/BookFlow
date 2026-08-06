@@ -140,3 +140,15 @@ button {
 .search-panel li:hover { background: #f0f4ff; }
 .hit-title { margin: 0 0 4px; font-weight: 600; cursor: pointer; color: #2f6fed; }
 .hit-text { margin: 0; color: #666; font-size: 13px; line-height: 1.6; }
+
+:root {
+  --bg: #ffffff; --fg: #1a1a1a; --panel-bg: #fafafa; --border: #e5e5e5;
+}
+[data-theme="dark"] {
+  --bg: #1e1e1e; --fg: #e8e8e8; --panel-bg: #262626; --border: #333;
+}
+body { background: var(--bg); color: var(--fg); }
+.reader-toolbar, .panel { background: var(--panel-bg); border-color: var(--border); }
+.md-reader, .txt-page, .library, .settings { background: var(--bg); color: var(--fg); }
+.btn-secondary { background: var(--panel-bg); color: var(--fg); border-color: var(--border); }
+.book-meta span { color: #888; }
