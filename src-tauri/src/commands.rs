@@ -119,10 +119,39 @@ pub fn delete_bookmark_cmd(id: i64, state: State<'_, AppState>) -> Result<(), St
 #[tauri::command]
 pub fn read_file_content(path: String) -> Result<String, String> {
     let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {e}"))?;
-    let text = String::from_utf8(bytes.clone()).unwrap_or_else(|_| {
-        String::from_utf8_lossy(&bytes).into_owned()
-    });
+    let text = match std::str::from_utf8(&bytes) {
+        Ok(s) => s.to_owned(),
+        Err(_) => encoding_rs::GBK.decode(&bytes).0.into_owned(),
+    };
     Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_file_content;
+
+    #[test]
+    fn read_utf8_and_gbk_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let utf8_path = dir.path().join("utf8.txt");
+        std::fs::write(&utf8_path, "你好，世界").unwrap();
+        assert_eq!(
+            read_file_content(utf8_path.to_string_lossy().into_owned()).unwrap(),
+            "你好，世界"
+        );
+
+        let gbk_path = dir.path().join("gbk.txt");
+        let (gbk_bytes, _, _) = encoding_rs::GBK.encode("你好，世界");
+        std::fs::write(&gbk_path, gbk_bytes.as_ref()).unwrap();
+        assert_eq!(
+            read_file_content(gbk_path.to_string_lossy().into_owned()).unwrap(),
+            "你好，世界"
+        );
+
+        let missing = dir.path().join("missing.txt");
+        assert!(read_file_content(missing.to_string_lossy().into_owned()).is_err());
+    }
 }
 
 #[tauri::command]
