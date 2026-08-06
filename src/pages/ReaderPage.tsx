@@ -5,6 +5,7 @@ import MdReader from "../readers/MdReader";
 import TxtReader from "../readers/TxtReader";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
+import TtsBar from "../components/TtsBar";
 import { addBookmark, type Book } from "../services/api";
 import "./ReaderPage.css";
 
@@ -81,6 +82,7 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
         <h2>{book.title}</h2>
         <button className="btn-secondary" onClick={() => setPanel((p) => (p === "annotations" ? null : "annotations"))}>标注</button>
         <button className="btn-secondary" onClick={() => setPanel((p) => (p === "bookmarks" ? null : "bookmarks"))}>书签</button>
+        <TtsBar />
       </header>
       <div className="reader-body">
         <main className="reader-main">

@@ -25,3 +25,5 @@
 .annotation-green { border-left: 4px solid #34a853; }
 .annotation-blue { border-left: 4px solid #4285f4; }
 .annotation-pink { border-left: 4px solid #ea7cbb; }
+.tts-bar { display: flex; align-items: center; gap: 10px; }
+.tts-bar input[type=range] { width: 120px; }

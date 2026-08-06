@@ -1,5 +1,6 @@
 use crate::db::*;
 use crate::import::import_file;
+use crate::tts::TtsEngine;
 use rusqlite::Connection;
 use std::fs;
 use std::path::PathBuf;
@@ -9,6 +10,7 @@ use tauri::State;
 pub struct AppState {
     pub db: Mutex<Connection>,
     pub app_data_dir: PathBuf,
+    pub tts: TtsEngine,
 }
 
 impl AppState {
@@ -184,4 +186,15 @@ pub fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<Sea
 #[tauri::command]
 pub fn reindex(state: State<'_, AppState>) -> Result<(), String> {
     crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())
+}
+
+#[tauri::command]
+pub fn tts_speak(text: String, rate: f64, state: State<'_, AppState>) -> Result<(), String> {
+    state.tts.set_rate(rate);
+    state.tts.speak(&text)
+}
+
+#[tauri::command]
+pub fn tts_stop(state: State<'_, AppState>) -> Result<(), String> {
+    state.tts.stop()
 }

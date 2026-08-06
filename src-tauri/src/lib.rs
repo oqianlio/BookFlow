@@ -3,6 +3,7 @@ pub mod db;
 pub mod import;
 pub mod commands;
 pub mod search;
+pub mod tts;
 
 use commands::*;
 use tauri::Manager;
@@ -26,7 +27,7 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).expect("创建应用数据目录失败");
             std::fs::create_dir_all(app_data_dir.join("books")).ok();
             let conn = import::open_app_db(&app_data_dir)?;
-            app.manage(AppState { db: std::sync::Mutex::new(conn), app_data_dir });
+            app.manage(AppState { db: std::sync::Mutex::new(conn), app_data_dir, tts: crate::tts::TtsEngine::new() });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -37,6 +38,7 @@ pub fn run() {
             add_bookmark_cmd, list_bookmarks_cmd, delete_bookmark_cmd,
             read_file_content, set_setting_cmd, get_setting_cmd,
             search_books, reindex,
+            tts_speak, tts_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
