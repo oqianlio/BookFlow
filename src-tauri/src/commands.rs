@@ -47,6 +47,12 @@ pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Ve
             Err(e) => eprintln!("读取导入记录失败 {}: {}", src.display(), e),
         }
     }
+    // 导入后重建全文索引，保证新书可立即被搜索到
+    if !imported.is_empty() {
+        if let Err(e) = crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap()) {
+            eprintln!("重建搜索索引失败: {e}");
+        }
+    }
     Ok(imported)
 }
 
@@ -168,7 +174,14 @@ use crate::search::SearchHit;
 
 #[tauri::command]
 pub fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<SearchHit>, String> {
-    crate::search::search(&state.app_data_dir, &query, 100)
+    match crate::search::search(&state.app_data_dir, &query, 100) {
+        Ok(hits) => Ok(hits),
+        Err(_) => {
+            // 索引尚未构建（首次搜索）时自动重建
+            crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())?;
+            crate::search::search(&state.app_data_dir, &query, 100)
+        }
+    }
 }
 
 #[tauri::command]
