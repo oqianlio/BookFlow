@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getFontSize, setFontSize, Theme, initTheme, setTheme, getTheme } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
+import BookSourceManager from "../components/BookSourceManager";
 
 export default function SettingsPage({ onBack }: { onBack: () => void }) {
   const [theme, setThemeState] = useState<Theme>("light");
@@ -73,6 +74,7 @@ export default function SettingsPage({ onBack }: { onBack: () => void }) {
             <span className="range-value">{rate.toFixed(1)}x</span>
           </div>
         </div>
+        <BookSourceManager />
       </div>
     </div>
   );

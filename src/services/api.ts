@@ -76,6 +76,27 @@ export async function deleteBookmark(id: number) {
   await invoke("delete_bookmark_cmd", { id });
 }
 
+export interface BookSource {
+  id: number; name: string; url: string; json: string;
+  enabled: boolean; last_used_at: number | null;
+}
+
+export async function listBookSources(): Promise<BookSource[]> {
+  return invoke<BookSource[]>("list_book_sources");
+}
+export async function addBookSource(name: string, url: string, json: string): Promise<number> {
+  return invoke<number>("add_book_source", { name, url, json });
+}
+export async function updateBookSource(id: number, name: string, url: string, json: string): Promise<void> {
+  await invoke("update_book_source", { id, name, url, json });
+}
+export async function deleteBookSource(id: number): Promise<void> {
+  await invoke("delete_book_source", { id });
+}
+export async function setBookSourceEnabled(id: number, enabled: boolean): Promise<void> {
+  await invoke("set_book_source_enabled", { id, enabled });
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   return invoke<string | null>("get_setting_cmd", { key });
 }
