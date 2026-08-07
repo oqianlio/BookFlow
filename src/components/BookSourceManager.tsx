@@ -16,6 +16,10 @@ export default function BookSourceManager() {
     setError(null);
     try {
       const obj = JSON.parse(raw);
+      if (typeof obj !== "object" || obj === null) {
+        setError("书源 JSON 格式不正确");
+        return;
+      }
       if (!obj.bookSourceName || !obj.bookSourceUrl) {
         setError("书源 JSON 缺少 bookSourceName 或 bookSourceUrl");
         return;
@@ -29,8 +33,23 @@ export default function BookSourceManager() {
   };
 
   const handleDelete = async (id: number) => {
-    await deleteBookSource(id);
-    await refresh();
+    setError(null);
+    try {
+      await deleteBookSource(id);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleToggleEnable = async (id: number, enabled: boolean) => {
+    setError(null);
+    try {
+      await setBookSourceEnabled(id, enabled);
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
   return (
@@ -52,7 +71,7 @@ export default function BookSourceManager() {
                   type="checkbox"
                   aria-label={`启用 ${s.name}`}
                   checked={s.enabled}
-                  onChange={(e) => { void setBookSourceEnabled(s.id, e.target.checked); void refresh(); }}
+                  onChange={(e) => handleToggleEnable(s.id, e.target.checked)}
                 />
                 <button className="btn btn-ghost" onClick={() => handleDelete(s.id)}>删除</button>
               </div>
