@@ -1,5 +1,3 @@
-import { JSDOM } from "jsdom";
-
 export type EngineResult = string;
 
 export type ParsedRule = {
@@ -26,7 +24,7 @@ export interface BookSource {
 const REMOVE_SELECTORS = ["script", "style", "ins", "iframe", "noscript", "button", "footer", ".ad", ".ads", ".advert", "#ad"];
 
 export function purifyContent(html: string, replaceRules?: string[]): string {
-  const doc = new JSDOM(`<div id="__purify__">${html}</div>`).window.document;
+  const doc = new DOMParser().parseFromString(`<div id="__purify__">${html}</div>`, "text/html");
   const root = doc.getElementById("__purify__")!;
   for (const sel of REMOVE_SELECTORS) {
     root.querySelectorAll(sel).forEach((n) => n.remove());
@@ -57,8 +55,7 @@ export function parseBookSourceJson(raw: string): BookSource {
 }
 
 export function parseHtml(html: string): Document {
-  const dom = new JSDOM(html);
-  return dom.window.document;
+  return new DOMParser().parseFromString(html, "text/html");
 }
 
 export function parseRule(rule: string): ParsedRule {
