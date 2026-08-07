@@ -4,6 +4,7 @@ import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
 import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
 import SourceBookPage from "./pages/SourceBookPage";
+import SourceReaderPage from "./pages/SourceReaderPage";
 import type { Book } from "./services/api";
 import "./App.css";
 
@@ -12,7 +13,8 @@ type View =
   | { name: "reader"; book: Book }
   | { name: "settings" }
   | { name: "discover" }
-  | { name: "sourceBook"; hit: SearchHit };
+  | { name: "sourceBook"; hit: SearchHit }
+  | { name: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string };
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "library" });
@@ -39,7 +41,23 @@ export default function App() {
         bookUrl={view.hit.bookUrl}
         initialTitle={view.hit.title}
         onBack={() => setView({ name: "discover" })}
-        onRead={() => {}}
+        onRead={(index, url, name) => setView({
+          name: "sourceReader", sourceId: view.hit.sourceId, bookUrl: view.hit.bookUrl,
+          bookTitle: view.hit.title, chapterIndex: index, chapterUrl: url, chapterName: name,
+        })}
+      />
+    );
+  }
+  if (view.name === "sourceReader") {
+    return (
+      <SourceReaderPage
+        sourceId={view.sourceId}
+        bookUrl={view.bookUrl}
+        bookTitle={view.bookTitle}
+        initialChapterIndex={view.chapterIndex}
+        initialChapterUrl={view.chapterUrl}
+        initialChapterName={view.chapterName}
+        onBack={() => setView({ name: "sourceBook", hit: { title: view.bookTitle, author: "", coverUrl: "", bookUrl: view.bookUrl, sourceId: view.sourceId, sourceName: "" } })}
       />
     );
   }
