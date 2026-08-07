@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import SourceBookPage from "./SourceBookPage";
 import * as api from "../services/api";
 
@@ -31,5 +31,15 @@ describe("SourceBookPage", () => {
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText("第一章")).toBeInTheDocument();
     expect(screen.getByText("第二章")).toBeInTheDocument();
+  });
+
+  it("开始阅读 resumes by passing chapterIndex -1", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    const onRead = vi.fn();
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={onRead} />);
+    fireEvent.click(await screen.findByRole("button", { name: "开始阅读" }));
+    expect(onRead).toHaveBeenCalledWith(-1, "", "");
   });
 });

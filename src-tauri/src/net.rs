@@ -18,22 +18,26 @@ pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, 
 }
 
 #[tauri::command]
-pub fn http_get(
+pub async fn http_get(
     url: String,
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
 ) -> Result<String, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)))
-        .build()
-        .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?;
-    let mut req = client.get(&url);
-    if let Some(h) = headers {
-        for (k, v) in h {
-            req = req.header(&k, &v);
+    tauri::async_runtime::spawn_blocking(move || {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)))
+            .build()
+            .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?;
+        let mut req = client.get(&url);
+        if let Some(h) = headers {
+            for (k, v) in h {
+                req = req.header(&k, &v);
+            }
         }
-    }
-    let resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
-    let bytes = resp.bytes().map_err(|e| format!("读取响应失败: {e}"))?;
-    decode_body(&bytes, None)
+        let resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
+        let bytes = resp.bytes().map_err(|e| format!("读取响应失败: {e}"))?;
+        decode_body(&bytes, None)
+    })
+    .await
+    .map_err(|e| format!("网络任务调度失败: {e}"))?
 }

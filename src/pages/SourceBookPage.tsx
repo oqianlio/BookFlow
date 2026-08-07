@@ -62,6 +62,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         <span className="source-name">{sourceName}</span>
         {info.author && <span className="hit-author">{info.author}</span>}
         {info.intro && <p className="source-intro">{info.intro}</p>}
+        <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
       </div>
       <div className="source-toc">
         {toc.length === 0 ? (

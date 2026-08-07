@@ -90,4 +90,43 @@ describe("SourceReaderPage", () => {
     expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
     expect(screen.queryByText(/网络错误/)).not.toBeInTheDocument();
   });
+
+  it("does not override an explicit chapter choice with saved progress", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    vi.mocked(api.getBookSourceProgress).mockResolvedValue({
+      source_id: 1, book_url: "https://ex.com/book/1.html", title: "三体",
+      chapter_index: 99, chapter_url: "https://ex.com/c/99.html", chapter_name: "第 99 章",
+      percent: 0, updated_at: 0,
+    });
+    renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    expect(screen.getByText("第一章")).toBeInTheDocument();
+    expect(screen.queryByText("第 99 章")).not.toBeInTheDocument();
+  });
+
+  it("resumes from saved progress when entering with -1", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch2);
+    vi.mocked(api.getBookSourceProgress).mockResolvedValue({
+      source_id: 1, book_url: "https://ex.com/book/1.html", title: "三体",
+      chapter_index: 1, chapter_url: "https://ex.com/c/2.html", chapter_name: "第二章",
+      percent: 0, updated_at: 0,
+    });
+    render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
+      initialChapterIndex={-1} initialChapterUrl="" initialChapterName="" onBack={() => {}} />);
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    expect(screen.getByText("第二章")).toBeInTheDocument();
+  });
+
+  it("shows an empty state when resuming with no saved progress", async () => {
+    vi.mocked(api.getBookSourceProgress).mockResolvedValue(null);
+    render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
+      initialChapterIndex={-1} initialChapterUrl="" initialChapterName="" onBack={() => {}} />);
+    expect(await screen.findByText("请从目录选择章节")).toBeInTheDocument();
+  });
 });

@@ -47,6 +47,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
 
   const persist = useCallback(() => {
     const c = chapterRef.current;
+    if (!c.url) return;
     void saveBookSourceProgress({
       sourceId, bookUrl, title: bookTitle, chapterIndex: c.index,
       chapterUrl: c.url, chapterName: c.name, percent: 0,
@@ -54,13 +55,14 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   }, [sourceId, bookUrl, bookTitle]);
 
   useEffect(() => {
+    if (initialChapterIndex !== -1) return;
     let cancelled = false;
     void getBookSourceProgress(sourceId, bookUrl).then((p) => {
       if (cancelled) return;
       if (p) {
         setChapter({ index: p.chapter_index, url: p.chapter_url, name: p.chapter_name });
-      } else if (initialChapterIndex === -1) {
-        setContent(""); setLoading(false);
+      } else {
+        setLoading(false);
       }
     });
     return () => { cancelled = true; };
@@ -94,7 +96,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
     <div className="source-reader reader-page">
       <header className="reader-toolbar">
         <button className="btn-icon" onClick={onBack} aria-label="返回" title="返回"><BackIcon size={18} /></button>
-        <h2><span className="reader-title">{bookTitle}</span> · <span className="reader-chapter">{chapter.name}</span></h2>
+        <h2><span className="reader-title">{bookTitle}</span>{chapter.name && <> · <span className="reader-chapter">{chapter.name}</span></>}</h2>
         <div className="toolbar-actions">
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || prevUrlsRef.current.length === 0}>上一章</button>
           <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || !!error || !nextUrlRef.current}>下一章</button>
@@ -109,7 +111,11 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
           </div>
         )}
         {!loading && !error && (
-          <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
+          chapter.url ? (
+            <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
+          ) : (
+            <p className="panel-empty">请从目录选择章节</p>
+          )
         )}
       </main>
     </div>
