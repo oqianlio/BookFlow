@@ -3,6 +3,7 @@ pub mod db;
 pub mod import;
 pub mod commands;
 pub mod cover;
+pub mod net;
 pub mod search;
 pub mod tts;
 
@@ -40,6 +41,7 @@ pub fn run() {
             read_file_content, set_setting_cmd, get_setting_cmd,
             search_books, reindex,
             tts_speak, tts_stop,
+            crate::net::http_get,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
