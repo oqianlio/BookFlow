@@ -217,3 +217,49 @@ pub fn tts_speak(text: String, rate: f64, state: State<'_, AppState>) -> Result<
 pub fn tts_stop(state: State<'_, AppState>) -> Result<(), String> {
     state.tts.stop()
 }
+
+#[tauri::command]
+pub fn list_book_sources(state: State<'_, AppState>) -> Result<Vec<SourceRow>, String> {
+    list_sources(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_book_source(name: String, url: String, json: String, state: State<'_, AppState>) -> Result<i64, String> {
+    add_source(&state.db.lock().unwrap(), &name, &url, &json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn update_book_source(id: i64, name: String, url: String, json: String, state: State<'_, AppState>) -> Result<(), String> {
+    update_source(&state.db.lock().unwrap(), id, &name, &url, &json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_book_source(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    delete_source(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_book_source_enabled(id: i64, enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
+    set_source_enabled(&state.db.lock().unwrap(), id, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_book_source_progress(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Option<SourceProgress>, String> {
+    get_source_progress(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_book_source_progress(
+    source_id: i64,
+    book_url: String,
+    title: String,
+    chapter_index: i64,
+    chapter_url: String,
+    chapter_name: String,
+    percent: f64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    save_source_progress(&state.db.lock().unwrap(), &NewSourceProgress {
+        source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent,
+    }).map_err(|e| e.to_string())
+}

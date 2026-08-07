@@ -108,6 +108,25 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
         );
         CREATE INDEX IF NOT EXISTS idx_annotations_book ON annotations(book_id);
         CREATE INDEX IF NOT EXISTS idx_bookmarks_book ON bookmarks(book_id);
+        CREATE TABLE IF NOT EXISTS book_sources (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL,
+            json TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_used_at INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS book_source_progress (
+            source_id INTEGER NOT NULL,
+            book_url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            chapter_index INTEGER NOT NULL,
+            chapter_url TEXT NOT NULL,
+            chapter_name TEXT NOT NULL,
+            percent REAL NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (source_id, book_url)
+        );
         "#,
     )?;
     Ok(conn)
@@ -257,4 +276,115 @@ pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>> {
     } else {
         Ok(None)
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SourceRow {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub json: String,
+    pub enabled: bool,
+    pub last_used_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SourceProgress {
+    pub source_id: i64,
+    pub book_url: String,
+    pub title: String,
+    pub chapter_index: i64,
+    pub chapter_url: String,
+    pub chapter_name: String,
+    pub percent: f64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewSourceProgress {
+    pub source_id: i64,
+    pub book_url: String,
+    pub title: String,
+    pub chapter_index: i64,
+    pub chapter_url: String,
+    pub chapter_name: String,
+    pub percent: f64,
+}
+
+pub fn list_sources(conn: &Connection) -> Result<Vec<SourceRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, url, json, enabled, last_used_at FROM book_sources ORDER BY name",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(SourceRow {
+            id: r.get(0)?, name: r.get(1)?, url: r.get(2)?, json: r.get(3)?,
+            enabled: r.get::<_, i64>(4)? != 0, last_used_at: r.get(5)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn add_source(conn: &Connection, name: &str, url: &str, json: &str) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO book_sources (name, url, json) VALUES (?1, ?2, ?3)",
+        params![name, url, json],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn update_source(conn: &Connection, id: i64, name: &str, url: &str, json: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE book_sources SET name=?1, url=?2, json=?3 WHERE id=?4",
+        params![name, url, json, id],
+    )?;
+    Ok(())
+}
+
+pub fn delete_source(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM book_sources WHERE id=?1", [id])?;
+    conn.execute("DELETE FROM book_source_progress WHERE source_id=?1", [id])?;
+    Ok(())
+}
+
+pub fn set_source_enabled(conn: &Connection, id: i64, enabled: bool) -> Result<()> {
+    conn.execute(
+        "UPDATE book_sources SET enabled=?1 WHERE id=?2",
+        params![if enabled { 1 } else { 0 }, id],
+    )?;
+    Ok(())
+}
+
+pub fn get_source_progress(
+    conn: &Connection,
+    source_id: i64,
+    book_url: &str,
+) -> Result<Option<SourceProgress>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent, updated_at FROM book_source_progress WHERE source_id=?1 AND book_url=?2",
+    )?;
+    let mut rows = stmt.query(params![source_id, book_url])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(SourceProgress {
+            source_id: r.get(0)?, book_url: r.get(1)?, title: r.get(2)?,
+            chapter_index: r.get(3)?, chapter_url: r.get(4)?, chapter_name: r.get(5)?,
+            percent: r.get(6)?, updated_at: r.get(7)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<()> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    conn.execute(
+        "INSERT INTO book_source_progress (source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent, updated_at)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+         ON CONFLICT(source_id, book_url) DO UPDATE SET title=excluded.title, chapter_index=excluded.chapter_index,
+           chapter_url=excluded.chapter_url, chapter_name=excluded.chapter_name, percent=excluded.percent, updated_at=excluded.updated_at",
+        params![p.source_id, p.book_url, p.title, p.chapter_index, p.chapter_url, p.chapter_name, p.percent, now],
+    )?;
+    Ok(())
 }

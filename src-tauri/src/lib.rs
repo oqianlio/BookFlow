@@ -42,6 +42,9 @@ pub fn run() {
             search_books, reindex,
             tts_speak, tts_stop,
             crate::net::http_get,
+            list_book_sources, add_book_source, update_book_source,
+            delete_book_source, set_book_source_enabled,
+            get_book_source_progress, save_book_source_progress,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
