@@ -12,23 +12,36 @@ export default function MdReader({ path, bookId, onError }: { path: string; book
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
   const containerRef = useRef<HTMLDivElement>(null);
+  // 搜索跳转可能在内容加载完成前到达：先缓存，内容就绪后再滚动定位
+  const pendingJumpRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
 
-  useJumpTarget((loc) => {
+  const scrollTo = (pct: number) => {
     const el = containerRef.current;
     if (!el) return;
+    el.scrollTop = pct * (el.scrollHeight - el.clientHeight);
+  };
+
+  const applyJump = (loc: string) => {
     // 搜索命中：行号 -> 滚动百分比
     if (loc.startsWith("line:")) {
       const line = parseInt(loc.slice(5), 10);
       if (!Number.isFinite(line) || line < 0) return;
       const total = Math.max(1, totalLines);
-      const pct = Math.min(1, line / total);
-      el.scrollTop = pct * (el.scrollHeight - el.clientHeight);
+      scrollTo(Math.min(1, line / total));
       return;
     }
     const pct = parseFloat(loc);
-    if (Number.isFinite(pct)) {
-      el.scrollTop = pct * (el.scrollHeight - el.clientHeight);
+    if (Number.isFinite(pct)) scrollTo(pct);
+  };
+
+  useJumpTarget((loc) => {
+    if (!readyRef.current) {
+      // 内容尚未就绪：缓存跳转，就绪后补放
+      pendingJumpRef.current = loc;
+      return;
     }
+    applyJump(loc);
   });
 
   useEffect(() => {
@@ -75,6 +88,19 @@ export default function MdReader({ path, bookId, onError }: { path: string; book
     (window as any).__readerLocation = String(initialScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, html, initialScroll]);
+
+  // 内容就绪后补放加载前到达的搜索跳转
+  useEffect(() => {
+    if (readyRef.current) return;
+    if (!html) return;
+    readyRef.current = true;
+    const pj = pendingJumpRef.current;
+    if (pj != null) {
+      pendingJumpRef.current = null;
+      applyJump(pj);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html]);
 
   return (
     <div className="md-reader" ref={containerRef} onScroll={onScroll}>

@@ -11,6 +11,9 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
   const [error, setError] = useState<string | null>(null);
   const { location, percent, loaded, save } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
+  // 搜索跳转可能在内容加载完成前到达：先缓存，行数/页数就绪后再定位
+  const pendingJumpRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +53,7 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
   const goRef = useRef(go);
   goRef.current = go;
 
-  useJumpTarget((loc) => {
+  const applyJump = (loc: string) => {
     // 搜索命中：行号 -> 页码（行号 0 基）
     if (loc.startsWith("line:")) {
       const line = parseInt(loc.slice(5), 10);
@@ -59,7 +62,28 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
     }
     const p = parseInt(loc, 10);
     if (Number.isFinite(p)) goRef.current(p);
+  };
+
+  useJumpTarget((loc) => {
+    if (!readyRef.current) {
+      // 内容尚未就绪：缓存跳转，就绪后补放
+      pendingJumpRef.current = loc;
+      return;
+    }
+    applyJump(loc);
   });
+
+  // 内容就绪后补放加载前到达的搜索跳转
+  useEffect(() => {
+    if (readyRef.current) return;
+    if (lines.length === 0) return;
+    readyRef.current = true;
+    const pj = pendingJumpRef.current;
+    if (pj != null) {
+      pendingJumpRef.current = null;
+      applyJump(pj);
+    }
+  }, [lines]);
 
   return (
     <div className="txt-reader">
