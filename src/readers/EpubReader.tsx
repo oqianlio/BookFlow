@@ -51,6 +51,7 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
       try { pct = rendition.book.locations.percentageFromCfi(start); } catch { /* ignore */ }
       saveDebouncedRef.current(start, pct);
     });
+    let cancelled = false;
     void (async () => {
       try {
         await book.ready;
@@ -61,6 +62,7 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
           await rendition.display();
         }
       } catch (e) {
+        if (cancelled) return;
         const msg = String(e);
         setError(msg);
         onErrorRef.current?.(msg);
@@ -68,6 +70,7 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
     })();
     setRenditionKey((k) => k + 1);
     return () => {
+      cancelled = true;
       rendition.destroy();
       book.destroy();
     };

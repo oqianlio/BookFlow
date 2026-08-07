@@ -62,6 +62,7 @@ export default function PdfReader({ path, bookId, onError }: { path: string; boo
         setNumPages(pdf.numPages);
         await renderPage(pageRef.current, zoom);
       } catch (e) {
+        if (cancelled) return;
         reportError(e);
       }
     })();
@@ -70,7 +71,7 @@ export default function PdfReader({ path, bookId, onError }: { path: string; boo
   }, [path, loaded]);
 
   useEffect(() => {
-    void renderPage(page, zoom).catch(reportError);
+    void renderPage(page, zoom).catch((e) => setError(String(e)));
     save(String(page), page / Math.max(1, numPages));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, zoom, numPages]);
