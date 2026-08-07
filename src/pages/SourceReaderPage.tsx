@@ -16,6 +16,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const nextUrlRef = useRef("");
+  const prevUrlsRef = useRef<string[]>([]);
   const saveTimer = useRef<number | null>(null);
   const chapterRef = useRef(chapter);
   chapterRef.current = chapter;
@@ -76,10 +77,17 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   }, [content, loading, persist]);
 
   const goChapter = (delta: number) => {
-    const next = nextUrlRef.current;
-    if (!next) return;
     const idx = chapter.index + delta;
-    setChapter({ index: idx, url: next, name: `第 ${idx + 1} 章` });
+    if (delta > 0) {
+      const next = nextUrlRef.current;
+      if (!next) return;
+      prevUrlsRef.current.push(chapter.url);
+      setChapter({ index: idx, url: next, name: `第 ${idx + 1} 章` });
+    } else {
+      const prev = prevUrlsRef.current.pop();
+      if (!prev) return;
+      setChapter({ index: idx, url: prev, name: `第 ${idx + 1} 章` });
+    }
   };
 
   return (
@@ -88,8 +96,8 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
         <button className="btn-icon" onClick={onBack} aria-label="返回" title="返回"><BackIcon size={18} /></button>
         <h2><span className="reader-title">{bookTitle}</span> · <span className="reader-chapter">{chapter.name}</span></h2>
         <div className="toolbar-actions">
-          <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={chapter.index === 0}>上一章</button>
-          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!nextUrlRef.current}>下一章</button>
+          <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || prevUrlsRef.current.length === 0}>上一章</button>
+          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || !!error || !nextUrlRef.current}>下一章</button>
         </div>
       </header>
       <main className="reader-main">
