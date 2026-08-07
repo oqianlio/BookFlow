@@ -1,5 +1,13 @@
 import { JSDOM } from "jsdom";
 
+export type EngineResult = string;
+
+export type ParsedRule = {
+  type: "css" | "regex" | "regexReplace" | "js" | "xpath" | "plain";
+  value: string;
+  attr?: string;
+};
+
 export interface BookSource {
   bookSourceUrl: string;
   bookSourceName: string;
@@ -28,7 +36,7 @@ export function parseHtml(html: string): Document {
   return dom.window.document;
 }
 
-export function parseRule(rule: string): { type: string; value: string; attr?: string } {
+export function parseRule(rule: string): ParsedRule {
   const s = rule.trim();
   if (s.startsWith("@css:")) {
     return parseAttrRule(s.slice(5));
@@ -48,7 +56,7 @@ export function parseRule(rule: string): { type: string; value: string; attr?: s
   return parseAttrRule(s);
 }
 
-function parseAttrRule(s: string): { type: string; value: string; attr?: string } {
+function parseAttrRule(s: string): ParsedRule {
   const m = s.match(/^(.+?)@([a-zA-Z]+)$/);
   if (m) {
     return { type: "css", value: m[1], attr: m[2] };
