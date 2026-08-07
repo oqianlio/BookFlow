@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { getFontSize, setFontSize, Theme, initTheme, setTheme, getTheme } from "../components/theme";
+import { getTtsRate, setTtsRate } from "../components/TtsBar";
 
 export default function SettingsPage({ onBack }: { onBack: () => void }) {
   const [theme, setThemeState] = useState<Theme>("light");
   const [fontSize, setFontSizeState] = useState(18);
+  const [rate, setRateState] = useState(1);
 
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
     setFontSizeState(getFontSize());
+    void getTtsRate().then(setRateState);
   }, []);
 
   return (
@@ -50,6 +53,24 @@ export default function SettingsPage({ onBack }: { onBack: () => void }) {
               onChange={(e) => { const n = +e.target.value; setFontSizeState(n); void setFontSize(n); }}
             />
             <span className="range-value">{fontSize}px</span>
+          </div>
+        </div>
+        <div className="settings-group">
+          <div>
+            <div className="label">朗读语速</div>
+            <div className="hint">调节 TTS 朗读速度</div>
+          </div>
+          <div className="range-row">
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={rate}
+              aria-label="朗读语速"
+              onChange={(e) => { const n = +e.target.value; setRateState(n); void setTtsRate(n); }}
+            />
+            <span className="range-value">{rate.toFixed(1)}x</span>
           </div>
         </div>
       </div>

@@ -6,6 +6,7 @@ import TxtReader from "../readers/TxtReader";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
+import { BackIcon, BookmarkIcon, HighlightIcon } from "../components/icons";
 import { addBookmark, removeBook, type Book } from "../services/api";
 import "./ReaderPage.css";
 
@@ -92,11 +93,29 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
   return (
     <div className="reader-page">
       <header className="reader-toolbar">
-        <button className="btn-secondary" onClick={onBack}>返回书架</button>
+        <button className="btn-icon" onClick={onBack} aria-label="返回书架" title="返回书架">
+          <BackIcon size={18} />
+        </button>
         <h2>{book.title}</h2>
-        <button className="btn-secondary" onClick={() => setPanel((p) => (p === "annotations" ? null : "annotations"))}>标注</button>
-        <button className="btn-secondary" onClick={() => setPanel((p) => (p === "bookmarks" ? null : "bookmarks"))}>书签</button>
-        <TtsBar />
+        <div className="toolbar-actions">
+          <TtsBar />
+          <button
+            className={`btn-icon${panel === "annotations" ? " active" : ""}`}
+            onClick={() => setPanel((p) => (p === "annotations" ? null : "annotations"))}
+            aria-label="标注"
+            title="标注"
+          >
+            <HighlightIcon size={17} />
+          </button>
+          <button
+            className={`btn-icon${panel === "bookmarks" ? " active" : ""}`}
+            onClick={() => setPanel((p) => (p === "bookmarks" ? null : "bookmarks"))}
+            aria-label="书签"
+            title="书签"
+          >
+            <BookmarkIcon size={17} />
+          </button>
+        </div>
       </header>
       <div className="reader-body">
         <main className="reader-main">

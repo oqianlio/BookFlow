@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import BookCard from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
+import { BookIcon, SearchIcon, SettingsIcon } from "../components/icons";
 import { importFiles, listBooks, removeBook, type Book } from "../services/api";
-
-function EmptyShelfIcon() {
-  return (
-    <svg className="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <path d="M4 4h16v16H4z" strokeLinejoin="round" />
-      <path d="M8 8h8M8 12h8M8 16h5" strokeLinecap="round" />
-      <path d="M3 5v14M21 5v14" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 export default function LibraryPage({
   onOpenBook,
@@ -76,9 +67,18 @@ export default function LibraryPage({
           <small>桌面阅读器</small>
         </div>
         <div className="library-actions">
-          <button className="btn btn-ghost" onClick={() => setShowSearch((s) => !s)}>全文搜索</button>
+          <button
+            className={`btn-icon${showSearch ? " active" : ""}`}
+            onClick={() => setShowSearch((s) => !s)}
+            aria-label="全文搜索"
+            title="全文搜索"
+          >
+            <SearchIcon size={17} />
+          </button>
           {onOpenSettings && (
-            <button className="btn btn-ghost" onClick={onOpenSettings}>设置</button>
+            <button className="btn-icon" onClick={onOpenSettings} aria-label="设置" title="设置">
+              <SettingsIcon size={17} />
+            </button>
           )}
           <button className="btn btn-primary" onClick={handleImport} disabled={busy}>
             {busy ? "导入中…" : "导入书籍"}
@@ -89,7 +89,7 @@ export default function LibraryPage({
       {showSearch && <SearchPanel onJump={handleSearchJump} />}
       {books.length === 0 ? (
         <div className="empty">
-          <EmptyShelfIcon />
+          <BookIcon size={56} />
           <h2>书架空空如也，点击导入书籍</h2>
           <p>支持 EPUB · PDF · Markdown · TXT 四种格式，导入后即可开始阅读</p>
         </div>

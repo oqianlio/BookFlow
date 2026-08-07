@@ -520,6 +520,42 @@ button {
   overflow: hidden;
 }
 
+/* ============ 图标按钮（收纳次要功能） ============ */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.btn-icon:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.btn-icon.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ============ 设置 ============ */
 .settings {
   min-height: 100vh;
