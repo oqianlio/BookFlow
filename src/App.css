@@ -744,3 +744,14 @@ input[type="range"] {
   color: var(--accent);
   letter-spacing: 0.03em;
 }
+
+/* ============ 书源书籍页 ============ */
+.source-book .brand h1 { font-size: 20px; }
+.source-book-info { max-width: 720px; margin: 18px auto 24px; display: flex; flex-direction: column; gap: 6px; }
+.source-intro { font-size: 13px; line-height: 1.7; color: var(--fg-muted); }
+.source-toc { max-width: 720px; margin: 0 auto; }
+.source-toc .panel-empty { text-align: center; color: var(--fg-muted); padding: 48px 0; font-size: 13.5px; }
+.source-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.source-toc li { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.source-toc li .btn { width: 100%; justify-content: flex-start; text-align: left; }
+

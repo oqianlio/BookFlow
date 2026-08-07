@@ -101,6 +101,20 @@ export async function setBookSourceEnabled(id: number, enabled: boolean): Promis
   await invoke("set_book_source_enabled", { id, enabled });
 }
 
+export interface SourceProgress {
+  source_id: number; book_url: string; title: string; chapter_index: number;
+  chapter_url: string; chapter_name: string; percent: number; updated_at: number;
+}
+export async function getBookSourceProgress(sourceId: number, bookUrl: string): Promise<SourceProgress | null> {
+  return invoke<SourceProgress | null>("get_book_source_progress", { sourceId, bookUrl });
+}
+export async function saveBookSourceProgress(p: { sourceId: number; bookUrl: string; title: string; chapterIndex: number; chapterUrl: string; chapterName: string; percent: number }): Promise<void> {
+  await invoke("save_book_source_progress", {
+    sourceId: p.sourceId, bookUrl: p.bookUrl, title: p.title,
+    chapterIndex: p.chapterIndex, chapterUrl: p.chapterUrl, chapterName: p.chapterName, percent: p.percent,
+  });
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   return invoke<string | null>("get_setting_cmd", { key });
 }

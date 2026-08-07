@@ -3,6 +3,7 @@ import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
 import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
+import SourceBookPage from "./pages/SourceBookPage";
 import type { Book } from "./services/api";
 import "./App.css";
 
@@ -11,7 +12,7 @@ type View =
   | { name: "reader"; book: Book }
   | { name: "settings" }
   | { name: "discover" }
-  | { name: "discoverBook"; hit: SearchHit };
+  | { name: "sourceBook"; hit: SearchHit };
 
 export default function App() {
   const [view, setView] = useState<View>({ name: "library" });
@@ -26,22 +27,20 @@ export default function App() {
     return (
       <DiscoverPage
         onBack={() => setView({ name: "library" })}
-        onOpenBook={(hit) => setView({ name: "discoverBook", hit })}
+        onOpenBook={(hit) => setView({ name: "sourceBook", hit })}
       />
     );
   }
-  if (view.name === "discoverBook") {
+  if (view.name === "sourceBook") {
     return (
-      <div className="page">
-        <header className="library-header">
-          <div className="brand">
-            <h1>{view.hit.title}</h1>
-            <small>{view.hit.sourceName}</small>
-          </div>
-          <button className="btn btn-ghost" onClick={() => setView({ name: "discover" })}>返回搜索</button>
-        </header>
-        <p className="panel-empty">书籍详情页将在后续任务中实现（书源：{view.hit.sourceName}）</p>
-      </div>
+      <SourceBookPage
+        sourceId={view.hit.sourceId}
+        sourceName={view.hit.sourceName}
+        bookUrl={view.hit.bookUrl}
+        initialTitle={view.hit.title}
+        onBack={() => setView({ name: "discover" })}
+        onRead={() => {}}
+      />
     );
   }
   return (
