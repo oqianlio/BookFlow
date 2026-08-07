@@ -81,6 +81,10 @@ export interface BookSource {
   enabled: boolean; last_used_at: number | null;
 }
 
+export async function httpGet(url: string, headers?: Record<string, string>, timeoutMs?: number): Promise<string> {
+  return invoke<string>("http_get", { url, headers: headers ?? null, timeoutMs: timeoutMs ?? null });
+}
+
 export async function listBookSources(): Promise<BookSource[]> {
   return invoke<BookSource[]>("list_book_sources");
 }

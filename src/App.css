@@ -646,3 +646,101 @@ input[type="range"] {
 .source-url { font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-actions { display: flex; align-items: center; gap: 8px; }
 .book-source-manager textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); font-size: 12px; font-family: ui-monospace, Consolas, monospace; resize: vertical; }
+
+/* ============ 发现与搜索（书源） ============ */
+.discover-search {
+  display: flex;
+  gap: 10px;
+  max-width: 720px;
+  margin: 20px auto 28px;
+}
+
+.discover-search input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--fg);
+  font-size: 14px;
+  font-family: var(--font-ui);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.discover-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.discover-search input::placeholder {
+  color: var(--fg-muted);
+}
+
+.discover-results {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.discover .panel-empty {
+  text-align: center;
+  color: var(--fg-muted);
+  padding: 48px 0;
+  font-size: 13.5px;
+}
+
+.hit-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.12s ease;
+}
+
+.hit-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.hit-card:active {
+  transform: translateY(1px);
+}
+
+.hit-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.hit-card .hit-title {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hit-card .hit-author {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.hit-source {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}

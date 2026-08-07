@@ -7,9 +7,11 @@ import { importFiles, listBooks, removeBook, type Book } from "../services/api";
 export default function LibraryPage({
   onOpenBook,
   onOpenSettings,
+  onOpenDiscover,
 }: {
   onOpenBook: (b: Book) => void;
   onOpenSettings?: () => void;
+  onOpenDiscover?: () => void;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [busy, setBusy] = useState(false);
@@ -67,6 +69,11 @@ export default function LibraryPage({
           <small>桌面阅读器</small>
         </div>
         <div className="library-actions">
+          {onOpenDiscover && (
+            <button className="btn btn-soft" onClick={onOpenDiscover} aria-label="发现" title="发现">
+              发现
+            </button>
+          )}
           <button
             className={`btn-icon${showSearch ? " active" : ""}`}
             onClick={() => setShowSearch((s) => !s)}
