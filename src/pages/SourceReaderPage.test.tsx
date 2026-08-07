@@ -62,4 +62,32 @@ describe("SourceReaderPage", () => {
     expect(prevBtn).toBeDisabled();
     expect(screen.getByRole("button", { name: "下一章" })).toBeEnabled();
   });
+
+  it("applies source purify replace rules to chapter content", async () => {
+    const src = JSON.parse(sourceJson);
+    src.purify = ["##广告##（净）##"];
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><div id="content"><p>净化正文。广告</p></div></body></html>`,
+    );
+    renderReader();
+    expect(await screen.findByText("净化正文。（净）")).toBeInTheDocument();
+    expect(screen.queryByText(/广告/)).not.toBeInTheDocument();
+  });
+
+  it("shows a retry button on error and recovers on click", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet)
+      .mockRejectedValueOnce(new Error("网络错误"))
+      .mockResolvedValueOnce(ch1);
+    renderReader();
+    expect(await screen.findByText(/网络错误/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    expect(screen.queryByText(/网络错误/)).not.toBeInTheDocument();
+  });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon } from "../components/icons";
 import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, type BookSource as Src } from "../services/bookSourceEngine";
 import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
@@ -33,7 +33,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url });
       const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url }) : "";
       nextUrlRef.current = next;
-      setContent(text);
+      setContent(purifyContent(text, (src as any).purify));
       setLoading(false);
     } catch (e) {
       setError(String(e));
@@ -102,7 +102,12 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       </header>
       <main className="reader-main">
         {loading && <p className="panel-empty">加载中…</p>}
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <div className="panel-empty">
+            <p className="error">{error}</p>
+            <button className="btn btn-ghost" onClick={() => void loadChapter(chapter)}>重试</button>
+          </div>
+        )}
         {!loading && !error && (
           <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
         )}

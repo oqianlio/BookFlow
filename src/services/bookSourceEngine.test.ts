@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent } from "./bookSourceEngine";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -33,6 +33,20 @@ describe("bookSourceEngine", () => {
 
   it("rejects invalid book source JSON", () => {
     expect(() => parseBookSourceJson("{}")).toThrow();
+  });
+
+  it("strips scripts and ad nodes", () => {
+    const out = purifyContent(`<div>正文<script>alert(1)</script><ins>广告</ins>继续</div>`);
+    expect(out).not.toContain("alert");
+    expect(out).not.toContain("广告");
+    expect(out).toContain("正文");
+    expect(out).toContain("继续");
+  });
+
+  it("applies ## replace rules", () => {
+    const out = purifyContent(`<div>旧词1旧词2</div>`, ["##旧词##新词##"]);
+    expect(out).toContain("新词1新词2");
+    expect(out).not.toContain("旧词");
   });
 });
 

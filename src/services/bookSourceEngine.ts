@@ -23,6 +23,26 @@ export interface BookSource {
   ruleContent?: any;
 }
 
+const REMOVE_SELECTORS = ["script", "style", "ins", "iframe", "noscript", "button", "footer", ".ad", ".ads", ".advert", "#ad"];
+
+export function purifyContent(html: string, replaceRules?: string[]): string {
+  const doc = new JSDOM(`<div id="__purify__">${html}</div>`).window.document;
+  const root = doc.getElementById("__purify__")!;
+  for (const sel of REMOVE_SELECTORS) {
+    root.querySelectorAll(sel).forEach((n) => n.remove());
+  }
+  let out = (root.innerHTML ?? "").trim();
+  if (replaceRules) {
+    for (const rule of replaceRules) {
+      if (rule.startsWith("##")) {
+        const parts = rule.slice(2).split("##");
+        out = out.replace(new RegExp(parts[0], "g"), parts[1] ?? "");
+      }
+    }
+  }
+  return out;
+}
+
 export function parseBookSourceJson(raw: string): BookSource {
   const obj = JSON.parse(raw);
   if (!obj.bookSourceUrl || !obj.bookSourceName) {
