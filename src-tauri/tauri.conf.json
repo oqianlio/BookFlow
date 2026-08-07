@@ -18,7 +18,18 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": {
+        "default-src": "'self'",
+        "connect-src": "ipc: http://ipc.localhost asset: http://asset.localhost",
+        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "font-src": "'self' asset: http://asset.localhost data:",
+        "style-src": "'unsafe-inline' 'self'",
+        "script-src": "'self'",
+        "worker-src": "'self' blob:",
+        "frame-src": "'self' blob: data:",
+        "object-src": "'none'",
+        "base-uri": "'self'"
+      },
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/books/**"]

@@ -38,7 +38,14 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
         e.preventDefault();
         const w = window as any;
         const loc = w.__readerLocation ?? "";
-        if (loc) w.__requestBookmark?.();
+        if (!loc) return;
+        if (w.__requestBookmark) {
+          w.__requestBookmark();
+        } else {
+          // EPUB 走 request-bookmark 事件；其余格式直接使用已发布的 __readerLocation
+          void addBookmark({ bookId: book.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
+          w.dispatchEvent(new CustomEvent("bookmark-changed"));
+        }
       }
       if (e.key === "a" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -47,7 +54,7 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [book.id]);
 
   useEffect(() => {
     const onRequestBookmark = (e: Event) => {
@@ -63,28 +70,24 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
   }, [book.id]);
 
   useEffect(() => {
-    const locateMatch = (text: string) => {
-      if (book.format === "epub" || book.format === "pdf") return;
-      const t = setTimeout(() => {
-        try {
-          (window as any).find(text, false, false, false, false, true, true);
-        } catch { /* window.find 不可用时忽略 */ }
-      }, 250);
-      return () => clearTimeout(t);
+    // 全文搜索跳转：把命中的定位信息交给当前格式的阅读器（reader-jump 事件）
+    const routeSearchJump = (loc?: string) => {
+      if (!loc) return;
+      jump(loc);
+    };
+    const onSearchJump = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { location?: string } | undefined;
+      routeSearchJump(detail?.location);
     };
     const w = window as any;
-    const pending = w.__searchJump as { text?: string } | undefined;
-    if (pending?.text) {
+    const pending = w.__searchJump as { location?: string } | undefined;
+    if (pending?.location) {
       w.__searchJump = undefined;
-      locateMatch(pending.text);
+      routeSearchJump(pending.location);
     }
-    const onSearchJump = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { text?: string } | undefined;
-      if (detail?.text) locateMatch(detail.text);
-    };
     window.addEventListener("search-jump", onSearchJump);
     return () => window.removeEventListener("search-jump", onSearchJump);
-  }, [book.format]);
+  }, [jump]);
 
   return (
     <div className="reader-page">
@@ -110,7 +113,7 @@ export default function ReaderPage({ book, onBack }: { book: Book; onBack: () =>
           {!openError && book.format === "txt" && <TxtReader path={book.path} bookId={book.id} onError={setOpenError} />}
         </main>
         {panel === "annotations" && (
-          <AnnotationPanel bookId={book.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
+          <AnnotationPanel bookId={book.id} format={book.format} onJump={jump} onChanged={() => jumpKey.current += 1} />
         )}
         {panel === "bookmarks" && (
           <BookmarkPanel bookId={book.id} onJump={jump} onChanged={() => jumpKey.current += 1} />

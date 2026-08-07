@@ -5,14 +5,6 @@ export interface SearchHit {
   book_id: number; title: string; format: string; text: string; location: string;
 }
 
-function snippetAround(text: string, query: string, radius = 40): string {
-  const idx = text.toLowerCase().indexOf(query.toLowerCase());
-  if (idx < 0) return "";
-  const start = Math.max(0, idx - radius);
-  const end = Math.min(text.length, idx + query.length + radius);
-  return text.slice(start, end).replace(/\s+/g, " ");
-}
-
 export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
@@ -38,9 +30,10 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
       </div>
       <ul>
         {results.map((h, i) => (
-          <li key={i}>
-            <p className="hit-title" onClick={() => onJump({ ...h, location: snippetAround(h.text, query) })}>{h.title}</p>
-            <p className="hit-text">{h.text.slice(0, 120)}</p>
+          <li key={`${h.book_id}-${i}`}>
+            {/* location 由 Rust 侧按格式填充（EPUB 章节 href / PDF 页码 / 文本行号） */}
+            <p className="hit-title" onClick={() => onJump(h)}>{h.title}</p>
+            <p className="hit-text">{h.text}</p>
           </li>
         ))}
       </ul>

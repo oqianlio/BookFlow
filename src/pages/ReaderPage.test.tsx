@@ -29,6 +29,7 @@ beforeEach(() => {
   (window as any).__readerLocation = undefined;
   (window as any).__bookmarkLocation = undefined;
   (window as any).__requestBookmark = undefined;
+  (window as any).__searchJump = undefined;
 });
 
 describe("ReaderPage", () => {
@@ -60,6 +61,40 @@ describe("ReaderPage", () => {
     await userEvent.click(screen.getByText("高亮A"));
     expect((window as any).__jumpTo).toBe("cfi:anno");
     expect(listener).toHaveBeenCalledTimes(1);
+    window.removeEventListener("reader-jump", listener);
+  });
+
+  it("Ctrl+B falls back to __readerLocation when no EPUB request-bookmark hook", async () => {
+    render(<ReaderPage book={{ ...book, format: "pdf" }} onBack={() => {}} />);
+    const w = window as any;
+    w.__readerLocation = "7";
+    w.__requestBookmark = undefined;
+    await userEvent.keyboard("{Control>}b{/Control}");
+    await waitFor(() =>
+      expect(api.addBookmark).toHaveBeenCalledWith(
+        expect.objectContaining({ bookId: 1, location: "7" }),
+      ),
+    );
+  });
+
+  it("routes a search-jump location to the reader via reader-jump", async () => {
+    const listener = vi.fn();
+    window.addEventListener("reader-jump", listener);
+    render(<ReaderPage book={book} onBack={() => {}} />);
+    window.dispatchEvent(new CustomEvent("search-jump", { detail: { location: "line:120", format: "txt" } }));
+    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    expect((window as any).__jumpTo).toBe("line:120");
+    window.removeEventListener("reader-jump", listener);
+  });
+
+  it("applies a pending __searchJump set before mount", async () => {
+    (window as any).__searchJump = { location: "3", format: "pdf" };
+    const listener = vi.fn();
+    window.addEventListener("reader-jump", listener);
+    render(<ReaderPage book={{ ...book, format: "pdf" }} onBack={() => {}} />);
+    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    expect((window as any).__jumpTo).toBe("3");
+    expect((window as any).__searchJump).toBeUndefined();
     window.removeEventListener("reader-jump", listener);
   });
 });

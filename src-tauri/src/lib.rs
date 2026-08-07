@@ -2,6 +2,7 @@
 pub mod db;
 pub mod import;
 pub mod commands;
+pub mod cover;
 pub mod search;
 pub mod tts;
 

@@ -47,9 +47,10 @@ export default function LibraryPage({ onOpenBook }: { onOpenBook: (b: Book) => v
     const book = books.find((b) => b.id === h.book_id);
     if (!book) return;
     const w = window as any;
-    w.__searchJump = { text: h.location || h.text };
+    // 打开书籍后按命中定位：EPUB 章节 href / PDF 页码 / MD/TXT 行号
+    w.__searchJump = { location: h.location, format: h.format };
     onOpenBook(book);
-    w.dispatchEvent(new CustomEvent("search-jump", { detail: { text: h.location || h.text } }));
+    w.dispatchEvent(new CustomEvent("search-jump", { detail: { location: h.location, format: h.format } }));
   };
 
   return (

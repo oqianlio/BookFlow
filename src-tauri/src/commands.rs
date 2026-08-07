@@ -33,11 +33,18 @@ pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Ve
                 continue;
             }
         };
+        // EPUB 导入时提取封面图（失败不影响导入，PDF/MD/TXT 用占位封面）
+        let cover_path = if imported_file.format == "epub" {
+            crate::cover::extract_epub_cover(&imported_file.dest, &books_root)
+                .map(|p| p.to_string_lossy().into_owned())
+        } else {
+            None
+        };
         let new_book = NewBook {
             title: imported_file.title,
             format: imported_file.format,
             path: imported_file.dest.to_string_lossy().into_owned(),
-            cover_path: None,
+            cover_path,
         };
         let id = upsert_book(&state.db.lock().unwrap(), &new_book).map_err(|e| {
             eprintln!("写入数据库失败 {}: {}", src.display(), e);
@@ -69,10 +76,22 @@ pub fn remove_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
     let path: Option<String> = conn
         .query_row("SELECT path FROM books WHERE id = ?1", [id], |r| r.get(0))
         .ok();
+    let cover_path: Option<Option<String>> = conn
+        .query_row("SELECT cover_path FROM books WHERE id = ?1", [id], |r| r.get(0))
+        .ok();
     delete_book(&conn, id).map_err(|e| e.to_string())?;
+    drop(conn);
     if let Some(p) = path {
         let _ = fs::remove_file(&p);
+        // 兼容旧版本导入时写入的 `<书>_cover.jpg`
         let _ = fs::remove_file(format!("{p}.jpg"));
+    }
+    if let Some(cp) = cover_path.flatten() {
+        let _ = fs::remove_file(&cp);
+    }
+    // 同步删除全文索引中的该书文档，避免删除后仍被搜到
+    if let Err(e) = crate::search::delete_book_from_index(&state.app_data_dir, id) {
+        eprintln!("删除索引条目失败 book_id={id}: {e}");
     }
     Ok(())
 }

@@ -41,3 +41,25 @@ export function installSelectionHandler(
 export function removeHighlight(rendition: Rendition, cfi: string) {
   rendition.annotations.remove(cfi, "highlight");
 }
+
+/**
+ * 清洗 EPUB 章节 XHTML 文档（best-effort 防御）：
+ * 移除 script / iframe / object / embed 元素，以及全部 on* 事件属性和 javascript: 伪协议链接。
+ * epub.js 章节 iframe 为 sandbox（无 allow-scripts），本函数作为纵深防御在章节加载时执行。
+ */
+export function sanitizeXhtml(doc: Document): void {
+  doc.querySelectorAll("script, iframe, object, embed").forEach((el) => el.remove());
+  doc.querySelectorAll("*").forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on")) {
+        el.removeAttribute(attr.name);
+      } else if (
+        (name === "href" || name === "src") &&
+        attr.value.trim().toLowerCase().startsWith("javascript:")
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  });
+}

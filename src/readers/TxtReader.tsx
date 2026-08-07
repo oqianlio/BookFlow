@@ -36,6 +36,11 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
     }
   }, [loaded, location, pageCount]);
 
+  // 供书签/标注读取当前页码
+  useEffect(() => {
+    (window as any).__readerLocation = String(page);
+  }, [page]);
+
   const go = (p: number) => {
     const clamped = Math.min(Math.max(0, p), pageCount - 1);
     setPage(clamped);
@@ -46,6 +51,12 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
   goRef.current = go;
 
   useJumpTarget((loc) => {
+    // 搜索命中：行号 -> 页码（行号 0 基）
+    if (loc.startsWith("line:")) {
+      const line = parseInt(loc.slice(5), 10);
+      if (Number.isFinite(line) && line >= 0) goRef.current(Math.floor(line / LINES_PER_PAGE));
+      return;
+    }
     const p = parseInt(loc, 10);
     if (Number.isFinite(p)) goRef.current(p);
   });

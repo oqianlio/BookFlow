@@ -9,7 +9,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 const hits = [
-  { book_id: 1, title: "甲", format: "", text: "云上的日子十分漫长", location: "" },
+  { book_id: 1, title: "甲", format: "txt", text: "云上的日子十分漫长，这是命中片段…", location: "line:12" },
 ];
 
 beforeEach(() => {
@@ -32,7 +32,7 @@ describe("SearchPanel", () => {
     expect(invokeMock).not.toHaveBeenCalled();
   });
 
-  it("invokes onJump with a snippet location on hit click", async () => {
+  it("invokes onJump with the hit location from the backend", async () => {
     invokeMock.mockResolvedValue(hits);
     const onJump = vi.fn();
     render(<SearchPanel onJump={onJump} />);
@@ -40,7 +40,7 @@ describe("SearchPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "搜索" }));
     await userEvent.click(await screen.findByText("甲"));
     expect(onJump).toHaveBeenCalledWith(
-      expect.objectContaining({ book_id: 1, location: expect.stringContaining("漫长") }),
+      expect.objectContaining({ book_id: 1, location: "line:12", format: "txt" }),
     );
   });
 });

@@ -4,12 +4,15 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { addAnnotation, deleteAnnotation, listAnnotations } from "../services/api";
-import { applyAnnotations, installSelectionHandler, removeHighlight, type StoredAnnotation } from "./epubAnnotation";
+import { applyAnnotations, installSelectionHandler, removeHighlight, sanitizeXhtml, type StoredAnnotation } from "./epubAnnotation";
 
 export default function EpubReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<EpubBook | null>(null);
   const renditionRef = useRef<Rendition | null>(null);
+  // 搜索跳转可能在书加载完成前到达：先缓存，就绪后再定位
+  const pendingJumpRef = useRef<string | null>(null);
+  const readyRef = useRef(false);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
@@ -17,7 +20,10 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
   saveDebouncedRef.current = saveDebounced;
   useSaveOnLocationChange(bookId, location, percent, save);
   useJumpTarget((loc) => {
-    void renditionRef.current?.display(loc);
+    pendingJumpRef.current = loc;
+    if (readyRef.current) {
+      void renditionRef.current?.display(loc);
+    }
   });
 
   const [error, setError] = useState<string | null>(null);
@@ -27,8 +33,11 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
 
   useEffect(() => {
     if (!hostRef.current) return;
+    readyRef.current = false;
     const book = ePub(convertFileSrc(path));
     bookRef.current = book;
+    // 章节加载时清洗 XHTML：移除 script/on* 事件（纵深防御）
+    book.spine.hooks.content.register((doc: Document) => sanitizeXhtml(doc));
     const rendition = book.renderTo(hostRef.current, { flow: "paginated", width: "100%", height: "100%" });
     renditionRef.current = rendition;
     appliedRef.current = new Set();
@@ -60,6 +69,12 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
           await rendition.display(location);
         } else {
           await rendition.display();
+        }
+        readyRef.current = true;
+        const pj = pendingJumpRef.current;
+        if (pj) {
+          pendingJumpRef.current = null;
+          await rendition.display(pj);
         }
       } catch (e) {
         if (cancelled) return;
