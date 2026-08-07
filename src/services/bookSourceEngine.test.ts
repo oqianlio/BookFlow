@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs } from "./bookSourceEngine";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -33,5 +33,27 @@ describe("bookSourceEngine", () => {
 
   it("rejects invalid book source JSON", () => {
     expect(() => parseBookSourceJson("{}")).toThrow();
+  });
+});
+
+describe("evalJs", () => {
+  it("evaluates @js: expression with node context", () => {
+    const doc2 = parseHtml(`<a href="/x/1.html">书名</a>`);
+    const node = doc2.querySelector("a")!;
+    const out = evalJs("node.getAttribute('href')", { node, doc: doc2, baseUrl: "https://ex.com" });
+    expect(out).toBe("/x/1.html");
+  });
+
+  it("evaluates @js: with java.base64", () => {
+    const doc3 = parseHtml("<html><body></body></html>");
+    const out = evalJs("java.base64Decode('5L2g5aW9')", { doc: doc3, baseUrl: "https://ex.com" });
+    expect(out).toBe("你好");
+  });
+
+  it("extracts list via @xpath:", () => {
+    const doc4 = parseHtml(SAMPLE_HTML);
+    const list = extractList(doc4, "@xpath://ul[@class='book-list']/li", { name: "a.b-name@text" });
+    expect(list.length).toBe(2);
+    expect(list[0].name).toBe("三体");
   });
 });

@@ -124,8 +124,7 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
     return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
   }
   if (parsed.type === "js") {
-    // Task 3 实现；此处返回空串占位
-    return "";
+    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl });
   }
   const node = doc.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
@@ -144,6 +143,19 @@ export function extractList(
   ctx?: { baseUrl?: string },
 ): Array<Record<string, string>> {
   const parsed = parseRule(listRule);
+  if (parsed.type === "xpath") {
+    const nodes = doc.evaluate(parsed.value, doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    const arr: Element[] = [];
+    for (let i = 0; i < nodes.snapshotLength; i++) {
+      const n = nodes.snapshotItem(i) as Element | null;
+      if (n) arr.push(n);
+    }
+    return arr.map((node) => {
+      const out: Record<string, string> = {};
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule);
+      return out;
+    });
+  }
   if (parsed.type !== "css") return [];
   const nodes = selectNodes(doc, parsed.value);
   return nodes.map((node) => {
@@ -160,4 +172,22 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
   if (parsed.type !== "css") return "";
   const node = el.matches(parsed.value) ? el : el.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, baseUrl) : "";
+}
+
+export function evalJs(expr: string, ctx: { node?: Element; doc: Document; baseUrl?: string }): string {
+  const java = {
+    base64Decode: (b64: string) =>
+      new TextDecoder("utf-8").decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))),
+    regex: (input: string, pattern: string) => {
+      const m = input.match(new RegExp(pattern));
+      return m ? (m[1] ?? m[0]) : "";
+    },
+  };
+  const fn = new Function("node", "doc", "result", "baseUrl", "java", `"use strict"; return (${expr});`);
+  try {
+    const result = fn(ctx.node ?? null, ctx.doc, "", ctx.baseUrl ?? "", java);
+    return result == null ? "" : String(result);
+  } catch (e) {
+    return "";
+  }
 }
