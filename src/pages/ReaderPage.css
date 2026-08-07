@@ -1,32 +1,334 @@
-.reader-page { display: flex; flex-direction: column; height: 100vh; }
-.reader-toolbar { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
-.reader-toolbar h2 { margin: 0; font-size: 16px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.reader-main { flex: 1; overflow: hidden; }
-.reader-host { width: 100%; height: 100%; }
-.md-reader { height: 100%; overflow-y: auto; padding: 24px; box-sizing: border-box; }
-.md-content { max-width: 720px; margin: 0 auto; line-height: 1.8; }
-.txt-reader { height: 100%; display: flex; flex-direction: column; }
-.txt-page { flex: 1; overflow-y: auto; padding: 32px; line-height: 1.9; }
-.txt-nav { display: flex; justify-content: center; align-items: center; gap: 16px; padding: 8px; }
-.pdf-reader { height: 100%; display: flex; flex-direction: column; }
-.pdf-toolbar { display: flex; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
-.pdf-canvas-wrap { flex: 1; overflow: auto; display: flex; justify-content: center; padding: 16px; }
-.pdf-canvas-wrap canvas { box-shadow: 0 2px 12px rgba(0,0,0,.15); }
-.reader-body { flex: 1; display: flex; min-height: 0; }
-.reader-main { flex: 1; min-width: 0; overflow: hidden; }
-.panel { width: 280px; border-left: 1px solid var(--border); padding: 12px; overflow-y: auto; background: var(--panel-bg); }
-.panel ul { list-style: none; margin: 0; padding: 0; }
-.panel li { padding: 8px; border-radius: 6px; background: var(--bg); margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.panel li p { cursor: pointer; margin: 0 0 6px; }
-.panel-add { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.panel-add input, .panel-add select { padding: 6px; }
-.panel-empty { color: #999; }
-.annotation-yellow { border-left: 4px solid #f5c518; }
-.annotation-green { border-left: 4px solid #34a853; }
-.annotation-blue { border-left: 4px solid #4285f4; }
-.annotation-pink { border-left: 4px solid #ea7cbb; }
-.tts-bar { display: flex; align-items: center; gap: 10px; }
-.tts-bar input[type=range] { width: 120px; }
-.error-box { margin: 40px auto; padding: 24px; max-width: 480px; text-align: center; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-bg); }
-.error-box p { margin: 0 0 12px; }
-.error-detail { color: #999; font-size: 13px; word-break: break-all; }
+.reader-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.reader-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.reader-toolbar h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.reader-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.reader-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.reader-host {
+  width: 100%;
+  height: 100%;
+}
+
+/* ============ 阅读排版：正文用衬线体 ============ */
+.md-reader {
+  height: 100%;
+  overflow-y: auto;
+  padding: 40px 28px 60px;
+  box-sizing: border-box;
+}
+
+.md-content {
+  max-width: 46em;
+  margin: 0 auto;
+  font-family: var(--font-read);
+  font-size: 17px;
+  line-height: 1.95;
+  color: var(--fg);
+}
+
+.md-content h1,
+.md-content h2,
+.md-content h3 {
+  font-family: var(--font-read);
+  line-height: 1.4;
+  margin: 1.6em 0 0.6em;
+}
+
+.md-content p {
+  margin: 0 0 1.1em;
+}
+
+.md-content code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+.md-content pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+.md-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.md-content a {
+  color: var(--accent);
+}
+
+.md-content blockquote {
+  margin: 0 0 1.1em;
+  padding: 0 1em;
+  border-left: 3px solid var(--border-strong);
+  color: var(--fg-muted);
+}
+
+.md-content img {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+/* ============ TXT 阅读器 ============ */
+.txt-reader {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.txt-page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 28px 60px;
+  line-height: 1.95;
+  font-family: var(--font-read);
+  font-size: 17px;
+  max-width: 46em;
+  margin: 0 auto;
+  color: var(--fg);
+  width: 100%;
+}
+
+.txt-page p {
+  margin: 0 0 0.9em;
+}
+
+.txt-nav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 13px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* ============ PDF 阅读器 ============ */
+.pdf-reader {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.pdf-toolbar .page-ind {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--fg-muted);
+  min-width: 5em;
+  text-align: center;
+}
+
+.pdf-canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.pdf-canvas-wrap canvas {
+  box-shadow: var(--shadow-md);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.pdf-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--fg-muted);
+  font-family: var(--font-read);
+}
+
+/* ============ 侧栏面板 ============ */
+.panel {
+  width: 300px;
+  border-left: 1px solid var(--border);
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.panel h3 {
+  margin: 0 0 14px;
+  font-family: var(--font-read);
+  font-size: 16px;
+  color: var(--fg);
+}
+
+.panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.panel li {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 8px;
+  box-shadow: var(--shadow-sm);
+  border-left: 3px solid transparent;
+}
+
+.panel li p {
+  cursor: pointer;
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.panel li button {
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.panel li button:hover {
+  color: var(--danger);
+}
+
+.panel-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.panel-add input,
+.panel-add select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.panel-add input:focus,
+.panel-add select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.panel-empty {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.annotation-yellow { border-left-color: #d9a13c; }
+.annotation-green { border-left-color: #6f9a63; }
+.annotation-blue { border-left-color: #6a8fb0; }
+.annotation-pink { border-left-color: #c97a96; }
+
+/* ============ TTS 朗读栏 ============ */
+.tts-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tts-bar label {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.tts-bar .rate-val {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.6em;
+}
+
+.tts-bar input[type="range"] {
+  width: 110px;
+  accent-color: var(--accent);
+}
+
+/* ============ 错误盒 ============ */
+.error-box {
+  margin: 48px auto;
+  padding: 32px 36px;
+  max-width: 420px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.error-box p {
+  margin: 0 0 8px;
+  font-family: var(--font-read);
+  font-size: 17px;
+  color: var(--fg);
+}
+
+.error-box .error-detail {
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  word-break: break-all;
+  font-family: var(--font-ui);
+  margin-bottom: 18px;
+}

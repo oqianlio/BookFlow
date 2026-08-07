@@ -20,9 +20,11 @@ export default function App() {
     return <SettingsPage onBack={() => setView({ name: "library" })} />;
   }
   return (
-    <div>
-      <LibraryPage onOpenBook={(book) => setView({ name: "reader", book })} />
-      <button className="btn-secondary" onClick={() => setView({ name: "settings" })}>设置</button>
+    <div className="app">
+      <LibraryPage
+        onOpenBook={(book) => setView({ name: "reader", book })}
+        onOpenSettings={() => setView({ name: "settings" })}
+      />
     </div>
   );
 }

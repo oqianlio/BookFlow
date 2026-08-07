@@ -26,7 +26,7 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
       <div className="panel-add">
         <input aria-label="搜索关键词" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void run()} placeholder="搜索书名与正文" />
-        <button className="btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
+        <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
       </div>
       <ul>
         {results.map((h, i) => (
