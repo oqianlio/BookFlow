@@ -48,6 +48,16 @@ describe("bookSourceEngine", () => {
     expect(out).toContain("新词1新词2");
     expect(out).not.toContain("旧词");
   });
+
+  it("skips invalid replace patterns without throwing", () => {
+    const out = purifyContent(`<div>正文内容</div>`, ["##\\p{L}##x##"]);
+    expect(out).toContain("正文内容");
+  });
+
+  it("skips empty replace patterns without corrupting content", () => {
+    const out = purifyContent(`正文内容`, ["####"]);
+    expect(out).toBe("正文内容");
+  });
 });
 
 describe("evalJs", () => {

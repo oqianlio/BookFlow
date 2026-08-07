@@ -36,7 +36,12 @@ export function purifyContent(html: string, replaceRules?: string[]): string {
     for (const rule of replaceRules) {
       if (rule.startsWith("##")) {
         const parts = rule.slice(2).split("##");
-        out = out.replace(new RegExp(parts[0], "g"), parts[1] ?? "");
+        if (!parts[0]) continue;
+        try {
+          out = out.replace(new RegExp(parts[0], "g"), parts[1] ?? "");
+        } catch {
+          continue;
+        }
       }
     }
   }
