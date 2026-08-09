@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent, splitAlternatives } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -104,5 +104,34 @@ describe("rule alternatives (||)", () => {
     const doc = parseHtml(`<div><a class="x" href="/1">一</a><a class="x" href="/2">二</a></div>`);
     const out = extractSingle(doc, "tag.a.0@href||tag.a.1@href", { baseUrl: "https://ex.com" });
     expect(out).toBe("https://ex.com/1");
+  });
+});
+
+describe("tag.x index selector", () => {
+  it("resolves tag.x index selector", () => {
+    const doc = parseHtml(`<div><a class="x" href="/1">一</a><a class="x" href="/2">二</a><a class="x" href="/3">三</a></div>`);
+    const el = doc.querySelector("div")!;
+    const second = resolveTagIndex("tag.a.1", el);
+    expect(second?.getAttribute("href")).toBe("/2");
+  });
+
+  it("returns null for out-of-range tag index", () => {
+    const doc = parseHtml(`<div><a href="/1">一</a></div>`);
+    const el = doc.querySelector("div")!;
+    expect(resolveTagIndex("tag.a.5", el)).toBeNull();
+  });
+
+  it("extracts via tag.x in extractSingle", () => {
+    const doc = parseHtml(`<div><a href="/1">一</a><a href="/2">二</a></div>`);
+    const href = extractSingle(doc, "tag.a.1@href", { baseUrl: "https://ex.com" });
+    expect(href).toBe("https://ex.com/2");
+  });
+
+  it("extracts via tag.x in extractList item rules", () => {
+    const doc = parseHtml(`<ul><li><a class="t" href="/a">甲</a><span class="t">乙</span></li><li><a class="t" href="/c">丙</a><span class="t">丁</span></li></ul>`);
+    const list = extractList(doc, "ul > li", { url: "tag.a.0@href", name: "tag.a.0@text" }, { baseUrl: "https://ex.com" });
+    expect(list.length).toBe(2);
+    expect(list[0].url).toBe("https://ex.com/a");
+    expect(list[1].url).toBe("https://ex.com/c");
   });
 });
