@@ -1,12 +1,7 @@
 use std::collections::HashMap;
 
 pub const DEFAULT_TIMEOUT_MS: u64 = 15_000;
-
-/// 请求选项，供规则引擎按需扩展。
-pub struct HttpGetOptions {
-    pub headers: HashMap<String, String>,
-    pub timeout_ms: Option<u64>,
-}
+pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, String> {
     if let Ok(s) = std::str::from_utf8(bytes) {
@@ -17,23 +12,61 @@ pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, 
     Ok(cow.into_owned())
 }
 
+/// 构造请求：书源 header 优先，未声明 UA 时注入默认浏览器 UA；POST 支持 form-urlencoded。
+pub fn build_request(
+    client: &reqwest::blocking::Client,
+    method: &str,
+    url: &str,
+    headers: &HashMap<String, String>,
+    body: Option<&str>,
+    content_type: Option<&str>,
+) -> reqwest::blocking::RequestBuilder {
+    let mut req = if method.eq_ignore_ascii_case("POST") {
+        let ct = content_type.unwrap_or("application/x-www-form-urlencoded");
+        client
+            .post(url)
+            .header(reqwest::header::CONTENT_TYPE, ct)
+            .body(body.unwrap_or("").to_string())
+    } else {
+        client.get(url)
+    };
+    let mut has_ua = false;
+    for (k, v) in headers {
+        if k.eq_ignore_ascii_case("user-agent") {
+            has_ua = true;
+        }
+        req = req.header(k, v);
+    }
+    if !has_ua {
+        req = req.header(reqwest::header::USER_AGENT, DEFAULT_UA);
+    }
+    req
+}
+
 #[tauri::command]
 pub async fn http_get(
     url: String,
     headers: Option<HashMap<String, String>>,
     timeout_ms: Option<u64>,
+    method: Option<String>,
+    body: Option<String>,
+    content_type: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)))
             .build()
             .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?;
-        let mut req = client.get(&url);
-        if let Some(h) = headers {
-            for (k, v) in h {
-                req = req.header(&k, &v);
-            }
-        }
+        let empty = HashMap::new();
+        let h = headers.as_ref().unwrap_or(&empty);
+        let req = build_request(
+            &client,
+            method.as_deref().unwrap_or("GET"),
+            &url,
+            h,
+            body.as_deref(),
+            content_type.as_deref(),
+        );
         let resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
         let bytes = resp.bytes().map_err(|e| format!("读取响应失败: {e}"))?;
         decode_body(&bytes, None)
