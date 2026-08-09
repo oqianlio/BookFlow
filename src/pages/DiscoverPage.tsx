@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { httpGet, listBookSources, type BookSource } from "../services/api";
-import { parseHtml, extractList, parseBookSourceJson, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseHtml, extractList, parseBookSourceJson, parseSearchUrl, type BookSource as Src } from "../services/bookSourceEngine";
 
 export interface SearchHit {
   title: string; author: string; coverUrl: string; bookUrl: string;
@@ -9,9 +9,9 @@ export interface SearchHit {
 
 async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const src: Src = parseBookSourceJson(bs.json);
-  const url = (src.searchUrl ?? "").replace("{{key}}", encodeURIComponent(key));
-  if (!url) return [];
-  const html = await httpGet(url, src.httpHeaders, undefined);
+  const parsed = parseSearchUrl(src.searchUrl ?? "", key);
+  if (!parsed.url) return [];
+  const html = await httpGet(parsed.url, src.httpHeaders, undefined, parsed.method, parsed.body);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
   const itemRules: Record<string, string> = {};

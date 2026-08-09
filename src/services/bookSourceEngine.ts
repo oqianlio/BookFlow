@@ -261,3 +261,18 @@ export function evalJs(expr: string, ctx: { node?: Element; doc: Document; baseU
     return "";
   }
 }
+
+export function parseSearchUrl(searchUrl: string, key: string): { url: string; method?: string; body?: string } {
+  const commaIdx = searchUrl.indexOf(",{");
+  if (commaIdx === -1) {
+    return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
+  }
+  const url = searchUrl.slice(0, commaIdx);
+  try {
+    const opts = JSON.parse(searchUrl.slice(commaIdx + 1));
+    const body = (opts.body ?? "").replace("{{key}}", encodeURIComponent(key));
+    return { url, method: opts.method ?? "POST", body };
+  } catch {
+    return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
+  }
+}
