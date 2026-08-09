@@ -79,6 +79,10 @@ export function parseRule(rule: string): ParsedRule {
 }
 
 function parseAttrRule(s: string): ParsedRule {
+  if (s.startsWith("@")) {
+    // 纯属性后缀（如 "@text"/"@href"）：表示对当前节点自身取值
+    return { type: "css", value: "", attr: s.slice(1) };
+  }
   const m = s.match(/^(.+?)@([a-zA-Z]+)$/);
   if (m) {
     return { type: "css", value: m[1], attr: m[2] };
@@ -115,6 +119,8 @@ export function nodeValue(node: Element, attr?: string): string {
     }
     case "all":
       return (node.textContent ?? "").trim();
+    case "html":
+      return (node as HTMLElement).innerHTML?.trim() ?? "";
     case "href":
       return node.getAttribute("href") ?? "";
     case "src":
@@ -148,6 +154,7 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
   if (parsed.type === "js") {
     return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl });
   }
+  if (!parsed.value) return "";
   const node = doc.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
 }
@@ -192,6 +199,10 @@ export function extractList(
 function extractFromElement(el: Element, rule: string, baseUrl?: string): string {
   const parsed = parseRule(rule);
   if (parsed.type !== "css") return "";
+  if (!parsed.value) {
+    // 纯属性规则（如 "@text"）：取当前节点自身
+    return finalize(nodeValue(el, parsed.attr), parsed.attr, baseUrl);
+  }
   const node = el.matches(parsed.value) ? el : el.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, baseUrl) : "";
 }
