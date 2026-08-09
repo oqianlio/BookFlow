@@ -646,6 +646,10 @@ input[type="range"] {
 .source-url { font-size: 12px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-actions { display: flex; align-items: center; gap: 8px; }
 .book-source-manager textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); font-size: 12px; font-family: ui-monospace, Consolas, monospace; resize: vertical; }
+.source-import { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.source-import-row { display: flex; gap: 8px; }
+.source-import-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); font-size: 13px; }
+.source-import-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* ============ 发现与搜索（书源） ============ */
 .discover-search {
