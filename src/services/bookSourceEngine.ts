@@ -119,6 +119,21 @@ export function nodeValue(node: Element, attr?: string): string {
     }
     case "all":
       return (node.textContent ?? "").trim();
+    case "textNodes": {
+      // legado 的 @textNodes：收集所有后代文本节点并拼接（常用于正文提取）
+      let out = "";
+      const walker = (n: Node) => {
+        for (const child of n.childNodes) {
+          if (child.nodeType === 3) {
+            out += (child.textContent ?? "") + "\n";
+          } else {
+            walker(child);
+          }
+        }
+      };
+      walker(node);
+      return out.trim();
+    }
     case "html":
       return (node as HTMLElement).innerHTML?.trim() ?? "";
     case "href":

@@ -134,4 +134,12 @@ describe("tag.x index selector", () => {
     expect(list[0].url).toBe("https://ex.com/a");
     expect(list[1].url).toBe("https://ex.com/c");
   });
+
+  it("extracts @textNodes joining all descendant text", () => {
+    const doc = parseHtml(`<div class="content"><p>第一段</p><p>第二段</p><span>附注</span></div>`);
+    const out = extractSingle(doc, ".content@textNodes");
+    expect(out).toContain("第一段");
+    expect(out).toContain("第二段");
+    expect(out).toContain("附注");
+  });
 });
