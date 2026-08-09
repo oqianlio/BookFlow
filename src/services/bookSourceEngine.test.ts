@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent, splitAlternatives } from "./bookSourceEngine";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -79,5 +79,30 @@ describe("evalJs", () => {
     const list = extractList(doc4, "@xpath://ul[@class='book-list']/li", { name: "a.b-name@text" });
     expect(list.length).toBe(2);
     expect(list[0].name).toBe("三体");
+  });
+});
+
+describe("rule alternatives (||)", () => {
+  it("splits || alternatives", () => {
+    expect(splitAlternatives("a@text||b@text")).toEqual(["a@text", "b@text"]);
+    expect(splitAlternatives("single@text")).toEqual(["single@text"]);
+  });
+
+  it("uses first non-empty alternative", () => {
+    const doc = parseHtml(`<div><span class="a"></span><p class="b">命中</p></div>`);
+    const out = extractSingle(doc, "span.a@text||p.b@text");
+    expect(out).toBe("命中");
+  });
+
+  it("falls through when first alternative empty", () => {
+    const doc = parseHtml(`<div><p class="b">只有B</p></div>`);
+    const out = extractSingle(doc, "span.a@text||p.b@text");
+    expect(out).toBe("只有B");
+  });
+
+  it("handles tag.x inside alternatives", () => {
+    const doc = parseHtml(`<div><a class="x" href="/1">一</a><a class="x" href="/2">二</a></div>`);
+    const out = extractSingle(doc, "tag.a.0@href||tag.a.1@href", { baseUrl: "https://ex.com" });
+    expect(out).toBe("https://ex.com/1");
   });
 });

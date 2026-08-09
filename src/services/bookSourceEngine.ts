@@ -130,7 +130,28 @@ export function nodeValue(node: Element, attr?: string): string {
   }
 }
 
+export function splitAlternatives(rule: string): string[] {
+  return rule.split("||").map((s) => s.trim()).filter((s) => s.length > 0);
+}
+
+export function resolveTagIndex(selector: string, scope: Document | Element): Element | null {
+  const m = selector.match(/^tag\.([a-zA-Z][\w-]*)\.(\d+)$/);
+  if (!m) return null;
+  const tag = m[1];
+  const index = parseInt(m[2], 10);
+  const nodes = scope.querySelectorAll(tag);
+  return nodes[index] ?? null;
+}
+
 export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string }): string {
+  const alts = splitAlternatives(rule);
+  if (alts.length > 1) {
+    for (const alt of alts) {
+      const v = extractSingle(doc, alt, ctx);
+      if (v) return v;
+    }
+    return "";
+  }
   const parsed = parseRule(rule);
   if (parsed.type === "regex") {
     const m = rule.match(/{{(.*?)}}/);
@@ -155,6 +176,10 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
     return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl });
   }
   if (!parsed.value) return "";
+  if (parsed.value.startsWith("tag.")) {
+    const node = resolveTagIndex(parsed.value, doc);
+    return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
+  }
   const node = doc.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
 }
@@ -197,11 +222,23 @@ export function extractList(
 }
 
 function extractFromElement(el: Element, rule: string, baseUrl?: string): string {
+  const alts = splitAlternatives(rule);
+  if (alts.length > 1) {
+    for (const alt of alts) {
+      const v = extractFromElement(el, alt, baseUrl);
+      if (v) return v;
+    }
+    return "";
+  }
   const parsed = parseRule(rule);
   if (parsed.type !== "css") return "";
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取当前节点自身
     return finalize(nodeValue(el, parsed.attr), parsed.attr, baseUrl);
+  }
+  if (parsed.value.startsWith("tag.")) {
+    const node = resolveTagIndex(parsed.value, el);
+    return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, baseUrl) : "";
   }
   const node = el.matches(parsed.value) ? el : el.querySelector(parsed.value);
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, baseUrl) : "";
