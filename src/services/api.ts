@@ -95,6 +95,13 @@ export async function httpGet(
   });
 }
 
+export function mergeUserAgent(headers: Record<string, string> | undefined, userAgent: string | undefined): Record<string, string> | undefined {
+  if (!userAgent) return headers;
+  const hasUa = Object.keys(headers ?? {}).some((k) => k.toLowerCase() === "user-agent");
+  if (hasUa) return headers;
+  return { ...(headers ?? {}), "User-Agent": userAgent };
+}
+
 export async function listBookSources(): Promise<BookSource[]> {
   return invoke<BookSource[]>("list_book_sources");
 }

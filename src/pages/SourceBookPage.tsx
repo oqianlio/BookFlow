@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { httpGet } from "../services/api";
+import { httpGet, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, extractList } from "../services/bookSourceEngine";
 
 interface TocItem { name: string; url: string }
@@ -22,7 +22,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         if (!bookUrl) { setError("书籍地址无效，无法打开"); return; }
         const base = s.bookSourceUrl || bookUrl;
         const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
-        const html = await httpGet(resolvedBookUrl, s.httpHeaders, undefined);
+        const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined);
         const doc = parseHtml(html);
         const bi = s.ruleBookInfo ?? {};
         const title = bi.name ? extractSingle(doc, bi.name) : initialTitle;
@@ -30,7 +30,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const intro = bi.intro ? extractSingle(doc, bi.intro) : "";
         const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl) : "";
         const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl }) : resolvedBookUrl;
-        const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, s.httpHeaders, undefined);
+        const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined);
         const tocDoc = parseHtml(tocHtml);
         const rules = s.ruleToc ?? {};
         const items = extractList(tocDoc, rules.chapterList ?? "", {

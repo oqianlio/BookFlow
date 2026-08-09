@@ -7,6 +7,10 @@ import * as api from "../services/api";
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
   httpGet: vi.fn(),
+  mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
+    ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
+      ? { ...(h ?? {}), "User-Agent": ua }
+      : h,
 }));
 
 describe("DiscoverPage", () => {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { httpGet, listBookSources, type BookSource } from "../services/api";
+import { httpGet, listBookSources, mergeUserAgent, type BookSource } from "../services/api";
 import { parseHtml, extractList, parseBookSourceJson, parseSearchUrl, type BookSource as Src } from "../services/bookSourceEngine";
 
 export interface SearchHit {
@@ -11,7 +11,7 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const src: Src = parseBookSourceJson(bs.json);
   const parsed = parseSearchUrl(src.searchUrl ?? "", key);
   if (!parsed.url) return [];
-  const html = await httpGet(parsed.url, src.httpHeaders, undefined, parsed.method, parsed.body);
+  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
   const itemRules: Record<string, string> = {};

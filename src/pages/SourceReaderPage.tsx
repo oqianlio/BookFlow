@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon } from "../components/icons";
-import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress } from "../services/api";
+import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, type BookSource as Src } from "../services/bookSourceEngine";
 import "./ReaderPage.css";
 
@@ -27,7 +27,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
       if (!bs) { setError("书源不存在"); setLoading(false); return; }
       const src: Src = parseBookSourceJson(bs.json);
-      const html = await httpGet(c.url, src.httpHeaders, undefined);
+      const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined);
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url });

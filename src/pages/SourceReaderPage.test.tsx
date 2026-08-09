@@ -8,6 +8,10 @@ vi.mock("../services/api", () => ({
   httpGet: vi.fn(),
   getBookSourceProgress: vi.fn().mockResolvedValue(null),
   saveBookSourceProgress: vi.fn().mockResolvedValue(undefined),
+  mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
+    ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
+      ? { ...(h ?? {}), "User-Agent": ua }
+      : h,
 }));
 
 const sourceJson = JSON.stringify({
