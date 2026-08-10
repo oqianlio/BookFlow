@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
+import { md5 } from "./md5";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -141,5 +142,55 @@ describe("tag.x index selector", () => {
     expect(out).toContain("第一段");
     expect(out).toContain("第二段");
     expect(out).toContain("附注");
+  });
+});
+
+describe("evalJs extended", () => {
+  const doc = emptyDoc();
+
+  it("returns string value", () => {
+    expect(evalJs("'hello'", { doc })).toBe("hello");
+  });
+
+  it("returns number without forcing String", () => {
+    expect(evalJs("1 + 2", { doc })).toBe(3);
+  });
+
+  it("returns object/array value", () => {
+    const r = evalJs("({a: 1})", { doc });
+    expect(r).toEqual({ a: 1 });
+  });
+
+  it("injects key/page/result/source context", () => {
+    const r = evalJs("key + ':' + page + ':' + result", { doc, key: "斗破", page: 2, result: "HTML" });
+    expect(r).toBe("斗破:2:HTML");
+  });
+
+  it("java.encodeURI encodes", () => {
+    expect(evalJs("java.encodeURI('你好')", { doc })).toBe(encodeURIComponent("你好"));
+  });
+
+  it("java.base64Decode decodes utf8", () => {
+    expect(evalJs("java.base64Decode('5L2g5aW9')", { doc })).toBe("你好");
+  });
+
+  it("java.md5 hashes", () => {
+    expect(evalJs("java.md5('abc')", { doc })).toBe(md5("abc"));
+  });
+
+  it("java.regex extracts group", () => {
+    expect(evalJs("java.regex('id-123', 'id-(\\\\d+)')", { doc })).toBe("123");
+  });
+
+  it("returns empty string on exception, does not throw", () => {
+    const r = evalJs("null.x", { doc });
+    expect(r).toBeFalsy();
+  });
+});
+
+describe("md5", () => {
+  it("matches known vectors", () => {
+    expect(md5("")).toBe("d41d8cd98f00b204e9800998ecf8427e");
+    expect(md5("abc")).toBe("900150983cd24fb0d6963f7d28e17f72");
   });
 });

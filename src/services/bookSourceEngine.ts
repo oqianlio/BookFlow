@@ -1,3 +1,5 @@
+import { md5 } from "./md5";
+
 export type EngineResult = string;
 
 export type ParsedRule = {
@@ -259,19 +261,43 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
   return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, baseUrl) : "";
 }
 
-export function evalJs(expr: string, ctx: { node?: Element; doc: Document; baseUrl?: string }): string {
+export function emptyDoc(): Document {
+  return new DOMParser().parseFromString("", "text/html");
+}
+
+export interface JsContext {
+  node?: Element;
+  doc: Document;
+  result?: string;
+  baseUrl?: string;
+  key?: string;
+  page?: number;
+  source?: any;
+}
+
+export function evalJs(expr: string, ctx: JsContext): any {
   const java = {
+    encodeURI: (s: string) => encodeURIComponent(String(s)),
+    decodeURI: (s: string) => decodeURIComponent(String(s)),
     base64Decode: (b64: string) =>
-      new TextDecoder("utf-8").decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))),
+      new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
+    base64Encode: (s: string) => btoa(String(s)),
     regex: (input: string, pattern: string) => {
-      const m = input.match(new RegExp(pattern));
+      const m = String(input).match(new RegExp(pattern));
       return m ? (m[1] ?? m[0]) : "";
     },
+    md5: (s: string) => md5(String(s)),
+    md5Encode: (s: string) => md5(String(s)),
+    random: (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min,
   };
-  const fn = new Function("node", "doc", "result", "baseUrl", "java", `"use strict"; return (${expr});`);
+  const source = ctx.source ?? {};
+  if (!source.getVariable) source.getVariable = () => "";
+  const fn = new Function(
+    "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url",
+    `"use strict"; return (${expr});`,
+  );
   try {
-    const result = fn(ctx.node ?? null, ctx.doc, "", ctx.baseUrl ?? "", java);
-    return result == null ? "" : String(result);
+    return fn(ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "");
   } catch (e) {
     return "";
   }
