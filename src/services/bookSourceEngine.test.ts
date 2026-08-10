@@ -190,6 +190,21 @@ describe("evalJs extended", () => {
     const r = evalJs("null.x", { doc });
     expect(r).toBeFalsy();
   });
+
+  it("runs multi-statement scripts returning last expression", () => {
+    const r = evalJs("var base='http://x.com'; base + '/api?key=' + java.encodeURI(key)", { doc, key: "斗破" });
+    expect(r).toBe("http://x.com/api?key=" + encodeURIComponent("斗破"));
+  });
+
+  it("runs multi-statement scripts returning result assignment", () => {
+    const r = evalJs("var arr=[1,2,3]; var out=[]; for(var i=0;i<arr.length;i++){out.push(arr[i]*2);} result=out;", { doc });
+    expect(r).toEqual([2, 4, 6]);
+  });
+
+  it("runs scripts with explicit return statement", () => {
+    const r = evalJs("var x = 5; return x * 2;", { doc });
+    expect(r).toBe(10);
+  });
 });
 
 describe("md5", () => {
