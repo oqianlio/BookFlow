@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
@@ -291,5 +291,36 @@ describe("resolveSearchUrl", () => {
   it("falls back to plain parseSearchUrl for non-@js", () => {
     const r = resolveSearchUrl("https://x.com/search?q={{key}}", "三体", 1);
     expect(r.url).toBe("https://x.com/search?q=" + encodeURIComponent("三体"));
+  });
+});
+
+describe("parseExploreUrl", () => {
+  it("parses category::url lines", () => {
+    const r = parseExploreUrl("玄幻::/sort/1_{{page}}.html\n都市::/sort/2_{{page}}.html");
+    expect(r).toEqual([
+      { title: "玄幻", url: "/sort/1_{{page}}.html" },
+      { title: "都市", url: "/sort/2_{{page}}.html" },
+    ]);
+  });
+
+  it("filters empty lines", () => {
+    const r = parseExploreUrl("玄幻::/a.html\n\n\n都市::/b.html");
+    expect(r.length).toBe(2);
+  });
+
+  it("handles lines without ::", () => {
+    const r = parseExploreUrl("仅标题");
+    expect(r).toEqual([{ title: "仅标题", url: "仅标题" }]);
+  });
+});
+
+describe("extractBookList", () => {
+  it("extracts books from itemRules", () => {
+    const doc = parseHtml(`<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li><li><a class="n" href="/b/2">活着</a><span class="a">余华</span></li></ul>`);
+    const rules = { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" };
+    const books = extractBookList(doc, rules, { baseUrl: "https://ex.com" });
+    expect(books.length).toBe(2);
+    expect(books[0].name).toBe("三体");
+    expect(books[1].bookUrl).toBe("https://ex.com/b/2");
   });
 });

@@ -394,3 +394,27 @@ export function resolveSearchUrl(searchUrl: string, key: string, page: number): 
   }
   return parseSearchUrl(s, key);
 }
+
+export function parseExploreUrl(exploreUrl: string): Array<{ title: string; url: string }> {
+  return exploreUrl
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const idx = line.indexOf("::");
+      if (idx === -1) return { title: line, url: line };
+      return { title: line.slice(0, idx).trim(), url: line.slice(idx + 2).trim() };
+    });
+}
+
+export function extractBookList(
+  doc: Document,
+  rules: Record<string, string>,
+  ctx: { baseUrl?: string; result?: string },
+): Array<Record<string, string>> {
+  const itemRules: Record<string, string> = {};
+  for (const k of ["name", "author", "coverUrl", "bookUrl"] as const) {
+    if (rules[k]) itemRules[k] = rules[k];
+  }
+  return extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result });
+}
