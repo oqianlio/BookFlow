@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent, type BookSource } from "../services/api";
 import { parseHtml, extractList, parseBookSourceJson, resolveSearchUrl, type BookSource as Src } from "../services/bookSourceEngine";
 
@@ -25,14 +25,32 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   }));
 }
 
-export default function DiscoverPage({ onBack, onOpenBook }: {
+export default function DiscoverPage({ onBack, onOpenBook, onOpenExplore }: {
   onBack: () => void;
   onOpenBook: (h: SearchHit) => void;
+  onOpenExplore?: (sourceId: number, sourceName: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exploreSources, setExploreSources] = useState<Array<{ id: number; name: string }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sources = (await listBookSources()).filter((s) => s.enabled);
+        const withExplore = sources
+          .map((s) => ({ id: s.id, name: s.name, exploreUrl: parseBookSourceJson(s.json).exploreUrl }))
+          .filter((s) => s.exploreUrl);
+        if (!cancelled) setExploreSources(withExplore.map(({ id, name }) => ({ id, name })));
+      } catch {
+        if (!cancelled) setExploreSources([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const run = async () => {
     if (!query.trim()) return;
@@ -59,6 +77,13 @@ export default function DiscoverPage({ onBack, onOpenBook }: {
           onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />
         <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
       </div>
+      {exploreSources.length > 0 && onOpenExplore && (
+        <div className="explore-entry">
+          {exploreSources.map((s) => (
+            <button key={s.id} className="btn btn-ghost" onClick={() => onOpenExplore(s.id, s.name)}>浏览 {s.name}</button>
+          ))}
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       <div className="discover-results">
         {hits.length === 0 && !busy ? (

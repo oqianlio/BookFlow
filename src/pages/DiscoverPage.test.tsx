@@ -31,4 +31,18 @@ describe("DiscoverPage", () => {
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText(/示例书源/)).toBeInTheDocument();
   });
+
+  it("shows explore entry for enabled sources with exploreUrl", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "有浏览", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "有浏览", exploreUrl: "分类::/x.html" }), enabled: true, last_used_at: null },
+      { id: 2, name: "无浏览", url: "https://ex2.com", json: JSON.stringify({ bookSourceUrl: "https://ex2.com", bookSourceName: "无浏览" }), enabled: true, last_used_at: null },
+    ]);
+    const onOpenExplore = vi.fn();
+    render(<DiscoverPage onBack={() => {}} onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
+    await screen.findByPlaceholderText("输入书名搜索所有已启用书源");
+    expect(await screen.findByText(/浏览 有浏览/)).toBeInTheDocument();
+    expect(screen.queryByText(/浏览 无浏览/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText(/浏览 有浏览/));
+    expect(onOpenExplore).toHaveBeenCalledWith(1, "有浏览");
+  });
 });

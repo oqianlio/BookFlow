@@ -5,6 +5,7 @@ import SettingsPage from "./pages/SettingsPage";
 import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
 import SourceBookPage from "./pages/SourceBookPage";
 import SourceReaderPage from "./pages/SourceReaderPage";
+import ExplorePage from "./pages/ExplorePage";
 import type { Book } from "./services/api";
 import "./App.css";
 
@@ -13,6 +14,7 @@ type View =
   | { name: "reader"; book: Book }
   | { name: "settings" }
   | { name: "discover" }
+  | { name: "explore"; sourceId: number; sourceName: string }
   | { name: "sourceBook"; hit: SearchHit }
   | { name: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string };
 
@@ -29,6 +31,17 @@ export default function App() {
     return (
       <DiscoverPage
         onBack={() => setView({ name: "library" })}
+        onOpenBook={(hit) => setView({ name: "sourceBook", hit })}
+        onOpenExplore={(id, name) => setView({ name: "explore", sourceId: id, sourceName: name })}
+      />
+    );
+  }
+  if (view.name === "explore") {
+    return (
+      <ExplorePage
+        sourceId={view.sourceId}
+        sourceName={view.sourceName}
+        onBack={() => setView({ name: "discover" })}
         onOpenBook={(hit) => setView({ name: "sourceBook", hit })}
       />
     );
