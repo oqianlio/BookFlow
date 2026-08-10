@@ -211,7 +211,7 @@ export function extractList(
   doc: Document,
   listRule: string,
   itemRules: Record<string, string>,
-  ctx?: { baseUrl?: string },
+  ctx?: { baseUrl?: string; result?: string },
 ): Array<Record<string, string>> {
   const parsed = parseRule(listRule);
   if (parsed.type === "xpath") {
@@ -227,6 +227,20 @@ export function extractList(
       return out;
     });
   }
+  if (parsed.type === "js") {
+    const raw = evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "" });
+    let items: any[];
+    try {
+      items = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
+    } catch {
+      items = [];
+    }
+    return (items as any[]).map((item) => {
+      const out: Record<string, string> = {};
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromJsObject(item, rule, ctx?.baseUrl);
+      return out;
+    });
+  }
   if (parsed.type !== "css") return [];
   const nodes = selectNodes(doc, parsed.value);
   return nodes.map((node) => {
@@ -236,6 +250,22 @@ export function extractList(
     }
     return out;
   });
+}
+
+export function extractFromJsObject(obj: any, rule: string, baseUrl?: string): string {
+  const s = rule.trim();
+  if (!s) return "";
+  if (s.startsWith("@js:")) {
+    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl }) ?? "");
+  }
+  const field = s.startsWith("$.") ? s.slice(2) : s;
+  const v = obj[field];
+  if (v == null) return "";
+  const str = String(v);
+  if ((field === "bookUrl" || field === "coverUrl") && baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) {
+    return resolveUrl(str, baseUrl);
+  }
+  return str;
 }
 
 function extractFromElement(el: Element, rule: string, baseUrl?: string): string {

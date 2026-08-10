@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
@@ -192,5 +192,42 @@ describe("md5", () => {
   it("matches known vectors", () => {
     expect(md5("")).toBe("d41d8cd98f00b204e9800998ecf8427e");
     expect(md5("abc")).toBe("900150983cd24fb0d6963f7d28e17f72");
+  });
+});
+
+describe("extractList @js: branch", () => {
+  const jsList = "@js:JSON.parse(result).data";
+  const itemRules = { name: "$.book_name", author: "$.author", bookUrl: "$.book_id" };
+
+  it("parses JSON array returned by @js:", () => {
+    const doc = emptyDoc();
+    const items = extractList(doc, jsList, itemRules, { result: JSON.stringify({ data: [
+      { book_name: "三体", author: "刘慈欣", book_id: "1" },
+      { book_name: "活着", author: "余华", book_id: "2" },
+    ] }) });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("三体");
+    expect(items[1].author).toBe("余华");
+  });
+
+  it("handles @js: returning an array directly", () => {
+    const doc = emptyDoc();
+    const items = extractList(doc, "@js:[{a:'x'},{a:'y'}]", { a: "$.a" }, {});
+    expect(items.length).toBe(2);
+    expect(items[0].a).toBe("x");
+  });
+
+  it("extractFromJsObject supports $.field and plain field", () => {
+    expect(extractFromJsObject({ name: "N", id: 7 }, "$.name")).toBe("N");
+    expect(extractFromJsObject({ name: "N", id: 7 }, "id")).toBe("7");
+  });
+
+  it("extractFromJsObject handles @js: rule with result as object", () => {
+    const rule = "@js:'https://x.com/api/' + result.book_id";
+    expect(extractFromJsObject({ book_id: "9" }, rule)).toBe("https://x.com/api/9");
+  });
+
+  it("extractFromJsObject returns empty for missing field", () => {
+    expect(extractFromJsObject({ a: 1 }, "$.missing")).toBe("");
   });
 });
