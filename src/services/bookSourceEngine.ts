@@ -1,4 +1,5 @@
 import { md5 } from "./md5";
+import { SymmetricCrypto } from "./aes";
 
 export type EngineResult = string;
 
@@ -334,6 +335,8 @@ export function evalJs(expr: string, ctx: JsContext): any {
     md5: (s: string) => md5(String(s)),
     md5Encode: (s: string) => md5(String(s)),
     random: (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min,
+    createSymmetricCrypto: (transformation: string, key: any, iv?: any) =>
+      new SymmetricCrypto(transformation, key, iv),
   };
   const source = ctx.source ?? {};
   if (!source.getVariable) source.getVariable = () => "";

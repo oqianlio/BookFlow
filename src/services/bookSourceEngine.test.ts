@@ -219,6 +219,11 @@ describe("evalJs extended", () => {
     const r = evalJs("String(this.source.getVariable())", { doc, source });
     expect(r).toBe("abc");
   });
+
+  it("java.createSymmetricCrypto encrypts and decrypts", () => {
+    const r = evalJs("var c=java.createSymmetricCrypto('AES/ECB/PKCS5Padding','0123456789abcdef'); c.decryptStr(c.encryptBase64('你好'))", { doc: emptyDoc() });
+    expect(r).toBe("你好");
+  });
 });
 
 describe("md5", () => {
