@@ -763,3 +763,7 @@ input[type="range"] {
 .source-reader .reader-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-reader .reader-chapter { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-muted); font-size: 13px; font-weight: 500; }
 
+/* ============ 探索浏览页 ============ */
+.explore-cats { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 16px; }
+.explore-cats .btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+

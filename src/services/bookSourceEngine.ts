@@ -16,6 +16,8 @@ export interface BookSource {
   httpUserAgent?: string;
   httpHeaders?: Record<string, string>;
   searchUrl?: string;
+  exploreUrl?: string;
+  ruleExplore?: any;
   bookUrlPattern?: string;
   ruleSearch?: any;
   ruleBookInfo?: any;
