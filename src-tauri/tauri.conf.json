@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "阅卷",
+  "productName": "枕书",
   "version": "0.1.0",
   "identifier": "com.administrator.yd",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "阅卷",
+        "title": "枕书",
         "width": 800,
         "height": 600
       }

@@ -65,7 +65,7 @@ export default function LibraryPage({
     <div className="library">
       <header className="library-header">
         <div className="brand">
-          <h1>阅卷</h1>
+          <h1>枕书</h1>
           <small>桌面阅读器</small>
         </div>
         <div className="library-actions">
