@@ -35,7 +35,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const rules = s.ruleToc ?? {};
         const items = extractList(tocDoc, rules.chapterList ?? "", {
           name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-        }, { baseUrl: tocUrl });
+        }, { baseUrl: tocUrl, result: tocHtml });
         const tocItems = items.filter((i) => i.url).map((i) => ({
           name: i.name || "未命名章节",
           url: i.url.startsWith("http") ? i.url : new URL(i.url, tocUrl).toString(),

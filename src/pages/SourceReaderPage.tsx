@@ -30,7 +30,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined);
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
-      const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url });
+      const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html });
       const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url }) : "";
       nextUrlRef.current = next;
       setContent(purifyContent(text, (src as any).purify));

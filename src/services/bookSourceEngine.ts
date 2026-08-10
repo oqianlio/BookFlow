@@ -160,7 +160,7 @@ export function resolveTagIndex(selector: string, scope: Document | Element): El
   return nodes[index] ?? null;
 }
 
-export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string }): string {
+export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: string }): string {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -190,7 +190,7 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
     return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
   }
   if (parsed.type === "js") {
-    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl });
+    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "" });
   }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
@@ -346,4 +346,13 @@ export function parseSearchUrl(searchUrl: string, key: string): { url: string; m
   } catch {
     return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
   }
+}
+
+export function resolveSearchUrl(searchUrl: string, key: string, page: number): { url: string; method?: string; body?: string } {
+  const s = searchUrl.trim();
+  if (s.startsWith("@js:")) {
+    const url = String(evalJs(s.slice(4), { doc: emptyDoc(), key, page, result: "" }) ?? "");
+    return { url };
+  }
+  return parseSearchUrl(searchUrl, key);
 }

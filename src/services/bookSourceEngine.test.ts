@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
@@ -229,5 +229,18 @@ describe("extractList @js: branch", () => {
 
   it("extractFromJsObject returns empty for missing field", () => {
     expect(extractFromJsObject({ a: 1 }, "$.missing")).toBe("");
+  });
+});
+
+describe("resolveSearchUrl", () => {
+  it("handles @js: searchUrl", () => {
+    const js = "@js:'https://x.com/api/search?key=' + java.encodeURI(key) + '&page=' + page";
+    const r = resolveSearchUrl(js, "斗破", 1);
+    expect(r.url).toBe("https://x.com/api/search?key=" + encodeURIComponent("斗破") + "&page=1");
+  });
+
+  it("falls back to plain parseSearchUrl for non-@js", () => {
+    const r = resolveSearchUrl("https://x.com/search?q={{key}}", "三体", 1);
+    expect(r.url).toBe("https://x.com/search?q=" + encodeURIComponent("三体"));
   });
 });
