@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent, type BookSource } from "../services/api";
-import { parseHtml, extractList, parseBookSourceJson, resolveSearchUrl, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, type BookSource as Src } from "../services/bookSourceEngine";
 
 export interface SearchHit {
   title: string; author: string; coverUrl: string; bookUrl: string;
@@ -14,11 +14,7 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
-  const itemRules: Record<string, string> = {};
-  for (const k of ["name", "author", "coverUrl", "bookUrl"] as const) {
-    if (rules[k]) itemRules[k] = rules[k];
-  }
-  const items = extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: src.bookSourceUrl, result: html });
+  const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });
   return items.filter((i) => i.name).map((i) => ({
     title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
     bookUrl: i.bookUrl ?? "", sourceId: bs.id, sourceName: bs.name,

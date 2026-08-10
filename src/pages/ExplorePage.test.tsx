@@ -30,4 +30,39 @@ describe("ExplorePage", () => {
     await userEvent.click(screen.getByText("玄幻"));
     await waitFor(() => expect(screen.getByText("三体")).toBeInTheDocument());
   });
+
+  it("paginates categories whose url contains {{page}}", async () => {
+    const paginatedJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "测试",
+      exploreUrl: "玄幻::/sort/1_{{page}}.html\n都市::/list/2.html",
+      ruleExplore: { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "测试", url: "https://ex.com", json: paginatedJson, enabled: true, last_used_at: null },
+    ]);
+    const get = vi.mocked(api.httpGet);
+    get.mockClear();
+    get.mockImplementation(async (url: string) => {
+      if (url.includes("sort/1_1.html")) return `<ul class="list"><li><a class="n" href="/b/p1">甲</a></li></ul>`;
+      if (url.includes("sort/1_2.html")) return `<ul class="list"><li><a class="n" href="/b/p2">乙</a></li></ul>`;
+      if (url.includes("list/2.html")) return `<ul class="list"><li><a class="n" href="/b/c">丙</a></li></ul>`;
+      return "<ul></ul>";
+    });
+    render(<ExplorePage sourceId={1} sourceName="测试" onBack={() => {}} onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("玄幻")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByText("玄幻"));
+    await waitFor(() => expect(screen.getByText("甲")).toBeInTheDocument());
+    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_1.html", undefined, undefined);
+    expect(screen.getByText("下一页")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("下一页"));
+    await waitFor(() => expect(screen.getByText("乙")).toBeInTheDocument());
+    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_2.html", undefined, undefined);
+
+    await userEvent.click(screen.getByText("都市"));
+    await waitFor(() => expect(screen.getByText("丙")).toBeInTheDocument());
+    expect(get).toHaveBeenCalledWith("https://ex.com/list/2.html", undefined, undefined);
+    expect(screen.queryByText("下一页")).not.toBeInTheDocument();
+  });
 });

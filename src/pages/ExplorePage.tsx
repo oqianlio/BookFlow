@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import type { SearchHit } from "./DiscoverPage";
@@ -13,6 +13,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
   const [active, setActive] = useState<{ title: string; url: string } | null>(null);
   const [page, setPage] = useState(1);
   const [src, setSrc] = useState<Src | null>(null);
+  const reqIdRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +32,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
 
   const loadCategory = useCallback(async (cat: { title: string; url: string }, pg: number) => {
     if (!src) return;
+    const seq = ++reqIdRef.current;
     setBusy(true); setError(null);
     try {
       const rawUrl = cat.url.replace("{{page}}", String(pg));
@@ -39,15 +41,18 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
       const doc = parseHtml(html);
       const rules = src.ruleExplore ?? {};
       const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });
+      if (seq !== reqIdRef.current) return;
       setBooks(items.filter((i) => i.name).map((i) => ({
         title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
         bookUrl: i.bookUrl ?? "", sourceId, sourceName,
       })));
       setActive(cat); setPage(pg);
     } catch (e) {
+      if (seq !== reqIdRef.current) return;
+      setBooks([]);
       setError(String(e));
     } finally {
-      setBusy(false);
+      if (seq === reqIdRef.current) setBusy(false);
     }
   }, [src, sourceId, sourceName]);
 
