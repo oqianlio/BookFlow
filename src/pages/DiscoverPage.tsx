@@ -41,10 +41,16 @@ export default function DiscoverPage({ onBack, onOpenBook, onOpenExplore }: {
     (async () => {
       try {
         const sources = (await listBookSources()).filter((s) => s.enabled);
-        const withExplore = sources
-          .map((s) => ({ id: s.id, name: s.name, exploreUrl: parseBookSourceJson(s.json).exploreUrl }))
-          .filter((s) => s.exploreUrl);
-        if (!cancelled) setExploreSources(withExplore.map(({ id, name }) => ({ id, name })));
+        const withExplore: Array<{ id: number; name: string }> = [];
+        for (const s of sources) {
+          try {
+            const src = parseBookSourceJson(s.json);
+            if (src.exploreUrl) withExplore.push({ id: s.id, name: s.name });
+          } catch {
+            // 单个书源 JSON 解析失败，跳过该书源
+          }
+        }
+        if (!cancelled) setExploreSources(withExplore);
       } catch {
         if (!cancelled) setExploreSources([]);
       }
