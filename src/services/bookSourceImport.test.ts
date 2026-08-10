@@ -35,15 +35,15 @@ describe("extractBookSourceFromText", () => {
   });
 });
 
-describe("validateBookSource", () => {
-  it("rejects sources using @js:", () => {
+describe("validateBookSource (@js: now allowed)", () => {
+  it("accepts @js: sources now", () => {
     const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" };
-    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).toThrow("不支持");
+    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).not.toThrow();
   });
 
-  it("rejects sources using <js>", () => {
+  it("accepts <js> sources", () => {
     const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", ruleSearch: { bookList: "<js>eval(1)</js>" } };
-    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).toThrow("不支持");
+    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).not.toThrow();
   });
 
   it("accepts pure CSS sources", () => {
@@ -51,9 +51,9 @@ describe("validateBookSource", () => {
     expect(extractBookSourceFromText(JSON.stringify(cssSrc))).toMatchObject(cssSrc);
   });
 
-  it("rejects @js: source via URL import", async () => {
+  it("accepts @js: source via URL import", async () => {
     vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" }));
-    await expect(importBookSourceFromUrl("https://x.com/src.json")).rejects.toThrow("不支持");
+    await expect(importBookSourceFromUrl("https://x.com/src.json")).resolves.toMatchObject({ name: "X", url: "https://x.com" });
   });
 });
 
