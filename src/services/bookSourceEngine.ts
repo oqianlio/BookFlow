@@ -335,6 +335,13 @@ export function evalJs(expr: string, ctx: JsContext): any {
   };
   const source = ctx.source ?? {};
   if (!source.getVariable) source.getVariable = () => "";
+  // legado 的 TYPE()：从 source 变量读取当前分类索引并映射到 tab_type 值（默认小说=3）
+  const TYPE = () => {
+    const v = String(source.getVariable?.() ?? "").split(",")[0];
+    const n = parseInt(v, 10);
+    if (!isNaN(n) && n >= 0 && n < 4) return [3, 2, 8, 11][n];
+    return 3;
+  };
   const code = String(expr).trim();
   let body: string;
   if (/\breturn\b/.test(code)) {
@@ -353,11 +360,11 @@ export function evalJs(expr: string, ctx: JsContext): any {
     }
   }
   const fn = new Function(
-    "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url",
+    "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
     body,
   );
   try {
-    return fn(ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "");
+    return fn.call({ source }, ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "", TYPE);
   } catch (e) {
     console.warn("evalJs error:", expr, e);
     return "";

@@ -205,6 +205,20 @@ describe("evalJs extended", () => {
     const r = evalJs("var x = 5; return x * 2;", { doc });
     expect(r).toBe(10);
   });
+
+  it("provides TYPE() mapping source variable to tab type", () => {
+    const source = { getVariable: () => "0,foo" };
+    const r = evalJs("TYPE()", { doc, source });
+    expect(r).toBe(3);
+    const r2 = evalJs("TYPE()", { doc, source: { getVariable: () => "1,bar" } });
+    expect(r2).toBe(2);
+  });
+
+  it("binds this.source in scripts", () => {
+    const source = { getVariable: () => "abc" };
+    const r = evalJs("String(this.source.getVariable())", { doc, source });
+    expect(r).toBe("abc");
+  });
 });
 
 describe("md5", () => {
