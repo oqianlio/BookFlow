@@ -41,6 +41,7 @@ describe("BookSourceManager", () => {
     await screen.findByText(/暂无书源/);
     await userEvent.type(screen.getByLabelText("书源网址"), "https://example.com/source.json");
     await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
+    await waitFor(() => expect(imp.importBookSourceFromUrl).toHaveBeenCalledWith("https://example.com/source.json"));
     await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalled());
   });
 

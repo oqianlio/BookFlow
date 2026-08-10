@@ -15,6 +15,8 @@ export default function BookSourceManager() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const handleFileImport = async () => {
+    if (busy) return;
+    setBusy(true);
     setError(null);
     try {
       const picked = await open({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
@@ -26,6 +28,8 @@ export default function BookSourceManager() {
       await refresh();
     } catch (e) {
       setError(String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
