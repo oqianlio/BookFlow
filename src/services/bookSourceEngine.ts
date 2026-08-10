@@ -160,7 +160,7 @@ export function resolveTagIndex(selector: string, scope: Document | Element): El
   return nodes[index] ?? null;
 }
 
-export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: string }): string {
+export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: unknown }): string {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -211,7 +211,7 @@ export function extractList(
   doc: Document,
   listRule: string,
   itemRules: Record<string, string>,
-  ctx?: { baseUrl?: string; result?: string },
+  ctx?: { baseUrl?: string; result?: unknown },
 ): Array<Record<string, string>> {
   const parsed = parseRule(listRule);
   if (parsed.type === "xpath") {
@@ -253,8 +253,16 @@ export function extractList(
 }
 
 export function extractFromJsObject(obj: any, rule: string, baseUrl?: string): string {
+  if (obj == null || typeof obj !== "object") return "";
   const s = rule.trim();
   if (!s) return "";
+  const jsIdx = s.indexOf("@js:");
+  if (jsIdx > 0) {
+    const field = s.slice(0, jsIdx).trim().replace(/^\$?\./, "");
+    const expr = s.slice(jsIdx + 4);
+    const fieldVal = obj[field];
+    return String(evalJs(expr, { doc: emptyDoc(), result: fieldVal, baseUrl }) ?? "");
+  }
   if (s.startsWith("@js:")) {
     return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl }) ?? "");
   }
@@ -298,7 +306,7 @@ export function emptyDoc(): Document {
 export interface JsContext {
   node?: Element;
   doc: Document;
-  result?: string;
+  result?: unknown;
   baseUrl?: string;
   key?: string;
   page?: number;
@@ -311,7 +319,12 @@ export function evalJs(expr: string, ctx: JsContext): any {
     decodeURI: (s: string) => decodeURIComponent(String(s)),
     base64Decode: (b64: string) =>
       new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
-    base64Encode: (s: string) => btoa(String(s)),
+    base64Encode: (s: string) => {
+      const bytes = new TextEncoder().encode(String(s));
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin);
+    },
     regex: (input: string, pattern: string) => {
       const m = String(input).match(new RegExp(pattern));
       return m ? (m[1] ?? m[0]) : "";
@@ -329,6 +342,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
   try {
     return fn(ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "");
   } catch (e) {
+    console.warn("evalJs error:", expr, e);
     return "";
   }
 }
@@ -354,5 +368,5 @@ export function resolveSearchUrl(searchUrl: string, key: string, page: number): 
     const url = String(evalJs(s.slice(4), { doc: emptyDoc(), key, page, result: "" }) ?? "");
     return { url };
   }
-  return parseSearchUrl(searchUrl, key);
+  return parseSearchUrl(s, key);
 }

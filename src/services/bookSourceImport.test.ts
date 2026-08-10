@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commitBookSource, extractBookSourceFromText, importBookSourceFromFile, importBookSourceFromUrl } from "./bookSourceImport";
+import { commitBookSource, extractBookSourceFromText, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "./bookSourceImport";
 import * as api from "./api";
 
 vi.mock("./api", () => ({
@@ -54,6 +54,23 @@ describe("validateBookSource (@js: now allowed)", () => {
   it("accepts @js: source via URL import", async () => {
     vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" }));
     await expect(importBookSourceFromUrl("https://x.com/src.json")).resolves.toMatchObject({ name: "X", url: "https://x.com" });
+  });
+});
+
+describe("sourceUsesJs", () => {
+  it("returns true for @js: sources", () => {
+    const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" };
+    expect(sourceUsesJs(jsSrc)).toBe(true);
+  });
+
+  it("returns true for <js> sources", () => {
+    const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", ruleSearch: { bookList: "<js>eval(1)</js>" } };
+    expect(sourceUsesJs(jsSrc)).toBe(true);
+  });
+
+  it("returns false for pure CSS sources", () => {
+    const cssSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", ruleSearch: { bookList: ".list li", name: "a@text" } };
+    expect(sourceUsesJs(cssSrc)).toBe(false);
   });
 });
 

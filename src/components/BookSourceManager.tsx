@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, type BookSource } from "../services/api";
-import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl } from "../services/bookSourceImport";
+import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 
 export default function BookSourceManager() {
   const [sources, setSources] = useState<BookSource[]>([]);
@@ -14,6 +14,11 @@ export default function BookSourceManager() {
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
+  const confirmJsImport = (bookSource: any): boolean => {
+    if (!sourceUsesJs(bookSource)) return true;
+    return window.confirm("此书源包含可在本机执行的 JS 脚本，仅导入你信任的书源。继续？");
+  };
+
   const handleFileImport = async () => {
     if (busy) return;
     setBusy(true);
@@ -24,6 +29,7 @@ export default function BookSourceManager() {
       const path = Array.isArray(picked) ? picked[0] : picked;
       if (!path) return;
       const result = await importBookSourceFromFile(path);
+      if (!confirmJsImport(result.bookSource)) return;
       await commitBookSource(result.bookSource);
       await refresh();
     } catch (e) {
@@ -39,6 +45,7 @@ export default function BookSourceManager() {
     setError(null);
     try {
       const result = await importBookSourceFromUrl(url.trim());
+      if (!confirmJsImport(result.bookSource)) return;
       await commitBookSource(result.bookSource);
       setUrl("");
       await refresh();

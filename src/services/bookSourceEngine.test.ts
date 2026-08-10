@@ -174,6 +174,10 @@ describe("evalJs extended", () => {
     expect(evalJs("java.base64Decode('5L2g5aW9')", { doc })).toBe("你好");
   });
 
+  it("java.base64Encode encodes utf8 (CJK-safe)", () => {
+    expect(evalJs("java.base64Encode('你好')", { doc })).toBe("5L2g5aW9");
+  });
+
   it("java.md5 hashes", () => {
     expect(evalJs("java.md5('abc')", { doc })).toBe(md5("abc"));
   });
@@ -229,6 +233,22 @@ describe("extractList @js: branch", () => {
 
   it("extractFromJsObject returns empty for missing field", () => {
     expect(extractFromJsObject({ a: 1 }, "$.missing")).toBe("");
+  });
+
+  it("extractFromJsObject evaluates mixed $.field@js: rule with result bound to field value", () => {
+    const rule = "$.book_id@js:'https://x.com/api/' + result";
+    expect(extractFromJsObject({ book_id: "9" }, rule)).toBe("https://x.com/api/9");
+  });
+
+  it("extractFromJsObject evaluates mixed field@js: rule (no $.)", () => {
+    const rule = "book_id@js:'id-' + result";
+    expect(extractFromJsObject({ book_id: "9" }, rule)).toBe("id-9");
+  });
+
+  it("extractFromJsObject returns empty for null/non-object", () => {
+    expect(extractFromJsObject(null as any, "$.name")).toBe("");
+    expect(extractFromJsObject(undefined as any, "$.name")).toBe("");
+    expect(extractFromJsObject("a string", "$.name")).toBe("");
   });
 });
 

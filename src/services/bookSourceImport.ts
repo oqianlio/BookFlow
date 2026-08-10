@@ -49,6 +49,11 @@ export async function importBookSourceFromFile(path: string): Promise<{ name: st
   return { name: bookSource.bookSourceName, url: bookSource.bookSourceUrl, bookSource };
 }
 
+export function sourceUsesJs(bookSource: any): boolean {
+  const s = JSON.stringify(bookSource);
+  return s.includes("@js:") || s.includes("<js>");
+}
+
 export async function commitBookSource(bookSource: any): Promise<number> {
   return addBookSource(bookSource.bookSourceName, bookSource.bookSourceUrl, JSON.stringify(bookSource));
 }
