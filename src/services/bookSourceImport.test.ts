@@ -35,6 +35,28 @@ describe("extractBookSourceFromText", () => {
   });
 });
 
+describe("validateBookSource", () => {
+  it("rejects sources using @js:", () => {
+    const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" };
+    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).toThrow("不支持");
+  });
+
+  it("rejects sources using <js>", () => {
+    const jsSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", ruleSearch: { bookList: "<js>eval(1)</js>" } };
+    expect(() => extractBookSourceFromText(JSON.stringify(jsSrc))).toThrow("不支持");
+  });
+
+  it("accepts pure CSS sources", () => {
+    const cssSrc = { bookSourceName: "X", bookSourceUrl: "https://x.com", ruleSearch: { bookList: ".list li", name: "a@text" } };
+    expect(extractBookSourceFromText(JSON.stringify(cssSrc))).toMatchObject(cssSrc);
+  });
+
+  it("rejects @js: source via URL import", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" }));
+    await expect(importBookSourceFromUrl("https://x.com/src.json")).rejects.toThrow("不支持");
+  });
+});
+
 describe("bookSourceImport async functions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
