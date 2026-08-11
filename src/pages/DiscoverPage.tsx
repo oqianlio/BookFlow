@@ -23,8 +23,7 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   }));
 }
 
-export default function DiscoverPage({ onBack, onOpenBook, onOpenExplore }: {
-  onBack: () => void;
+export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
   onOpenBook: (h: SearchHit) => void;
   onOpenExplore?: (sourceId: number, sourceName: string) => void;
 }) {
@@ -72,10 +71,7 @@ export default function DiscoverPage({ onBack, onOpenBook, onOpenExplore }: {
 
   return (
     <div className="discover page">
-      <header className="library-header">
-        <div className="brand"><h1>发现</h1></div>
-        <button className="btn btn-ghost" onClick={onBack}>返回书架</button>
-      </header>
+      <header className="library-header"><h1>发现</h1></header>
       <div className="discover-search">
         <input aria-label="搜索关键词" placeholder="输入书名搜索所有已启用书源" value={query}
           onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />

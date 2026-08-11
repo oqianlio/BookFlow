@@ -4,7 +4,7 @@ import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import BookSourceManager from "../components/BookSourceManager";
 
 export default function SettingsPage({ onBack, onOpenDebug }: {
-  onBack: () => void; onOpenDebug?: (sourceId: number, sourceName: string) => void;
+  onBack?: () => void; onOpenDebug?: (sourceId: number, sourceName: string) => void;
 }) {
   const [theme, setThemeState] = useState<Theme>({ scheme: "sora", mode: "light" });
   const [fontSize, setFontSizeState] = useState(18);
@@ -26,7 +26,7 @@ export default function SettingsPage({ onBack, onOpenDebug }: {
     <div className="settings page">
       <header className="library-header">
         <h1>设置</h1>
-        <button className="btn btn-ghost" onClick={onBack}>返回书架</button>
+        {onBack && <button className="btn btn-ghost" onClick={onBack}>返回书架</button>}
       </header>
       <div className="settings-form">
         <div className="settings-group">

@@ -25,7 +25,7 @@ describe("DiscoverPage", () => {
     vi.mocked(api.httpGet).mockResolvedValue(
       `<ul><li><span class="name">三体</span><span class="author">刘慈欣</span><a class="name" href="/b/1.html"></a></li></ul>`,
     );
-    render(<DiscoverPage onBack={() => {}} onOpenBook={() => {}} />);
+    render(<DiscoverPage onOpenBook={() => {}} />);
     await userEvent.type(screen.getByLabelText("搜索关键词"), "三体");
     await userEvent.click(screen.getByRole("button", { name: /搜索/ }));
     expect(await screen.findByText("三体")).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe("DiscoverPage", () => {
       { id: 2, name: "无浏览", url: "https://ex2.com", json: JSON.stringify({ bookSourceUrl: "https://ex2.com", bookSourceName: "无浏览" }), enabled: true, last_used_at: null },
     ]);
     const onOpenExplore = vi.fn();
-    render(<DiscoverPage onBack={() => {}} onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
+    render(<DiscoverPage onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
     await screen.findByPlaceholderText("输入书名搜索所有已启用书源");
     expect(await screen.findByText(/浏览 有浏览/)).toBeInTheDocument();
     expect(screen.queryByText(/浏览 无浏览/)).not.toBeInTheDocument();

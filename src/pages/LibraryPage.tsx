@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import BookCard from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
-import { BookIcon, SearchIcon, SettingsIcon } from "../components/icons";
+import { BookIcon, SearchIcon } from "../components/icons";
 import { importFiles, listBooks, removeBook, type Book } from "../services/api";
 
-export default function LibraryPage({
-  onOpenBook,
-  onOpenSettings,
-  onOpenDiscover,
-}: {
+export default function LibraryPage({ onOpenBook }: {
   onOpenBook: (b: Book) => void;
-  onOpenSettings?: () => void;
-  onOpenDiscover?: () => void;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [busy, setBusy] = useState(false);
@@ -69,11 +63,6 @@ export default function LibraryPage({
           <small>桌面阅读器</small>
         </div>
         <div className="library-actions">
-          {onOpenDiscover && (
-            <button className="btn btn-soft" onClick={onOpenDiscover} aria-label="发现" title="发现">
-              发现
-            </button>
-          )}
           <button
             className={`btn-icon${showSearch ? " active" : ""}`}
             onClick={() => setShowSearch((s) => !s)}
@@ -82,11 +71,6 @@ export default function LibraryPage({
           >
             <SearchIcon size={17} />
           </button>
-          {onOpenSettings && (
-            <button className="btn-icon" onClick={onOpenSettings} aria-label="设置" title="设置">
-              <SettingsIcon size={17} />
-            </button>
-          )}
           <button className="btn btn-primary" onClick={handleImport} disabled={busy}>
             {busy ? "导入中…" : "导入书籍"}
           </button>
