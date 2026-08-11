@@ -166,6 +166,12 @@ describe("evalJs source variables", () => {
     evalJs("source.putVariable('1,x')", { doc, sourceKey: "ex.com" });
     expect(evalJs("TYPE()", { doc, sourceKey: "ex.com" })).toBe(2);
   });
+
+  it("extractFromJsObject @js: rules forward sourceKey for isolation", () => {
+    evalJs("java.put('tag','A')", { doc: emptyDoc(), sourceKey: "ex.com" });
+    expect(extractFromJsObject({}, "@js:java.get('tag')", undefined, "ex.com")).toBe("A");
+    expect(extractFromJsObject({}, "@js:java.get('tag')", undefined, "other.com")).toBe("");
+  });
 });
 
 describe("evalJs extended", () => {

@@ -42,7 +42,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
       const html = await httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
       const doc = parseHtml(html);
       const rules = src.ruleExplore ?? {};
-      const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });
+      const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
       if (seq !== reqIdRef.current) return;
       setBooks(items.filter((i) => i.name).map((i) => ({
         title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",

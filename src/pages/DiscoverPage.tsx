@@ -16,7 +16,7 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
-  const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });
+  const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
   return items.filter((i) => i.name).map((i) => ({
     title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
     bookUrl: i.bookUrl ?? "", sourceId: bs.id, sourceName: bs.name,

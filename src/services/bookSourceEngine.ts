@@ -242,7 +242,7 @@ export function extractList(
     }
     return (items as any[]).map((item) => {
       const out: Record<string, string> = {};
-      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromJsObject(item, rule, ctx?.baseUrl);
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromJsObject(item, rule, ctx?.baseUrl, ctx?.sourceKey);
       return out;
     });
   }
@@ -257,7 +257,7 @@ export function extractList(
   });
 }
 
-export function extractFromJsObject(obj: any, rule: string, baseUrl?: string): string {
+export function extractFromJsObject(obj: any, rule: string, baseUrl?: string, sourceKey?: string): string {
   if (obj == null || typeof obj !== "object") return "";
   const s = rule.trim();
   if (!s) return "";
@@ -266,10 +266,10 @@ export function extractFromJsObject(obj: any, rule: string, baseUrl?: string): s
     const field = s.slice(0, jsIdx).trim().replace(/^\$?\./, "");
     const expr = s.slice(jsIdx + 4);
     const fieldVal = obj[field];
-    return String(evalJs(expr, { doc: emptyDoc(), result: fieldVal, baseUrl }) ?? "");
+    return String(evalJs(expr, { doc: emptyDoc(), result: fieldVal, baseUrl, sourceKey }) ?? "");
   }
   if (s.startsWith("@js:")) {
-    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl }) ?? "");
+    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl, sourceKey }) ?? "");
   }
   const field = s.startsWith("$.") ? s.slice(2) : s;
   const v = obj[field];
@@ -423,13 +423,13 @@ export function parseExploreUrl(exploreUrl: string): Array<{ title: string; url:
 export function extractBookList(
   doc: Document,
   rules: Record<string, string>,
-  ctx: { baseUrl?: string; result?: string },
+  ctx: { baseUrl?: string; result?: string; sourceKey?: string },
 ): Array<Record<string, string>> {
   const itemRules: Record<string, string> = {};
   for (const k of ["name", "author", "coverUrl", "bookUrl"] as const) {
     if (rules[k]) itemRules[k] = rules[k];
   }
-  return extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result });
+  return extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result, sourceKey: ctx.sourceKey });
 }
 
 export function isImageChapter(html: string): boolean {

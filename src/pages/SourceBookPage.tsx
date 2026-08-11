@@ -29,17 +29,17 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
         const doc = parseHtml(html);
         const bi = s.ruleBookInfo ?? {};
-        const title = bi.name ? extractSingle(doc, bi.name) : initialTitle;
-        const author = bi.author ? extractSingle(doc, bi.author) : "";
-        const intro = bi.intro ? extractSingle(doc, bi.intro) : "";
-        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl) : "";
-        const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl }) : resolvedBookUrl;
+        const title = bi.name ? extractSingle(doc, bi.name, { sourceKey: s.bookSourceUrl }) : initialTitle;
+        const author = bi.author ? extractSingle(doc, bi.author, { sourceKey: s.bookSourceUrl }) : "";
+        const intro = bi.intro ? extractSingle(doc, bi.intro, { sourceKey: s.bookSourceUrl }) : "";
+        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { sourceKey: s.bookSourceUrl }) : "";
+        const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
         const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
         const tocDoc = parseHtml(tocHtml);
         const rules = s.ruleToc ?? {};
         const items = extractList(tocDoc, rules.chapterList ?? "", {
           name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-        }, { baseUrl: tocUrl, result: tocHtml });
+        }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl });
         const tocItems = items.filter((i) => i.url).map((i) => ({
           name: i.name || "未命名章节",
           url: i.url.startsWith("http") ? i.url : new URL(i.url, tocUrl).toString(),
