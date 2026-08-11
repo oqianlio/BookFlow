@@ -6,7 +6,7 @@ import BookSourceManager from "../components/BookSourceManager";
 export default function SettingsPage({ onBack, onOpenDebug }: {
   onBack: () => void; onOpenDebug?: (sourceId: number, sourceName: string) => void;
 }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>({ scheme: "sora", mode: "light" });
   const [fontSize, setFontSizeState] = useState(18);
   const [rate, setRateState] = useState(1);
 
@@ -15,6 +15,12 @@ export default function SettingsPage({ onBack, onOpenDebug }: {
     setFontSizeState(getFontSize());
     void getTtsRate().then(setRateState);
   }, []);
+
+  const toggleMode = (mode: Theme["mode"]) => {
+    const next = { ...getTheme(), mode };
+    setThemeState(next);
+    void setTheme(next);
+  };
 
   return (
     <div className="settings page">
@@ -31,13 +37,13 @@ export default function SettingsPage({ onBack, onOpenDebug }: {
           <div className="segmented" role="group" aria-label="主题">
             <button
               type="button"
-              className={theme === "light" ? "active" : ""}
-              onClick={() => { setThemeState("light"); void setTheme("light"); }}
+              className={theme.mode === "light" ? "active" : ""}
+              onClick={() => toggleMode("light")}
             >白天</button>
             <button
               type="button"
-              className={theme === "dark" ? "active" : ""}
-              onClick={() => { setThemeState("dark"); void setTheme("dark"); }}
+              className={theme.mode === "dark" ? "active" : ""}
+              onClick={() => toggleMode("dark")}
             >夜间</button>
           </div>
         </div>
