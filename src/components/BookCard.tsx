@@ -16,7 +16,7 @@ function placeholderClass(format: string): string {
 }
 
 export default function BookCard({ book, onOpen, onRemove }: {
-  book: Book; onOpen: (b: Book) => void; onRemove: (id: number) => void;
+  book: Book; onOpen: (b: Book) => void; onRemove?: (id: number) => void;
 }) {
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -48,11 +48,13 @@ export default function BookCard({ book, onOpen, onRemove }: {
           <span className="fmt">{formatLabel(book.format)}</span>
         </div>
       </div>
-      <button
-        className="book-remove"
-        onClick={(e) => { e.stopPropagation(); onRemove(book.id); }}
-        aria-label={`删除 ${book.title}`}
-      >×</button>
+      {onRemove && (
+        <button
+          className="book-remove"
+          onClick={(e) => { e.stopPropagation(); onRemove(book.id); }}
+          aria-label={`删除 ${book.title}`}
+        >×</button>
+      )}
     </div>
   );
 }

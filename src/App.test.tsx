@@ -17,8 +17,9 @@ vi.mock("./services/api", () => ({
 describe("App shell", () => {
   it("switches areas via side nav", async () => {
     render(<App />);
-    expect(await screen.findAllByText("首页")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: /书架/ }));
+    expect(await screen.findByText("你好，枕书")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /首页/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /^书架$/ }));
     expect(await screen.findByText(/书架空空如也/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /我的/ }));
     expect(await screen.findByText("设置")).toBeInTheDocument();
