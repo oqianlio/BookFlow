@@ -27,6 +27,13 @@ describe("bookSourceEngine", () => {
     expect(list[1].bookUrl).toBe("https://example.com/book/2.html");
   });
 
+  it("handles empty list rule without throwing", () => {
+    expect(() => extractList(doc, "", { name: "a@text" })).not.toThrow();
+    expect(extractList(doc, "", { name: "a@text" })).toEqual([]);
+    expect(() => extractBookList(doc, {}, {})).not.toThrow();
+    expect(extractBookList(doc, {}, {})).toEqual([]);
+  });
+
   it("parses a valid book source JSON", () => {
     const src = parseBookSourceJson(JSON.stringify(SAMPLE_SOURCE));
     expect(src.bookSourceName).toBe("示例书源");

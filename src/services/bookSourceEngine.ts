@@ -98,6 +98,7 @@ function parseAttrRule(s: string): ParsedRule {
 }
 
 export function selectNodes(doc: Document, selector: string): Element[] {
+  if (!selector.trim()) return [];
   return Array.from(doc.querySelectorAll(selector));
 }
 
