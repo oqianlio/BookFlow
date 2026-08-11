@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
+import { loadJsLib } from "../services/jsLib";
 import type { SearchHit } from "./DiscoverPage";
 
 export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }: {
@@ -24,7 +25,8 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         const s = parseBookSourceJson(bs.json);
         if (cancelled) return;
         setSrc(s);
-        setCategories(parseExploreUrl(s.exploreUrl ?? ""));
+        setCategories(parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s }));
+        loadJsLib(s.bookSourceUrl, s.jsLib);
       } catch (e) { if (!cancelled) setError(String(e)); }
     })();
     return () => { cancelled = true; };

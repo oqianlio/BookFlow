@@ -21,6 +21,7 @@ export interface BookSource {
   searchUrl?: string;
   exploreUrl?: string;
   loginUrl?: string;
+  jsLib?: string;
   ruleExplore?: any;
   bookUrlPattern?: string;
   ruleSearch?: any;
