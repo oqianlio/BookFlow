@@ -20,12 +20,19 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
   const [busy, setBusy] = useState(false);
   const [src, setSrc] = useState<{ json: string } | null>(null);
 
+  const loadSource = async () => {
+    const bs = (await listBookSources()).find((s) => s.id === sourceId);
+    if (!bs) { setError("书源不存在"); return; }
+    setError(null);
+    setSrc(bs);
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const bs = (await listBookSources()).find((s) => s.id === sourceId);
-        if (!bs) { setError("书源不存在"); return; }
+        if (!bs) { if (!cancelled) setError("书源不存在"); return; }
         if (!cancelled) setSrc(bs);
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -48,6 +55,20 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
     }
   };
 
+  const retry = async () => {
+    if (busy) return;
+    setError(null);
+    try {
+      if (src) {
+        await run();
+      } else {
+        await loadSource();
+      }
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const meta = STAGES.find((s) => s.value === stage) ?? STAGES[0];
 
   return (
@@ -61,7 +82,7 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
       {error && (
         <div className="debug-error">
           <p className="error">{error}</p>
-          <button className="btn btn-ghost" onClick={() => void run()}>重试</button>
+          <button className="btn btn-ghost" onClick={() => void retry()}>重试</button>
         </div>
       )}
       <div className="debug-controls">
