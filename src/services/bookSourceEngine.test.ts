@@ -393,6 +393,14 @@ describe("parseExploreUrl", () => {
   it("returns empty array for failing @js: expression", () => {
     expect(parseExploreUrl("@js:null.x", {})).toEqual([]);
   });
+
+  it("parses @js: string with && separator without spurious entries", () => {
+    const r = parseExploreUrl('@js:"玄幻::/x/&&都市::/d/"', {});
+    expect(r).toEqual([
+      { title: "玄幻", url: "/x/" },
+      { title: "都市", url: "/d/" },
+    ]);
+  });
 });
 
 describe("extractBookList", () => {

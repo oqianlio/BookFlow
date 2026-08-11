@@ -456,7 +456,7 @@ export function parseExploreUrl(
       // 非 JSON，走字符串解析
     }
     return str
-      .split(/(&&|\n)+/)
+      .split(/(?:&&|\n)+/)
       .map((l) => l.trim())
       .filter(Boolean)
       .map((line) => {
