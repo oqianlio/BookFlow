@@ -1,3 +1,4 @@
+use crate::cookies::CookieJarManager;
 use crate::db::*;
 use crate::import::import_file;
 use crate::tts::TtsEngine;
@@ -11,6 +12,7 @@ pub struct AppState {
     pub db: Mutex<Connection>,
     pub app_data_dir: PathBuf,
     pub tts: TtsEngine,
+    pub cookies: CookieJarManager,
 }
 
 impl AppState {

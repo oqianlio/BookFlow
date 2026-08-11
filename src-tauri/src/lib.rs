@@ -2,12 +2,14 @@
 pub mod db;
 pub mod import;
 pub mod commands;
+pub mod cookies;
 pub mod cover;
 pub mod net;
 pub mod search;
 pub mod tts;
 
 use commands::*;
+use cookies::CookieJarManager;
 use tauri::Manager;
 use tauri_plugin_dialog;
 use tauri_plugin_fs;
@@ -29,7 +31,8 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir).expect("创建应用数据目录失败");
             std::fs::create_dir_all(app_data_dir.join("books")).ok();
             let conn = import::open_app_db(&app_data_dir)?;
-            app.manage(AppState { db: std::sync::Mutex::new(conn), app_data_dir, tts: crate::tts::TtsEngine::new() });
+            let cookies = CookieJarManager::new(app_data_dir.join("cookies"));
+            app.manage(AppState { db: std::sync::Mutex::new(conn), app_data_dir, tts: crate::tts::TtsEngine::new(), cookies });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

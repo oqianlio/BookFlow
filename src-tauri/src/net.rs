@@ -51,10 +51,18 @@ pub async fn http_get(
     method: Option<String>,
     body: Option<String>,
     content_type: Option<String>,
+    cookie_jar: Option<String>,
+    state: tauri::State<'_, crate::commands::AppState>,
 ) -> Result<String, String> {
+    let cookies = state.cookies.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)))
+        let jar = cookie_jar.map(|key| cookies.jar_for(&key));
+        let mut client_builder = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)));
+        if let Some(j) = &jar {
+            client_builder = client_builder.cookie_provider(j.clone());
+        }
+        let client = client_builder
             .build()
             .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?;
         let empty = HashMap::new();
@@ -68,6 +76,10 @@ pub async fn http_get(
             content_type.as_deref(),
         );
         let resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
+        // reqwest 只在内存中读写 cookie，不会自动写回文件，需手动持久化
+        if let Some(j) = &jar {
+            j.save();
+        }
         let bytes = resp.bytes().map_err(|e| format!("读取响应失败: {e}"))?;
         decode_body(&bytes, None)
     })
