@@ -412,12 +412,13 @@ button {
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary);
+  filter: brightness(0.95);
 }
 
 .btn-ghost {
@@ -461,13 +462,14 @@ button {
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border: 1px solid transparent;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
 }
 
 .btn-primary:hover:not(:disabled) {
   background: var(--primary);
+  filter: brightness(0.95);
 }
 
 .btn-primary:disabled {
