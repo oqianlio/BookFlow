@@ -146,6 +146,28 @@ describe("tag.x index selector", () => {
   });
 });
 
+describe("evalJs source variables", () => {
+  it("java.put/get roundtrips with sourceKey isolation", () => {
+    const doc = emptyDoc();
+    evalJs("java.put('page','2')", { doc, sourceKey: "ex.com" });
+    expect(evalJs("java.get('page')", { doc, sourceKey: "ex.com" })).toBe("2");
+    expect(evalJs("java.get('page')", { doc, sourceKey: "other.com" })).toBe("");
+  });
+
+  it("source.putVariable/getVariable persist across calls", () => {
+    const doc = emptyDoc();
+    evalJs("source.putVariable('3,foo')", { doc, sourceKey: "ex.com" });
+    expect(evalJs("source.getVariable()", { doc, sourceKey: "ex.com" })).toBe("3,foo");
+    expect(evalJs("source.getVariable()", { doc, sourceKey: "other.com" })).toBe("");
+  });
+
+  it("TYPE still works after source.getVariable implementation", () => {
+    const doc = emptyDoc();
+    evalJs("source.putVariable('1,x')", { doc, sourceKey: "ex.com" });
+    expect(evalJs("TYPE()", { doc, sourceKey: "ex.com" })).toBe(2);
+  });
+});
+
 describe("evalJs extended", () => {
   const doc = emptyDoc();
 

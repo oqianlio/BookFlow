@@ -1,5 +1,6 @@
 import { md5 } from "./md5";
 import { SymmetricCrypto } from "./aes";
+import { getSourceVars } from "./sourceVars";
 
 export type EngineResult = string;
 
@@ -164,7 +165,7 @@ export function resolveTagIndex(selector: string, scope: Document | Element): El
   return nodes[index] ?? null;
 }
 
-export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: unknown }): string {
+export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: unknown; sourceKey?: string }): string {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -194,7 +195,7 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
     return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
   }
   if (parsed.type === "js") {
-    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "" });
+    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
   }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
@@ -215,7 +216,7 @@ export function extractList(
   doc: Document,
   listRule: string,
   itemRules: Record<string, string>,
-  ctx?: { baseUrl?: string; result?: unknown },
+  ctx?: { baseUrl?: string; result?: unknown; sourceKey?: string },
 ): Array<Record<string, string>> {
   const parsed = parseRule(listRule);
   if (parsed.type === "xpath") {
@@ -232,7 +233,7 @@ export function extractList(
     });
   }
   if (parsed.type === "js") {
-    const raw = evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "" });
+    const raw = evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
     let items: any[];
     try {
       items = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
@@ -315,9 +316,11 @@ export interface JsContext {
   key?: string;
   page?: number;
   source?: any;
+  sourceKey?: string;
 }
 
 export function evalJs(expr: string, ctx: JsContext): any {
+  const vars = getSourceVars(ctx.sourceKey ?? "default");
   const java = {
     encodeURI: (s: string) => encodeURIComponent(String(s)),
     decodeURI: (s: string) => decodeURIComponent(String(s)),
@@ -338,9 +341,13 @@ export function evalJs(expr: string, ctx: JsContext): any {
     random: (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min,
     createSymmetricCrypto: (transformation: string, key: any, iv?: any) =>
       new SymmetricCrypto(transformation, key, iv),
+    put: (k: string, v: any) => { vars.set(String(k), String(v)); },
+    get: (k: string) => vars.get(String(k)) ?? "",
   };
   const source = ctx.source ?? {};
-  if (!source.getVariable) source.getVariable = () => "";
+  if (!source.getVariable) source.getVariable = () => String(vars.get("variable") ?? "");
+  source.putVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
+  source.setVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
   // legado 的 TYPE()：从 source 变量读取当前分类索引并映射到 tab_type 值（默认小说=3）
   const TYPE = () => {
     const v = String(source.getVariable?.() ?? "").split(",")[0];
