@@ -317,5 +317,5 @@
 }
 
 /* ============ 漫画阅读器 ============ */
-.manga-viewer { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; overflow-y: auto; }
+.manga-viewer { height: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px; overflow-y: auto; box-sizing: border-box; }
 .manga-viewer img { max-width: 100%; height: auto; border-radius: 4px; background: #000; }
