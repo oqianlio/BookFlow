@@ -1135,3 +1135,7 @@ input[type="range"] {
 .home-section { margin: 8px 0 0; font-family: var(--font-read); font-size: 18px; color: var(--on-surface); }
 .home .book-grid { padding: 16px 0 48px; }
 
+/* ============ 我的页 ============ */
+.my-form { max-width: 520px; display: flex; flex-direction: column; gap: 14px; padding: 12px 0; }
+.my .settings-group { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
+

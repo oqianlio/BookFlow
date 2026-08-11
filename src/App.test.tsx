@@ -22,7 +22,7 @@ describe("App shell", () => {
     await userEvent.click(screen.getByRole("button", { name: /^书架$/ }));
     expect(await screen.findByText(/书架空空如也/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /我的/ }));
-    expect(await screen.findByText("设置")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /RSS/ }));
     expect(await screen.findAllByText(/敬请期待/)).toHaveLength(2);
   });
