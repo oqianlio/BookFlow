@@ -11,7 +11,9 @@ async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const src: Src = parseBookSourceJson(bs.json);
   const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1);
   if (!parsed.url) return [];
-  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body);
+  let cookieJarHost = "";
+  try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
   const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });

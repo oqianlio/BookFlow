@@ -8,6 +8,7 @@ vi.mock("../services/api", () => ({
   httpGet: vi.fn(),
   getBookSourceProgress: vi.fn().mockResolvedValue(null),
   saveBookSourceProgress: vi.fn().mockResolvedValue(undefined),
+  openLoginWindow: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -132,6 +133,31 @@ describe("SourceReaderPage", () => {
     render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
       initialChapterIndex={-1} initialChapterUrl="" initialChapterName="" onBack={() => {}} />);
     expect(await screen.findByText("请从目录选择章节")).toBeInTheDocument();
+  });
+
+  it("shows 登录 button on the empty-state path when the source has loginUrl", async () => {
+    const src = JSON.parse(sourceJson);
+    src.loginUrl = "https://ex.com/login";
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.getBookSourceProgress).mockResolvedValue(null);
+    render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
+      initialChapterIndex={-1} initialChapterUrl="" initialChapterName="" onBack={() => {}} />);
+    expect(await screen.findByText("请从目录选择章节")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
+  });
+
+  it("passes the source hostname as cookieJar to chapter httpGet", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    const calls = vi.mocked(api.httpGet).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) expect(c[6]).toBe("ex.com");
   });
 
   it("renders manga viewer for image chapters", async () => {

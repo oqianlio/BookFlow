@@ -37,7 +37,9 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
     try {
       const rawUrl = cat.url.replace("{{page}}", String(pg));
       const url = resolveUrl(rawUrl, src.bookSourceUrl);
-      const html = await httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined);
+      let cookieJarHost = "";
+      try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+      const html = await httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
       const doc = parseHtml(html);
       const rules = src.ruleExplore ?? {};
       const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html });

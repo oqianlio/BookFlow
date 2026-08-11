@@ -97,14 +97,22 @@ impl CookieJarManager {
     /// 返回该 key 的 jar：首次从 `<dir>/<sanitized>.json` 加载并缓存，
     /// 之后直接返回缓存实例；文件不存在则新建空 jar。
     /// 持久化仍由调用方在每次请求后显式调用 [`CookieJar::save`]。
+    ///
+    /// 注意：加载与插入在同一把缓存互斥锁内完成（jar 文件很小），避免两个并发首次调用
+    /// 各自加载、各自插入不同 `Arc<CookieJar>`（后者的 save 覆盖前者的 cookie）。
+    /// 锁顺序为 缓存 Mutex →（新建 jar 时无锁）→ 后续 save/store 的 store RwLock，
+    /// 无反向嵌套，不会死锁。
     pub fn jar_for(&self, key: &str) -> Arc<CookieJar> {
         let sani = sanitize_key(key);
-        if let Some(jar) = self.cache.lock().unwrap().get(&sani) {
-            return jar.clone();
+        let mut cache = self.cache.lock().unwrap();
+        match cache.entry(sani) {
+            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                let file = self.dir.join(format!("{}.json", e.key()));
+                let jar = Arc::new(CookieJar::load(file));
+                e.insert(jar.clone());
+                jar
+            }
         }
-        let file = self.dir.join(format!("{sani}.json"));
-        let jar = Arc::new(CookieJar::load(file));
-        self.cache.lock().unwrap().insert(sani, jar.clone());
-        jar
     }
 }

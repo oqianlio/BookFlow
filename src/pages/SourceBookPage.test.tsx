@@ -74,4 +74,19 @@ describe("SourceBookPage", () => {
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "登录" })).not.toBeInTheDocument();
   });
+
+  it("passes the source hostname as cookieJar to book and toc httpGet calls", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><span class="author">刘慈欣</span><ol>
+        <li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    await screen.findByText("第一章");
+    const calls = vi.mocked(api.httpGet).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) expect(c[6]).toBe("ex.com");
+  });
 });

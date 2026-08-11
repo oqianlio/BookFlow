@@ -18,10 +18,10 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   const [isManga, setIsManga] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [src, setSrc] = useState<Src | null>(null);
   const nextUrlRef = useRef("");
   const prevUrlsRef = useRef<string[]>([]);
   const saveTimer = useRef<number | null>(null);
-  const srcRef = useRef<Src | null>(null);
   const chapterRef = useRef(chapter);
   chapterRef.current = chapter;
 
@@ -31,8 +31,10 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
       if (!bs) { setError("书源不存在"); setLoading(false); return; }
       const src: Src = parseBookSourceJson(bs.json);
-      srcRef.current = src;
-      const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined);
+      setSrc(src);
+      let cookieJarHost = "";
+      try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+      const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html });
@@ -64,6 +66,15 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       chapterUrl: c.url, chapterName: c.name, percent: 0,
     });
   }, [sourceId, bookUrl, bookTitle]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listBookSources().then((l) => {
+      const bs = l.find((x) => x.id === sourceId);
+      if (!cancelled && bs) setSrc(parseBookSourceJson(bs.json));
+    });
+    return () => { cancelled = true; };
+  }, [sourceId]);
 
   useEffect(() => {
     if (initialChapterIndex !== -1) return;
@@ -109,11 +120,10 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
         <button className="btn-icon" onClick={onBack} aria-label="返回" title="返回"><BackIcon size={18} /></button>
         <h2><span className="reader-title">{bookTitle}</span>{chapter.name && <> · <span className="reader-chapter">{chapter.name}</span></>}</h2>
         <div className="toolbar-actions">
-          {srcRef.current?.loginUrl && (
+          {src?.loginUrl && (
             <button
               className="btn btn-ghost"
               onClick={() => {
-                const src = srcRef.current;
                 if (!src?.loginUrl) return;
                 let host = "";
                 try { host = new URL(src.bookSourceUrl).hostname; } catch { host = src.bookSourceUrl; }

@@ -53,16 +53,16 @@ describe("ExplorePage", () => {
 
     await userEvent.click(screen.getByText("玄幻"));
     await waitFor(() => expect(screen.getByText("甲")).toBeInTheDocument());
-    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_1.html", undefined, undefined);
+    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_1.html", undefined, undefined, undefined, undefined, undefined, "ex.com");
     expect(screen.getByText("下一页")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("下一页"));
     await waitFor(() => expect(screen.getByText("乙")).toBeInTheDocument());
-    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_2.html", undefined, undefined);
+    expect(get).toHaveBeenCalledWith("https://ex.com/sort/1_2.html", undefined, undefined, undefined, undefined, undefined, "ex.com");
 
     await userEvent.click(screen.getByText("都市"));
     await waitFor(() => expect(screen.getByText("丙")).toBeInTheDocument());
-    expect(get).toHaveBeenCalledWith("https://ex.com/list/2.html", undefined, undefined);
+    expect(get).toHaveBeenCalledWith("https://ex.com/list/2.html", undefined, undefined, undefined, undefined, undefined, "ex.com");
     expect(screen.queryByText("下一页")).not.toBeInTheDocument();
   });
 });

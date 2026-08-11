@@ -1,6 +1,7 @@
 use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderValue;
 use std::fs;
+use std::sync::Arc;
 use tempfile::tempdir;
 use yd_lib::cookies::{CookieJarManager, sanitize_key};
 
@@ -19,6 +20,16 @@ fn jar_for_roundtrips_persistence() {
     drop(jar);
     // 再次获取同 key 不崩溃
     let _ = mgr.jar_for("example.com");
+    fs::remove_dir_all(dir.path()).unwrap();
+}
+
+#[test]
+fn jar_for_returns_same_arc_for_same_key() {
+    let dir = tempdir().unwrap();
+    let mgr = CookieJarManager::new(dir.path().to_path_buf());
+    let a = mgr.jar_for("example.com");
+    let b = mgr.jar_for("example.com");
+    assert!(Arc::ptr_eq(&a, &b), "同一 key 的重复调用应返回同一 Arc<CookieJar>");
     fs::remove_dir_all(dir.path()).unwrap();
 }
 
