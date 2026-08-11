@@ -133,4 +133,22 @@ describe("SourceReaderPage", () => {
       initialChapterIndex={-1} initialChapterUrl="" initialChapterName="" onBack={() => {}} />);
     expect(await screen.findByText("请从目录选择章节")).toBeInTheDocument();
   });
+
+  it("renders manga viewer for image chapters", async () => {
+    const src = JSON.parse(sourceJson);
+    src.ruleContent.content = "@css:.content@html";
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><div class="content"><img src="/img/1.jpg"><img src="/img/2.jpg"></div></body></html>`,
+    );
+    const { container } = render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/b/1.html" bookTitle="漫画"
+      initialChapterIndex={0} initialChapterUrl="https://ex.com/c/1.html" initialChapterName="第1话" onBack={() => {}} />);
+    expect(await screen.findByAltText("图片 2")).toBeInTheDocument();
+    expect(container.querySelector(".manga-viewer")).not.toBeNull();
+    const imgs = container.querySelectorAll(".manga-viewer img");
+    expect(imgs.length).toBe(2);
+    expect(imgs[0].getAttribute("src")).toBe("https://ex.com/img/1.jpg");
+  });
 });

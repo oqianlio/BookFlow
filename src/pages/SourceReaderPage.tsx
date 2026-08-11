@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon } from "../components/icons";
 import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
+import MangaViewer from "../readers/MangaViewer";
 import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
@@ -13,6 +14,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
 }) {
   const [chapter, setChapter] = useState<ChapterState>({ index: initialChapterIndex, url: initialChapterUrl, name: initialChapterName });
   const [content, setContent] = useState("");
+  const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const nextUrlRef = useRef("");
@@ -22,7 +24,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   chapterRef.current = chapter;
 
   const loadChapter = useCallback(async (c: ChapterState) => {
-    setLoading(true); setError(null); setContent("");
+    setLoading(true); setError(null); setContent(""); setImages([]);
     try {
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
       if (!bs) { setError("书源不存在"); setLoading(false); return; }
@@ -33,7 +35,11 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html });
       const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url }) : "";
       nextUrlRef.current = next;
-      setContent(purifyContent(text, (src as any).purify));
+      if (isImageChapter(text)) {
+        setImages(extractImageUrls(text, c.url));
+      } else {
+        setContent(purifyContent(text, (src as any).purify));
+      }
       setLoading(false);
     } catch (e) {
       setError(String(e));
@@ -111,7 +117,9 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
           </div>
         )}
         {!loading && !error && (
-          chapter.url ? (
+          images.length > 0 ? (
+            <MangaViewer images={images} onError={setError} />
+          ) : chapter.url ? (
             <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
           ) : (
             <p className="panel-empty">请从目录选择章节</p>
