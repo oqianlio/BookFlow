@@ -341,13 +341,14 @@ export function evalJs(expr: string, ctx: JsContext): any {
     random: (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min,
     createSymmetricCrypto: (transformation: string, key: any, iv?: any) =>
       new SymmetricCrypto(transformation, key, iv),
-    put: (k: string, v: any) => { vars.set(String(k), String(v)); },
+    put: (k: string, v: any) => { const s = v == null ? "" : String(v); vars.set(String(k), s); return s; },
     get: (k: string) => vars.get(String(k)) ?? "",
   };
   const source = ctx.source ?? {};
+  // 自定义 source 方法优先；未提供时才注入会话变量兜底（get/put/set 三者对称）
   if (!source.getVariable) source.getVariable = () => String(vars.get("variable") ?? "");
-  source.putVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
-  source.setVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
+  if (!source.putVariable) source.putVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
+  if (!source.setVariable) source.setVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
   // legado 的 TYPE()：从 source 变量读取当前分类索引并映射到 tab_type 值（默认小说=3）
   const TYPE = () => {
     const v = String(source.getVariable?.() ?? "").split(",")[0];
@@ -399,10 +400,10 @@ export function parseSearchUrl(searchUrl: string, key: string): { url: string; m
   }
 }
 
-export function resolveSearchUrl(searchUrl: string, key: string, page: number): { url: string; method?: string; body?: string } {
+export function resolveSearchUrl(searchUrl: string, key: string, page: number, ctx?: { sourceKey?: string }): { url: string; method?: string; body?: string } {
   const s = searchUrl.trim();
   if (s.startsWith("@js:")) {
-    const url = String(evalJs(s.slice(4), { doc: emptyDoc(), key, page, result: "" }) ?? "");
+    const url = String(evalJs(s.slice(4), { doc: emptyDoc(), key, page, result: "", sourceKey: ctx?.sourceKey }) ?? "");
     return { url };
   }
   return parseSearchUrl(s, key);

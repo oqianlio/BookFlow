@@ -313,6 +313,19 @@ describe("extractList @js: branch", () => {
     expect(extractFromJsObject(undefined as any, "$.name")).toBe("");
     expect(extractFromJsObject("a string", "$.name")).toBe("");
   });
+
+  it("drives full extractList js list -> js item chain with per-source isolation", () => {
+    const doc = emptyDoc();
+    const itemRule = { tag: "@js:java.get('tag')" };
+    const listA = "@js:java.put('tag','A'); [{a:1},{a:2}]";
+    const listB = "@js:[{a:1},{a:2}]";
+    const itemsA = extractList(doc, listA, itemRule, { sourceKey: "src-a" });
+    const itemsB = extractList(doc, listB, itemRule, { sourceKey: "src-b" });
+    expect(itemsA[0].tag).toBe("A");
+    expect(itemsA[1].tag).toBe("A");
+    expect(itemsB[0].tag).toBe("");
+    expect(itemsB[1].tag).toBe("");
+  });
 });
 
 describe("resolveSearchUrl", () => {

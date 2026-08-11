@@ -9,7 +9,7 @@ export interface SearchHit {
 
 async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
   const src: Src = parseBookSourceJson(bs.json);
-  const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1);
+  const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl });
   if (!parsed.url) return [];
   let cookieJarHost = "";
   try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
