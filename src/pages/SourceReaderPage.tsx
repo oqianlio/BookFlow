@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BackIcon } from "../components/icons";
-import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent } from "../services/api";
+import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import MangaViewer from "../readers/MangaViewer";
 import "./ReaderPage.css";
@@ -21,6 +21,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   const nextUrlRef = useRef("");
   const prevUrlsRef = useRef<string[]>([]);
   const saveTimer = useRef<number | null>(null);
+  const srcRef = useRef<Src | null>(null);
   const chapterRef = useRef(chapter);
   chapterRef.current = chapter;
 
@@ -30,6 +31,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
       if (!bs) { setError("书源不存在"); setLoading(false); return; }
       const src: Src = parseBookSourceJson(bs.json);
+      srcRef.current = src;
       const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined);
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
@@ -107,6 +109,18 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
         <button className="btn-icon" onClick={onBack} aria-label="返回" title="返回"><BackIcon size={18} /></button>
         <h2><span className="reader-title">{bookTitle}</span>{chapter.name && <> · <span className="reader-chapter">{chapter.name}</span></>}</h2>
         <div className="toolbar-actions">
+          {srcRef.current?.loginUrl && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                const src = srcRef.current;
+                if (!src?.loginUrl) return;
+                let host = "";
+                try { host = new URL(src.bookSourceUrl).hostname; } catch { host = src.bookSourceUrl; }
+                void openLoginWindow(src.loginUrl, host);
+              }}
+            >登录</button>
+          )}
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || prevUrlsRef.current.length === 0}>上一章</button>
           <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || !!error || !nextUrlRef.current}>下一章</button>
         </div>

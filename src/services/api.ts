@@ -88,11 +88,17 @@ export async function httpGet(
   method?: string,
   body?: string,
   contentType?: string,
+  cookieJar?: string,
 ): Promise<string> {
   return invoke<string>("http_get", {
     url, headers: headers ?? null, timeoutMs: timeoutMs ?? null,
     method: method ?? null, body: body ?? null, contentType: contentType ?? null,
+    cookieJar: cookieJar ?? null,
   });
+}
+
+export async function openLoginWindow(url: string, cookieJar: string): Promise<void> {
+  await invoke("open_login_window", { url, cookieJar });
 }
 
 export function mergeUserAgent(headers: Record<string, string> | undefined, userAgent: string | undefined): Record<string, string> | undefined {

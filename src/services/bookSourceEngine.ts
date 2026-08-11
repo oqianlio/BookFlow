@@ -18,6 +18,7 @@ export interface BookSource {
   httpHeaders?: Record<string, string>;
   searchUrl?: string;
   exploreUrl?: string;
+  loginUrl?: string;
   ruleExplore?: any;
   bookUrlPattern?: string;
   ruleSearch?: any;

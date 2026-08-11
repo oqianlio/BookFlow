@@ -1,7 +1,8 @@
 use reqwest::header::HeaderValue;
+use std::collections::HashMap;
 use std::io::BufWriter;
 use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 /// 清洗书源域名/标识为安全文件名：`|` `/` `\` `:` → `_`
 pub fn sanitize_key(key: &str) -> String {
@@ -76,20 +77,34 @@ impl reqwest::cookie::CookieStore for CookieJar {
 }
 
 /// 按书源 key 管理 cookie jar 文件：`<dir>/<sanitized key>.json`。
+/// 进程内缓存每个 key 的 `Arc<CookieJar>`，同一 key 的请求共享同一内存 store，
+/// 避免"每次重新加载 + 请求后整体写回"造成的并发丢更新（后写覆盖先写）。
 #[derive(Clone)]
 pub struct CookieJarManager {
     dir: PathBuf,
+    cache: Arc<Mutex<HashMap<String, Arc<CookieJar>>>>,
 }
 
 impl CookieJarManager {
     pub fn new(dir: PathBuf) -> Self {
         std::fs::create_dir_all(&dir).ok();
-        Self { dir }
+        Self {
+            dir,
+            cache: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
-    /// 返回该 key 的 jar：从 `<dir>/<sanitized>.json` 加载，文件不存在则新建空 jar。
+    /// 返回该 key 的 jar：首次从 `<dir>/<sanitized>.json` 加载并缓存，
+    /// 之后直接返回缓存实例；文件不存在则新建空 jar。
+    /// 持久化仍由调用方在每次请求后显式调用 [`CookieJar::save`]。
     pub fn jar_for(&self, key: &str) -> Arc<CookieJar> {
-        let file = self.dir.join(format!("{}.json", sanitize_key(key)));
-        Arc::new(CookieJar::load(file))
+        let sani = sanitize_key(key);
+        if let Some(jar) = self.cache.lock().unwrap().get(&sani) {
+            return jar.clone();
+        }
+        let file = self.dir.join(format!("{sani}.json"));
+        let jar = Arc::new(CookieJar::load(file));
+        self.cache.lock().unwrap().insert(sani, jar.clone());
+        jar
     }
 }

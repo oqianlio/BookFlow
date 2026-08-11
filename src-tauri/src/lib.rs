@@ -48,6 +48,7 @@ pub fn run() {
             list_book_sources, add_book_source, update_book_source,
             delete_book_source, set_book_source_enabled,
             get_book_source_progress, save_book_source_progress,
+            open_login_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

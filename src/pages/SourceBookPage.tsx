@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { httpGet, mergeUserAgent } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, extractList } from "../services/bookSourceEngine";
+import { httpGet, openLoginWindow, mergeUserAgent } from "../services/api";
+import { parseBookSourceJson, parseHtml, extractSingle, extractList, type BookSource } from "../services/bookSourceEngine";
 
 interface TocItem { name: string; url: string }
 
@@ -11,6 +11,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<BookSource | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,6 +20,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const bs = await (await import("../services/api")).listBookSources().then((l) => l.find((x) => x.id === sourceId));
         if (!bs) { setError("书源不存在"); return; }
         const s = parseBookSourceJson(bs.json);
+        if (!cancelled) setSource(s);
         if (!bookUrl) { setError("书籍地址无效，无法打开"); return; }
         const base = s.bookSourceUrl || bookUrl;
         const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
@@ -51,11 +53,21 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     return () => { cancelled = true; };
   }, [sourceId, bookUrl, initialTitle]);
 
+  const handleLogin = () => {
+    if (!source?.loginUrl) return;
+    let host = "";
+    try { host = new URL(source.bookSourceUrl).hostname; } catch { host = source.bookSourceUrl; }
+    void openLoginWindow(source.loginUrl, host);
+  };
+
   return (
     <div className="source-book page">
       <header className="library-header">
         <div className="brand"><h1>{info.title}</h1></div>
-        <button className="btn btn-ghost" onClick={onBack}>返回</button>
+        <div className="library-actions">
+          {source?.loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
+          <button className="btn btn-ghost" onClick={onBack}>返回</button>
+        </div>
       </header>
       {error && <p className="error">{error}</p>}
       <div className="source-book-info">

@@ -1,4 +1,4 @@
-use crate::cookies::CookieJarManager;
+use crate::cookies::{CookieJarManager, sanitize_key};
 use crate::db::*;
 use crate::import::import_file;
 use crate::tts::TtsEngine;
@@ -264,4 +264,51 @@ pub fn save_book_source_progress(
     save_source_progress(&state.db.lock().unwrap(), &NewSourceProgress {
         source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent,
     }).map_err(|e| e.to_string())
+}
+
+/// 打开书源登录窗口（WebViewWindow 加载 loginUrl）。
+/// 窗口关闭（Destroyed）后，用该书源 jar 对域名首页发一次请求，
+/// 吸收登录流程产生的 Set-Cookie 并持久化到 `<cookies dir>/<key>.json`。
+#[tauri::command]
+pub fn open_login_window(url: String, cookie_jar: String, app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+
+    let login_url = tauri::WebviewUrl::External(url.parse().map_err(|e| format!("URL 无效: {e}"))?);
+    let label = format!("login_{}", sanitize_key(&cookie_jar));
+    // 同书源登录窗口已存在时直接聚焦，避免重复创建报 LabelAlreadyExists
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let window = tauri::WebviewWindowBuilder::new(&app, label.as_str(), login_url)
+        .title("书源登录")
+        .inner_size(800.0, 600.0)
+        .build()
+        .map_err(|e| format!("打开登录窗口失败: {e}"))?;
+
+    let mgr = app.state::<AppState>().cookies.clone();
+    let jar_key = cookie_jar;
+    let _ = window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Destroyed) || jar_key.is_empty() {
+            return;
+        }
+        let mgr = mgr.clone();
+        let key = jar_key.clone();
+        let url = format!("https://{key}/");
+        std::thread::spawn(move || {
+            let jar = mgr.jar_for(&key);
+            let client = reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_millis(crate::net::DEFAULT_TIMEOUT_MS))
+                .cookie_provider(jar.clone())
+                .build();
+            if let Ok(c) = client {
+                let _ = c
+                    .get(&url)
+                    .header(reqwest::header::USER_AGENT, crate::net::DEFAULT_UA)
+                    .send();
+                jar.save();
+            }
+        });
+    });
+    Ok(())
 }
