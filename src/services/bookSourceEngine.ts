@@ -1,6 +1,7 @@
 import { md5 } from "./md5";
 import { SymmetricCrypto } from "./aes";
 import { getSourceVars } from "./sourceVars";
+import { getJsLib } from "./jsLib";
 
 export type EngineResult = string;
 
@@ -374,6 +375,12 @@ export function evalJs(expr: string, ctx: JsContext): any {
       body = `"use strict"; ${code}\nreturn result;`;
     }
   }
+  // 读取 jsLib 代码并前缀注入；剥离原 body 开头的 "use strict" 前缀避免重复
+  const jsLibCode = ctx.sourceKey ? getJsLib(ctx.sourceKey) : "";
+  if (jsLibCode) {
+    const withoutStrict = body.replace(/^"use strict";\s*/, "");
+    body = `"use strict";\n${jsLibCode}\n${withoutStrict}`;
+  }
   const fn = new Function(
     "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
     body,
@@ -410,7 +417,53 @@ export function resolveSearchUrl(searchUrl: string, key: string, page: number, c
   return parseSearchUrl(s, key);
 }
 
-export function parseExploreUrl(exploreUrl: string): Array<{ title: string; url: string }> {
+export function parseExploreUrl(
+  exploreUrl: string,
+  ctx?: { sourceKey?: string; source?: any },
+): Array<{ title: string; url: string }> {
+  const s = exploreUrl.trim();
+  if (s.startsWith("@js:")) {
+    const expr = s.slice(4);
+    const raw = evalJs(expr, {
+      doc: emptyDoc(),
+      result: "",
+      sourceKey: ctx?.sourceKey,
+      source: ctx?.source,
+    });
+    // 表达式直接返回对象数组（如 @js:[{...},{...}]）
+    if (Array.isArray(raw)) {
+      return raw
+        .map((item) => ({
+          title: String(item?.title ?? item?.name ?? ""),
+          url: String(item?.url ?? ""),
+        }))
+        .filter((k) => k.url);
+    }
+    const str = String(raw ?? "").trim();
+    if (!str) return [];
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => ({
+            title: String(item?.title ?? item?.name ?? ""),
+            url: String(item?.url ?? ""),
+          }))
+          .filter((k) => k.url);
+      }
+    } catch {
+      // 非 JSON，走字符串解析
+    }
+    return str
+      .split(/(&&|\n)+/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const idx = line.indexOf("::");
+        if (idx === -1) return { title: line, url: line };
+        return { title: line.slice(0, idx).trim(), url: line.slice(idx + 2).trim() };
+      });
+  }
   return exploreUrl
     .split("\n")
     .map((l) => l.trim())

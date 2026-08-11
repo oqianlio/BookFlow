@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList } from "./bookSourceEngine";
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
+import { loadJsLib } from "./jsLib";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 describe("bookSourceEngine", () => {
@@ -365,6 +366,32 @@ describe("parseExploreUrl", () => {
   it("handles lines without ::", () => {
     const r = parseExploreUrl("仅标题");
     expect(r).toEqual([{ title: "仅标题", url: "仅标题" }]);
+  });
+
+  it("evaluates @js: expression with jsLib-defined function", () => {
+    loadJsLib("ex.com", "function GEN_EXPLORE(){ return '玄幻::/x/\\n都市::/d/'; }");
+    const r = parseExploreUrl("@js:GEN_EXPLORE()", { sourceKey: "ex.com" });
+    expect(r).toEqual([
+      { title: "玄幻", url: "/x/" },
+      { title: "都市", url: "/d/" },
+    ]);
+  });
+
+  it("parses @js: returning JSON array", () => {
+    const r = parseExploreUrl('@js:[{"title":"玄幻","url":"/x/"},{"title":"都市","url":"/d/"}]', { sourceKey: "none" });
+    expect(r).toEqual([
+      { title: "玄幻", url: "/x/" },
+      { title: "都市", url: "/d/" },
+    ]);
+  });
+
+  it("parses @js: self-contained expression without jsLib", () => {
+    const r = parseExploreUrl('@js:(()=>[{"title":"A","url":"/a/"}])()', {});
+    expect(r).toEqual([{ title: "A", url: "/a/" }]);
+  });
+
+  it("returns empty array for failing @js: expression", () => {
+    expect(parseExploreUrl("@js:null.x", {})).toEqual([]);
   });
 });
 
