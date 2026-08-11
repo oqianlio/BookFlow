@@ -1,4 +1,39 @@
 .reader-page {
+  --bg: #f6f3ec;
+  --bg-soft: #efeae0;
+  --surface: #ffffff;
+  --surface-2: #faf8f2;
+  --fg: #2b2823;
+  --fg-muted: #7d766a;
+  --border: #e2dccb;
+  --border-strong: #d3cbb6;
+  --accent: #a8482a;
+  --accent-hover: #8f3b22;
+  --accent-soft: #f3e2d7;
+  --danger: #b03a2e;
+  --font-read: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", Georgia, serif;
+  --shadow-sm: 0 1px 2px rgba(66, 55, 40, 0.06);
+  --shadow-md: 0 6px 24px rgba(66, 55, 40, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+}
+
+[data-mode="dark"] .reader-page {
+  --bg: #1b1915;
+  --bg-soft: #221f1a;
+  --surface: #262219;
+  --surface-2: #2b271f;
+  --fg: #e6dfd2;
+  --fg-muted: #a89e8b;
+  --border: #3a3529;
+  --border-strong: #4a4435;
+  --accent: #d0763f;
+  --accent-hover: #e0864e;
+  --accent-soft: #3a2a1c;
+  --danger: #d4695c;
+}
+
+.reader-page {
   display: flex;
   flex-direction: column;
   height: 100vh;
