@@ -3,7 +3,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, type BookSource } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 
-export default function BookSourceManager() {
+export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: number, sourceName: string) => void }) {
   const [sources, setSources] = useState<BookSource[]>([]);
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +97,7 @@ export default function BookSourceManager() {
                   checked={s.enabled}
                   onChange={(e) => void handleToggleEnable(s.id, e.target.checked)}
                 />
+                <button className="btn btn-ghost" onClick={() => onDebug?.(s.id, s.name)}>调试</button>
                 <button className="btn btn-ghost" onClick={() => void handleDelete(s.id)}>删除</button>
               </div>
             </li>

@@ -6,6 +6,7 @@ import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
 import SourceBookPage from "./pages/SourceBookPage";
 import SourceReaderPage from "./pages/SourceReaderPage";
 import ExplorePage from "./pages/ExplorePage";
+import DebugSourcePage from "./pages/DebugSourcePage";
 import type { Book } from "./services/api";
 import "./App.css";
 
@@ -15,6 +16,7 @@ type View =
   | { name: "settings" }
   | { name: "discover" }
   | { name: "explore"; sourceId: number; sourceName: string }
+  | { name: "debugSource"; sourceId: number; sourceName: string }
   | { name: "sourceBook"; hit: SearchHit }
   | { name: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string };
 
@@ -25,7 +27,12 @@ export default function App() {
     return <ReaderPage book={view.book} onBack={() => setView({ name: "library" })} />;
   }
   if (view.name === "settings") {
-    return <SettingsPage onBack={() => setView({ name: "library" })} />;
+    return (
+      <SettingsPage
+        onBack={() => setView({ name: "library" })}
+        onOpenDebug={(sourceId, sourceName) => setView({ name: "debugSource", sourceId, sourceName })}
+      />
+    );
   }
   if (view.name === "discover") {
     return (
@@ -43,6 +50,15 @@ export default function App() {
         sourceName={view.sourceName}
         onBack={() => setView({ name: "discover" })}
         onOpenBook={(hit) => setView({ name: "sourceBook", hit })}
+      />
+    );
+  }
+  if (view.name === "debugSource") {
+    return (
+      <DebugSourcePage
+        sourceId={view.sourceId}
+        sourceName={view.sourceName}
+        onBack={() => setView({ name: "settings" })}
       />
     );
   }

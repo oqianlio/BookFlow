@@ -3,7 +3,9 @@ import { getFontSize, setFontSize, Theme, initTheme, setTheme, getTheme } from "
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import BookSourceManager from "../components/BookSourceManager";
 
-export default function SettingsPage({ onBack }: { onBack: () => void }) {
+export default function SettingsPage({ onBack, onOpenDebug }: {
+  onBack: () => void; onOpenDebug?: (sourceId: number, sourceName: string) => void;
+}) {
   const [theme, setThemeState] = useState<Theme>("light");
   const [fontSize, setFontSizeState] = useState(18);
   const [rate, setRateState] = useState(1);
@@ -74,7 +76,7 @@ export default function SettingsPage({ onBack }: { onBack: () => void }) {
             <span className="range-value">{rate.toFixed(1)}x</span>
           </div>
         </div>
-        <BookSourceManager />
+        <BookSourceManager onDebug={onOpenDebug} />
       </div>
     </div>
   );

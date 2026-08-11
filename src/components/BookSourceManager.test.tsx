@@ -36,6 +36,15 @@ describe("BookSourceManager", () => {
     expect(await screen.findByText("示例书源")).toBeInTheDocument();
   });
 
+  it("calls onDebug with the source when 调试 is clicked", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(sources);
+    const onDebug = vi.fn();
+    render(<BookSourceManager onDebug={onDebug} />);
+    await screen.findByText("示例书源");
+    await userEvent.click(screen.getByRole("button", { name: "调试" }));
+    expect(onDebug).toHaveBeenCalledWith(1, "示例书源");
+  });
+
   it("imports a source from URL", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
