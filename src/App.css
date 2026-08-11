@@ -922,7 +922,7 @@ input[type="range"] {
   padding: 10px 14px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius-sm);
-  background: var(--surface-container-high);
+  background: var(--surface-container-low);
   color: var(--on-surface);
   font-size: 14px;
   font-family: var(--font-ui);
@@ -937,6 +937,14 @@ input[type="range"] {
 
 .discover-search input::placeholder {
   color: var(--on-surface-variant);
+}
+
+.explore-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 720px;
+  margin: -8px auto 24px;
 }
 
 .discover-results {
