@@ -15,6 +15,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   const [chapter, setChapter] = useState<ChapterState>({ index: initialChapterIndex, url: initialChapterUrl, name: initialChapterName });
   const [content, setContent] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [isManga, setIsManga] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const nextUrlRef = useRef("");
@@ -24,7 +25,7 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   chapterRef.current = chapter;
 
   const loadChapter = useCallback(async (c: ChapterState) => {
-    setLoading(true); setError(null); setContent(""); setImages([]);
+    setLoading(true); setError(null); setContent(""); setImages([]); setIsManga(false);
     try {
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
       if (!bs) { setError("书源不存在"); setLoading(false); return; }
@@ -35,8 +36,10 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html });
       const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url }) : "";
       nextUrlRef.current = next;
-      if (isImageChapter(text)) {
-        setImages(extractImageUrls(text, c.url));
+      const urls = extractImageUrls(text, c.url);
+      if (isImageChapter(text) && urls.length !== 1) {
+        setImages(urls);
+        setIsManga(true);
       } else {
         setContent(purifyContent(text, (src as any).purify));
       }
@@ -117,8 +120,8 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
           </div>
         )}
         {!loading && !error && (
-          images.length > 0 ? (
-            <MangaViewer images={images} onError={setError} />
+          isManga ? (
+            <MangaViewer images={images} />
           ) : chapter.url ? (
             <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
           ) : (

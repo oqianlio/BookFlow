@@ -151,4 +151,34 @@ describe("SourceReaderPage", () => {
     expect(imgs.length).toBe(2);
     expect(imgs[0].getAttribute("src")).toBe("https://ex.com/img/1.jpg");
   });
+
+  it("renders text content for a chapter with a single inline image", async () => {
+    const src = JSON.parse(sourceJson);
+    src.ruleContent.content = "@css:.content@html";
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><div class="content"><p>正文段落，附带一张装饰图。</p><img src="/deco/cover.jpg"></div></body></html>`,
+    );
+    const { container } = render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
+      initialChapterIndex={0} initialChapterUrl="https://ex.com/c/1.html" initialChapterName="第一章" onBack={() => {}} />);
+    expect(await screen.findByText("正文段落，附带一张装饰图。")).toBeInTheDocument();
+    expect(container.querySelector(".manga-viewer")).toBeNull();
+  });
+
+  it("shows the empty state for an image chapter with no extractable urls", async () => {
+    const src = JSON.parse(sourceJson);
+    src.ruleContent.content = "@css:.content@html";
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><div class="content"><img src=""><img data-lazy="/lazy/1.jpg"></div></body></html>`,
+    );
+    const { container } = render(<SourceReaderPage sourceId={1} bookUrl="https://ex.com/b/1.html" bookTitle="漫画"
+      initialChapterIndex={0} initialChapterUrl="https://ex.com/c/1.html" initialChapterName="第1话" onBack={() => {}} />);
+    expect(await screen.findByText("无图片")).toBeInTheDocument();
+    expect(container.querySelector(".md-reader")).toBeNull();
+  });
 });
