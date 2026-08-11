@@ -266,10 +266,14 @@ function normalizeIv(iv: string | number[] | null | undefined): Uint8Array {
   return out;
 }
 
-function parseTransformation(transformation: string): { mode: "CBC" | "ECB"; nr: number; nk: number } {
-  const parts = transformation.split("/").map((p) => p.toUpperCase());
-  const mode = parts[1] === "ECB" ? "ECB" : "CBC";
-  return { mode, nr: 0, nk: 0 };
+function parseTransformation(transformation: string): "CBC" | "ECB" {
+  const parts = transformation.split("/");
+  const padding = parts[2];
+  const upper = padding?.toUpperCase();
+  if (padding != null && upper !== "PKCS5" && upper !== "PKCS7" && upper !== "PKCS5PADDING" && upper !== "PKCS7PADDING") {
+    throw new Error(`不支持的填充模式: ${padding}`);
+  }
+  return parts[1]?.toUpperCase() === "ECB" ? "ECB" : "CBC";
 }
 
 export class SymmetricCrypto {
@@ -283,8 +287,8 @@ export class SymmetricCrypto {
     key: string | number[] | null,
     iv?: string | number[] | null,
   ) {
-    const parsed = parseTransformation(transformation);
-    this.mode = parsed.mode;
+    this.mode = parseTransformation(transformation);
+    // legado 对 key=null 生成随机密钥；纯同步 JS 无 CSPRNG，这里用固定常量。此场景已在设计中降级（key=null 无实用价值），勿改为随机。
     const keyBytes =
       key == null
         ? Uint8Array.from([0x31, 0x41, 0x59, 0x26, 0x53, 0x58, 0x97, 0x93, 0x23, 0x84, 0x62, 0x64, 0x33, 0x83, 0x27, 0x95])
