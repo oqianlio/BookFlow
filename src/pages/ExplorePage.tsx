@@ -25,8 +25,8 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         const s = parseBookSourceJson(bs.json);
         if (cancelled) return;
         setSrc(s);
-        setCategories(parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s }));
         loadJsLib(s.bookSourceUrl, s.jsLib);
+        setCategories(parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s }));
       } catch (e) { if (!cancelled) setError(String(e)); }
     })();
     return () => { cancelled = true; };
