@@ -423,3 +423,17 @@ export function extractBookList(
   }
   return extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result });
 }
+
+export function isImageChapter(html: string): boolean {
+  return /<\s*img\b/i.test(html);
+}
+
+export function extractImageUrls(html: string, baseUrl: string): string[] {
+  const doc = parseHtml(html);
+  const urls: string[] = [];
+  doc.querySelectorAll("img").forEach((img) => {
+    const src = img.getAttribute("src") || img.getAttribute("data-src") || "";
+    if (src) urls.push(resolveUrl(src, baseUrl));
+  });
+  return urls;
+}

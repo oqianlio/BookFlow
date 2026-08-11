@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList } from "./bookSourceEngine";
+import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
@@ -327,5 +328,25 @@ describe("extractBookList", () => {
     expect(books.length).toBe(2);
     expect(books[0].name).toBe("三体");
     expect(books[1].bookUrl).toBe("https://ex.com/b/2");
+  });
+});
+
+describe("image chapter detection", () => {
+  it("detects img tags", () => {
+    expect(isImageChapter(`<div class="content"><img src="/c/1.jpg"><img src="/c/2.jpg"></div>`)).toBe(true);
+  });
+
+  it("returns false for plain text", () => {
+    expect(isImageChapter("这是一段正文文本")).toBe(false);
+  });
+
+  it("extracts img src and data-src with baseUrl resolution", () => {
+    const html = `<div><img src="/c/1.jpg"><img data-src="https://cdn.com/2.jpg"></div>`;
+    const urls = extractImageUrls(html, "https://ex.com/book/1.html");
+    expect(urls).toEqual(["https://ex.com/c/1.jpg", "https://cdn.com/2.jpg"]);
+  });
+
+  it("returns empty array when no images", () => {
+    expect(extractImageUrls("<p>文本</p>", "https://ex.com")).toEqual([]);
   });
 });
