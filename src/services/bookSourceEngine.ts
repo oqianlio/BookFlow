@@ -6,7 +6,7 @@ import { getJsLib } from "./jsLib";
 export type EngineResult = string;
 
 export type ParsedRule = {
-  type: "css" | "regex" | "regexReplace" | "js" | "xpath" | "plain";
+  type: "css" | "regex" | "regexReplace" | "js" | "xpath" | "json" | "plain";
   value: string;
   attr?: string;
 };
@@ -67,6 +67,21 @@ export function parseHtml(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
+export function jsonGet(obj: any, path: string): any {
+  if (obj == null) return undefined;
+  let cur: any = obj;
+  let p = path.trim();
+  if (p.startsWith("$.")) p = p.slice(2);
+  else if (p.startsWith("$")) p = p.slice(1);
+  if (!p) return cur;
+  const tokens = p.match(/[^.[\]]+|\d+(?=\])/g) ?? [];
+  for (const tok of tokens) {
+    if (cur == null) return undefined;
+    cur = cur[tok];
+  }
+  return cur;
+}
+
 export function parseRule(rule: string): ParsedRule {
   const s = rule.trim();
   if (s.startsWith("@css:")) {
@@ -77,6 +92,12 @@ export function parseRule(rule: string): ParsedRule {
   }
   if (s.startsWith("@js:")) {
     return { type: "js", value: s.slice(4) };
+  }
+  if (s.startsWith("@Json:")) {
+    return { type: "json", value: s.slice(6).trim() };
+  }
+  if (s.startsWith("$.") || s.startsWith("$[")) {
+    return { type: "json", value: s };
   }
   if (s.startsWith("##")) {
     return { type: "regexReplace", value: s.slice(2) };
@@ -200,6 +221,13 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
   if (parsed.type === "js") {
     return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
   }
+  if (parsed.type === "json") {
+    let j: any;
+    try { j = JSON.parse(String(ctx?.result ?? "")); } catch { return ""; }
+    const v = jsonGet(j, parsed.value);
+    if (v == null) return "";
+    return String(v);
+  }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
     const node = resolveTagIndex(parsed.value, doc);
@@ -249,6 +277,19 @@ export function extractList(
       return out;
     });
   }
+  if (parsed.type === "json") {
+    let j: any;
+    try { j = JSON.parse(String(ctx?.result ?? "")); } catch { return []; }
+    const arr = jsonGet(j, parsed.value);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((item) => {
+      const out: Record<string, string> = {};
+      for (const [key, rule] of Object.entries(itemRules)) {
+        out[key] = extractFromJsonObject(item, rule, { baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey });
+      }
+      return out;
+    });
+  }
   if (parsed.type !== "css") return [];
   const nodes = selectNodes(doc, parsed.value);
   return nodes.map((node) => {
@@ -261,26 +302,33 @@ export function extractList(
 }
 
 export function extractFromJsObject(obj: any, rule: string, baseUrl?: string, sourceKey?: string): string {
+  return extractFromJsonObject(obj, rule, { baseUrl, sourceKey });
+}
+
+export function extractFromJsonObject(
+  obj: any,
+  rule: string,
+  ctx?: { baseUrl?: string; sourceKey?: string },
+): string {
   if (obj == null || typeof obj !== "object") return "";
   const s = rule.trim();
   if (!s) return "";
   const jsIdx = s.indexOf("@js:");
+  if (jsIdx === 0) {
+    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+  }
+  const pathPart = (jsIdx > 0 ? s.slice(0, jsIdx) : s).trim();
+  const path = pathPart.startsWith("@Json:")
+    ? pathPart.slice(6).trim()
+    : pathPart.replace(/^\$\.?/, "");
+  const v = jsonGet(obj, path);
   if (jsIdx > 0) {
-    const field = s.slice(0, jsIdx).trim().replace(/^\$?\./, "");
-    const expr = s.slice(jsIdx + 4);
-    const fieldVal = obj[field];
-    return String(evalJs(expr, { doc: emptyDoc(), result: fieldVal, baseUrl, sourceKey }) ?? "");
+    return String(evalJs(s.slice(jsIdx + 4), { doc: emptyDoc(), result: v, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
   }
-  if (s.startsWith("@js:")) {
-    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl, sourceKey }) ?? "");
-  }
-  const field = s.startsWith("$.") ? s.slice(2) : s;
-  const v = obj[field];
   if (v == null) return "";
   const str = String(v);
-  if ((field === "bookUrl" || field === "coverUrl") && baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) {
-    return resolveUrl(str, baseUrl);
-  }
+  const isUrlField = path.endsWith("bookUrl") || path.endsWith("coverUrl") || path.endsWith("thumb_url");
+  if (isUrlField && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
   return str;
 }
 

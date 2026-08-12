@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, jsonGet, extractFromJsonObject } from "./bookSourceEngine";
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { loadJsLib } from "./jsLib";
@@ -431,5 +431,74 @@ describe("image chapter detection", () => {
 
   it("returns empty array when no images", () => {
     expect(extractImageUrls("<p>文本</p>", "https://ex.com")).toEqual([]);
+  });
+});
+
+describe("JSON rule extraction (@Json: / $.)", () => {
+  const json = JSON.stringify({
+    data: {
+      data: {
+        book_name: "三体",
+        author: "刘慈欣",
+        book_id: "123",
+        thumb_url: "/cover/1.jpg",
+        abstract: "科幻",
+        category: "科幻",
+        chapterListWithVolume: [
+          { title: "第一章", itemId: "c1" },
+          { title: "第二章", itemId: "c2" },
+        ],
+      },
+    },
+  });
+
+  it("parses @Json: and $. rules as json type", () => {
+    expect(parseRule("@Json:data")).toEqual({ type: "json", value: "data" });
+    expect(parseRule("$.a.b")).toEqual({ type: "json", value: "$.a.b" });
+    expect(parseRule("$[0]")).toEqual({ type: "json", value: "$[0]" });
+  });
+
+  it("jsonGet walks nested paths and array indexes", () => {
+    const obj = { a: { b: [{ c: 1 }, { c: 2 }] } };
+    expect(jsonGet(obj, "$.a.b[0].c")).toBe(1);
+    expect(jsonGet(obj, "$.a.b")).toEqual([{ c: 1 }, { c: 2 }]);
+    expect(jsonGet(obj, "$.missing")).toBeUndefined();
+    expect(jsonGet({ x: 1 }, "x")).toBe(1);
+  });
+
+  it("extractList extracts items from @Json:data", () => {
+    const doc = parseHtml("<div></div>");
+    const items = extractList(doc, "@Json:data.data.chapterListWithVolume", {
+      name: "$.title", url: "$.itemId",
+    }, { baseUrl: "http://x", result: json, sourceKey: "x" });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("第一章");
+    expect(items[0].url).toBe("c1");
+    expect(items[1].name).toBe("第二章");
+  });
+
+  it("extractSingle reads a scalar from $. path", () => {
+    const doc = parseHtml("<div></div>");
+    expect(extractSingle(doc, "$.data.data.book_name", { result: json, sourceKey: "x" })).toBe("三体");
+  });
+
+  it("extractFromJsonObject supports @js: composition and URL resolution", () => {
+    const item = { book_id: "123", thumb_url: "/cover/1.jpg" };
+    const url = extractFromJsonObject(item, "$.book_id@js:'http://x/detail?book_id=' + result", { baseUrl: "http://x" });
+    expect(url).toBe("http://x/detail?book_id=123");
+    const cover = extractFromJsonObject(item, "$.thumb_url", { baseUrl: "http://x" });
+    expect(cover).toBe("http://x/cover/1.jpg");
+  });
+
+  it("extractFromJsonObject handles @Json: prefix and @js: combination", () => {
+    const obj = { data: [{ id: 7 }] };
+    const out = extractFromJsonObject(obj, "@Json:data[0].id@js:'type=' + result", {});
+    expect(out).toBe("type=7");
+  });
+
+  it("returns empty on invalid JSON without throwing", () => {
+    const doc = parseHtml("<div></div>");
+    expect(extractList(doc, "@Json:data", { name: "$.n" }, { result: "not json", sourceKey: "x" })).toEqual([]);
+    expect(extractSingle(doc, "$.a", { result: "not json", sourceKey: "x" })).toBe("");
   });
 });
