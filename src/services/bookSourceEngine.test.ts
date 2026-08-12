@@ -544,4 +544,12 @@ describe("JSON rule extraction: real source regression", () => {
     const cover = extractSingle(doc, "$.data.data.cover_url", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
     expect(cover).toBe("http://101.35.133.34:5000/c/1.jpg");
   });
+
+  it("does not resolve empty URL fields to site root", () => {
+    const json = JSON.stringify({ data: [{ book_name: "无封面", thumb_url: "" }] });
+    const doc = parseHtml("<div></div>");
+    const items = extractList(doc, "@Json:data", { name: "$.book_name", coverUrl: "$.thumb_url" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
+    expect(items).toEqual([{ name: "无封面", coverUrl: "" }]);
+    expect(extractSingle(doc, "$.data[0].thumb_url", { baseUrl: "http://x", result: json, sourceKey: "x" })).toBe("");
+  });
 });

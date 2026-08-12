@@ -236,7 +236,7 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
       return String(evalJs(parsed.value.slice(jsIdx + 4), { doc, baseUrl: ctx?.baseUrl, result: v, sourceKey: ctx?.sourceKey }) ?? "");
     }
     const str = String(v);
-    if (isUrlField(pathPart) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
+    if (str && isUrlField(pathPart) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
     return str;
   }
   if (!parsed.value) return "";
@@ -344,7 +344,7 @@ export function extractFromJsonObject(
   }
   if (v == null) return "";
   const str = String(v);
-  if (isUrlField(path) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
+  if (str && isUrlField(path) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
   return str;
 }
 
