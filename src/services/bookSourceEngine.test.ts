@@ -502,3 +502,46 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     expect(extractSingle(doc, "$.a", { result: "not json", sourceKey: "x" })).toBe("");
   });
 });
+
+describe("JSON rule extraction: real source regression", () => {
+  it("real-source: 番茄聚合 ruleExplore extraction", () => {
+    const json = JSON.stringify({
+      data: [
+        { book_name: "三体", author: "刘慈欣", book_id: "1", thumb_url: "/c/1.jpg", abstract: "科幻", category: "科幻" },
+        { book_name: "活着", author: "余华", book_id: "2", thumb_url: "/c/2.jpg", abstract: "小说", category: "小说" },
+      ],
+    });
+    const doc = parseHtml("<div></div>");
+    const items = extractList(doc, "@Json:data", {
+      author: "$.author",
+      bookUrl: "$.book_id@js:'http://101.35.133.34:5000/api/detail?book_id=' + result",
+      coverUrl: "$.thumb_url",
+      intro: "$.abstract",
+      kind: "$.category",
+      name: "$.book_name",
+    }, { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
+    expect(items).toEqual([
+      { author: "刘慈欣", bookUrl: "http://101.35.133.34:5000/api/detail?book_id=1", coverUrl: "http://101.35.133.34:5000/c/1.jpg", intro: "科幻", kind: "科幻", name: "三体" },
+      { author: "余华", bookUrl: "http://101.35.133.34:5000/api/detail?book_id=2", coverUrl: "http://101.35.133.34:5000/c/2.jpg", intro: "小说", kind: "小说", name: "活着" },
+    ]);
+  });
+
+  it("real-source: 番茄聚合 ruleToc chapterList @Json:...@js: flatten", () => {
+    const json = JSON.stringify({ data: { data: { chapterListWithVolume: [[{ title: "一", itemId: "a" }], [{ title: "二", itemId: "b" }]] } } });
+    const doc = parseHtml("<div></div>");
+    const listRule = "@Json:data.data.chapterListWithVolume@js:\nvar arr=[];\nfor(var i=0;i<result.length;i++){arr=arr.concat(result[i]);}\nresult=arr;";
+    const items = extractList(doc, listRule, { name: "$.title", url: "$.itemId" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("一");
+    expect(items[1].name).toBe("二");
+  });
+
+  it("real-source: ruleBookInfo cover_url via extractSingle resolves against baseUrl", () => {
+    const json = JSON.stringify({ data: { data: { book_name: "三体", cover_url: "/c/1.jpg", book_url: "/book/1" } } });
+    const doc = parseHtml("<div></div>");
+    const name = extractSingle(doc, "$.data.data.book_name", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
+    expect(name).toBe("三体");
+    const cover = extractSingle(doc, "$.data.data.cover_url", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
+    expect(cover).toBe("http://101.35.133.34:5000/c/1.jpg");
+  });
+});

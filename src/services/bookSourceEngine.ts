@@ -136,6 +136,10 @@ export function resolveUrl(href: string, baseUrl: string): string {
   }
 }
 
+function isUrlField(path: string): boolean {
+  return path.endsWith("bookUrl") || path.endsWith("coverUrl") || path.endsWith("thumb_url") || path.endsWith("cover_url") || path.endsWith("tocUrl") || path.endsWith("toc_url");
+}
+
 export function nodeValue(node: Element, attr?: string): string {
   const a = attr ?? "text";
   switch (a) {
@@ -224,9 +228,16 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
   if (parsed.type === "json") {
     let j: any;
     try { j = JSON.parse(String(ctx?.result ?? "")); } catch { return ""; }
-    const v = jsonGet(j, parsed.value);
+    const jsIdx = parsed.value.indexOf("@js:");
+    const pathPart = (jsIdx > 0 ? parsed.value.slice(0, jsIdx) : parsed.value).trim();
+    const v = jsonGet(j, pathPart);
     if (v == null) return "";
-    return String(v);
+    if (jsIdx > 0) {
+      return String(evalJs(parsed.value.slice(jsIdx + 4), { doc, baseUrl: ctx?.baseUrl, result: v, sourceKey: ctx?.sourceKey }) ?? "");
+    }
+    const str = String(v);
+    if (isUrlField(pathPart) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
+    return str;
   }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
@@ -280,7 +291,13 @@ export function extractList(
   if (parsed.type === "json") {
     let j: any;
     try { j = JSON.parse(String(ctx?.result ?? "")); } catch { return []; }
-    const arr = jsonGet(j, parsed.value);
+    const jsIdx = parsed.value.indexOf("@js:");
+    const pathPart = (jsIdx > 0 ? parsed.value.slice(0, jsIdx) : parsed.value).trim();
+    let arr = jsonGet(j, pathPart);
+    if (jsIdx > 0) {
+      const raw = evalJs(parsed.value.slice(jsIdx + 4), { doc, baseUrl: ctx?.baseUrl, result: arr ?? "", sourceKey: ctx?.sourceKey });
+      try { arr = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]")); } catch { arr = []; }
+    }
     if (!Array.isArray(arr)) return [];
     return arr.map((item) => {
       const out: Record<string, string> = {};
@@ -327,8 +344,7 @@ export function extractFromJsonObject(
   }
   if (v == null) return "";
   const str = String(v);
-  const isUrlField = path.endsWith("bookUrl") || path.endsWith("coverUrl") || path.endsWith("thumb_url");
-  if (isUrlField && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
+  if (isUrlField(path) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
   return str;
 }
 
