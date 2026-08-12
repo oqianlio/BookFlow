@@ -29,11 +29,11 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
         const doc = parseHtml(html);
         const bi = s.ruleBookInfo ?? {};
-        const title = bi.name ? extractSingle(doc, bi.name, { sourceKey: s.bookSourceUrl }) : initialTitle;
-        const author = bi.author ? extractSingle(doc, bi.author, { sourceKey: s.bookSourceUrl }) : "";
-        const intro = bi.intro ? extractSingle(doc, bi.intro, { sourceKey: s.bookSourceUrl }) : "";
-        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { sourceKey: s.bookSourceUrl }) : "";
-        const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
+        const title = bi.name ? extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : initialTitle;
+        const author = bi.author ? extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const intro = bi.intro ? extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
         const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
         const tocDoc = parseHtml(tocHtml);
         const rules = s.ruleToc ?? {};
