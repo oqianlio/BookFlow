@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ExplorePage from "./ExplorePage";
 import * as api from "../services/api";
+import { resetJsLib } from "../services/jsLib";
 
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock("../services/api", () => ({
 }));
 
 const sourceJson = JSON.stringify({
-  bookSourceUrl: "https://ex.com", bookSourceName: "测试",
+  bookSourceUrl: "https://ex.com", bookSourceName: "示例",
   exploreUrl: "玄幻::/sort/1_{{page}}.html\n都市::/sort/2_{{page}}.html",
   ruleExplore: { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" },
 });
@@ -19,12 +20,33 @@ const sourceJson = JSON.stringify({
 describe("ExplorePage", () => {
   it("renders categories and fetches books on click", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
-      { id: 1, name: "测试", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
     vi.mocked(api.httpGet).mockResolvedValue(
       `<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li></ul>`,
     );
-    render(<ExplorePage sourceId={1} sourceName="测试" onBack={() => {}} onOpenBook={() => {}} />);
+    render(<ExplorePage sourceId={1} sourceName="示例" onBack={() => {}} onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("玄幻")).toBeInTheDocument());
+    expect(screen.getByText("都市")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("玄幻"));
+    await waitFor(() => expect(screen.getByText("三体")).toBeInTheDocument());
+  });
+
+  it("loads jsLib, parses @js: exploreUrl, and fetches books on click", async () => {
+    resetJsLib("https://ex.com");
+    const jsSourceJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+      jsLib: "function GEN_EXPLORE(){ return '玄幻::/sort/1.html\\n都市::/sort/2.html'; }",
+      exploreUrl: "@js:GEN_EXPLORE()",
+      ruleExplore: { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: jsSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li></ul>`,
+    );
+    render(<ExplorePage sourceId={1} sourceName="示例" onBack={() => {}} onOpenBook={() => {}} />);
     await waitFor(() => expect(screen.getByText("玄幻")).toBeInTheDocument());
     expect(screen.getByText("都市")).toBeInTheDocument();
     await userEvent.click(screen.getByText("玄幻"));
