@@ -101,6 +101,10 @@ export async function openLoginWindow(url: string, cookieJar: string): Promise<v
   await invoke("open_login_window", { url, cookieJar });
 }
 
+export function logFrontend(level: string, message: string): Promise<void> {
+  return invoke("log_frontend", { level, message });
+}
+
 export function mergeUserAgent(headers: Record<string, string> | undefined, userAgent: string | undefined): Record<string, string> | undefined {
   if (!userAgent) return headers;
   const hasUa = Object.keys(headers ?? {}).some((k) => k.toLowerCase() === "user-agent");

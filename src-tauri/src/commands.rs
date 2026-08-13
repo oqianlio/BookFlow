@@ -312,3 +312,12 @@ pub fn open_login_window(url: String, cookie_jar: String, app: tauri::AppHandle)
     });
     Ok(())
 }
+
+#[tauri::command]
+pub fn log_frontend(level: String, message: String) {
+    match level.as_str() {
+        "error" => eprintln!("[前端 error] {}", message),
+        "warn" => eprintln!("[前端 warn] {}", message),
+        _ => println!("[前端 {}] {}", level, message),
+    }
+}
