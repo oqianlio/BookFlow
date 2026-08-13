@@ -75,12 +75,17 @@ pub async fn http_get(
             body.as_deref(),
             content_type.as_deref(),
         );
-        let resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
+        let mut resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
         // reqwest 只在内存中读写 cookie，不会自动写回文件，需手动持久化
         if let Some(j) = &jar {
             j.save();
         }
-        let bytes = resp.bytes().map_err(|e| format!("读取响应失败: {e}"))?;
+        // 手动读取原始字节而非 resp.bytes()/text()：
+        // reqwest 0.13 在无 gzip feature 时对部分 chunked 响应会报 "error decoding response body"，
+        // 而原始字节是有效的（copy_to 可正常读出）。绕过后交由 decode_body 处理。
+        let mut bytes = Vec::new();
+        resp.copy_to(&mut bytes)
+            .map_err(|e| format!("读取响应失败: {e}"))?;
         decode_body(&bytes, None)
     })
     .await
