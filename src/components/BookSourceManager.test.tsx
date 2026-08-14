@@ -146,7 +146,7 @@ describe("BookSourceManager", () => {
     expect(imp.commitBookSource).toHaveBeenCalledWith(expect.objectContaining({ bookSourceName: "A源" }));
   });
 
-  it("skips existing URLs when importing collection", async () => {
+  it("shows existing sources in confirm list but leaves them unchecked by default", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "A源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
     ]);
@@ -161,9 +161,13 @@ describe("BookSourceManager", () => {
     render(<BookSourceManager />);
     await screen.findByText("A源");
     await userEvent.click(screen.getByRole("button", { name: /从文件导入/ }));
+    await waitFor(() => expect(screen.getByText("B源")).toBeInTheDocument());
+    // 已存在的 A源 默认不勾选，显示「已有」标记；新书源 B源 默认勾选
+    expect(screen.getByRole("checkbox", { name: "A源" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "B源" })).toBeChecked();
+    expect(screen.getByText("已有")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /导入选中/ }));
-    await waitFor(() => expect(screen.getByText(/成功导入 1 个，跳过 1 个/)).toBeInTheDocument());
-    expect(imp.commitBookSource).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalledTimes(1));
     expect(imp.commitBookSource).toHaveBeenCalledWith(expect.objectContaining({ bookSourceName: "B源" }));
   });
 

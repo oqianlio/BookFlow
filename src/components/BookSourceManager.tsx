@@ -10,6 +10,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   const [busy, setBusy] = useState(false);
   const [pendingSources, setPendingSources] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [existingUrls, setExistingUrls] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -26,24 +27,33 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     if (bookSources.length === 1) {
       const bs = bookSources[0];
       if (!confirmJsImport(bs)) return;
-      let existing: Set<string>;
-      try {
-        existing = new Set((await listBookSources()).map((s) => s.url));
-      } catch (e) {
-        setError(String(e));
-        return;
-      }
-      if (existing.has(bs.bookSourceUrl)) {
-        setImportMsg(`书源已存在，跳过：${bs.bookSourceName}`);
-        await refresh();
-        return;
-      }
-      await commitBookSource(bs);
+    let existing: Set<string>;
+    try {
+      existing = new Set((await listBookSources()).map((s) => s.url));
+    } catch (e) {
+      setError(String(e));
+      return;
+    }
+    if (existing.has(bs.bookSourceUrl)) {
+      setImportMsg(`书源已存在，跳过：${bs.bookSourceName}`);
       await refresh();
       return;
     }
+    await commitBookSource(bs);
+    await refresh();
+    return;
+  }
+    let existingUrls: Set<string>;
+    try {
+      existingUrls = new Set((await listBookSources()).map((s) => s.url));
+    } catch (e) {
+      setError(String(e));
+      return;
+    }
     setPendingSources(bookSources);
-    setSelected(new Set(bookSources.map((_, i) => i)));
+    setExistingUrls(existingUrls);
+    // 默认勾选本地不存在的新书源；已存在的显示但不勾选
+    setSelected(new Set(bookSources.map((_, i) => i).filter((i) => !existingUrls.has(bookSources[i].bookSourceUrl))));
     setImportMsg(null);
   };
 
@@ -190,6 +200,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
                 />
                 <span className="import-confirm-name">{bs.bookSourceName}</span>
                 <span className="import-confirm-url">{bs.bookSourceUrl}</span>
+                {existingUrls.has(bs.bookSourceUrl) && <span className="import-confirm-existing">已有</span>}
                 {sourceUsesJs(bs) && <span className="import-confirm-js">含脚本</span>}
               </li>
             ))}

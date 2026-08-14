@@ -915,6 +915,7 @@ input[type="range"] {
 .import-confirm-name { font-size: 13px; font-weight: 600; color: var(--on-surface); min-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .import-confirm-url { font-size: 11.5px; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .import-confirm-js { flex-shrink: 0; font-size: 11px; color: var(--primary); padding: 2px 8px; border-radius: 999px; background: var(--secondary-container); }
+.import-confirm-existing { flex-shrink: 0; font-size: 11px; color: var(--on-surface-variant); padding: 2px 8px; border-radius: 999px; background: var(--surface-container-high); border: 1px solid var(--outline-variant); }
 .import-confirm-actions { display: flex; gap: 10px; }
 .import-msg { margin: 10px 0 0; }
 
