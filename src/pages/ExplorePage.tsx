@@ -46,10 +46,11 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
       const rules = src.ruleExplore ?? {};
       const items = extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
       if (seq !== reqIdRef.current) return;
-      setBooks(items.filter((i) => i.name).map((i) => ({
+      const rendered = items.filter((i) => i.name).map((i) => ({
         title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
         bookUrl: i.bookUrl ?? "", sourceId, sourceName,
-      })));
+      }));
+      setBooks(rendered);
       setActive(cat); setPage(pg);
     } catch (e) {
       if (seq !== reqIdRef.current) return;
