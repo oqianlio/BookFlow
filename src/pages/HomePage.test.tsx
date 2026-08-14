@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import HomePage, { computeStats } from "./HomePage";
 import * as api from "../services/api";
 
-vi.mock("../services/api", () => ({ listBooks: vi.fn() }));
+vi.mock("../services/api", () => ({ listBooks: vi.fn(), importFiles: vi.fn() }));
 
 const now = 1_700_000_000;
 
@@ -24,32 +24,44 @@ describe("computeStats", () => {
 });
 
 describe("HomePage", () => {
-  it("renders stats and recent books sorted by last_opened_at", async () => {
+  it("renders stats and quick actions, no book cards", async () => {
     vi.mocked(api.listBooks).mockResolvedValue(books);
-    render(<HomePage onOpenBook={() => {}} />);
-    expect(await screen.findByText("3")).toBeInTheDocument();   // total
-    expect(await screen.findByText("三体")).toBeInTheDocument(); // most recent
-    expect(screen.getByText("算法")).toBeInTheDocument();
+    render(<HomePage />);
+    expect(await screen.findByText("3")).toBeInTheDocument();  // 藏书统计
+    expect(screen.getByText("EPUB")).toBeInTheDocument();       // 格式统计
+    expect(screen.getByRole("button", { name: /导入书籍/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去书架/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去发现/ })).toBeInTheDocument();
+    // 不再渲染最近阅读书卡
+    expect(screen.queryByText("三体")).not.toBeInTheDocument();
+    expect(screen.queryByText("算法")).not.toBeInTheDocument();
   });
+
   it("shows empty state when no books", async () => {
     vi.mocked(api.listBooks).mockResolvedValue([]);
-    render(<HomePage onOpenBook={() => {}} />);
+    render(<HomePage />);
     expect(await screen.findByText(/书架空空/)).toBeInTheDocument();
   });
-  it("opens a book when a recent book card is clicked", async () => {
-    vi.mocked(api.listBooks).mockResolvedValue(books);
-    const open = vi.fn();
-    render(<HomePage onOpenBook={open} />);
-    await screen.findByText("三体");
-    await userEvent.click(screen.getByText("三体"));
-    expect(open).toHaveBeenCalledWith(books[0]);
-  });
-  it("navigates to the bookshelf via the manage button", async () => {
-    vi.mocked(api.listBooks).mockResolvedValue([]);
-    const go = vi.fn();
-    render(<HomePage onOpenBook={() => {}} onGoBookshelf={go} />);
+
+  it("calls importFiles and refreshes on 导入书籍 click", async () => {
+    vi.mocked(api.listBooks).mockResolvedValueOnce([]).mockResolvedValueOnce(books);
+    vi.mocked(api.importFiles).mockResolvedValue(books as any);
+    render(<HomePage />);
     await screen.findByText(/书架空空/);
-    await userEvent.click(screen.getByRole("button", { name: /管理书架/ }));
-    expect(go).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /导入书籍/ }));
+    expect(api.importFiles).toHaveBeenCalled();
+    expect(await screen.findByText("3")).toBeInTheDocument();
+  });
+
+  it("navigates to bookshelf and discover via quick buttons", async () => {
+    vi.mocked(api.listBooks).mockResolvedValue([]);
+    const goShelf = vi.fn();
+    const goDiscover = vi.fn();
+    render(<HomePage onGoBookshelf={goShelf} onGoDiscover={goDiscover} />);
+    await screen.findByText(/书架空空/);
+    await userEvent.click(screen.getByRole("button", { name: /去书架/ }));
+    expect(goShelf).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: /去发现/ }));
+    expect(goDiscover).toHaveBeenCalled();
   });
 });

@@ -97,8 +97,8 @@ function AppInner() {
       <main className="app-main">
         {state.area === "home" && (
           <HomePage
-            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "home" })}
             onGoBookshelf={() => setState({ area: "bookshelf" })}
+            onGoDiscover={() => setState({ area: "discover" })}
           />
         )}
         {state.area === "bookshelf" && (

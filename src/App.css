@@ -1152,6 +1152,7 @@ input[type="range"] {
 .stat-label { font-size: 12px; color: var(--on-surface-variant); letter-spacing: 0.05em; }
 .home-section { margin: 8px 0 0; font-family: var(--font-read); font-size: 18px; color: var(--on-surface); }
 .home .book-grid { padding: 16px 0 48px; }
+.home-quick { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 0 24px; }
 
 /* ============ 我的页 ============ */
 .my-form { max-width: 520px; display: flex; flex-direction: column; gap: 14px; padding: 12px 0; }
