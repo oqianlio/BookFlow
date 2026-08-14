@@ -32,6 +32,7 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
 
   const copy = async () => {
     if (!message) return;
+    let ok = true;
     try {
       await navigator.clipboard.writeText(message);
     } catch {
@@ -39,11 +40,17 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
       ta.value = message;
       ta.style.position = "fixed";
       ta.style.opacity = "0";
+      ta.readOnly = true;
+      ta.style.userSelect = "text";
       document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
+      try {
+        ta.select();
+        ok = document.execCommand("copy");
+      } finally {
+        document.body.removeChild(ta);
+      }
     }
+    if (!ok) return;
     setCopied(true);
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => setCopied(false), 2000);
