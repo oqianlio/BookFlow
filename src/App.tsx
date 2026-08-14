@@ -11,6 +11,7 @@ import ExplorePage from "./pages/ExplorePage";
 import DebugSourcePage from "./pages/DebugSourcePage";
 import RssPage from "./pages/RssPage";
 import type { Book } from "./services/api";
+import { ErrorProvider } from "./components/ErrorDialog";
 import "./App.css";
 
 type DetailState =
@@ -23,6 +24,14 @@ type DetailState =
 type AppState = { area: AppArea } | DetailState;
 
 export default function App() {
+  return (
+    <ErrorProvider>
+      <AppInner />
+    </ErrorProvider>
+  );
+}
+
+function AppInner() {
   const [state, setState] = useState<AppState>({ area: "home" });
   const area = state.area === "detail" ? state.back : state.area;
 

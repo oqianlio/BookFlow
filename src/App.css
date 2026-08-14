@@ -1157,3 +1157,10 @@ input[type="range"] {
 .my-form { max-width: 520px; display: flex; flex-direction: column; gap: 14px; padding: 12px 0; }
 .my .settings-group { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); }
 
+/* ============ 错误弹窗 ============ */
+.error-dialog-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }
+.error-dialog { width: min(440px, 90vw); max-height: 70vh; display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: var(--radius-md); background: var(--surface-container-lowest); box-shadow: var(--shadow-lg); }
+.error-dialog h3 { margin: 0; font-size: 16px; color: var(--error); }
+.error-dialog-message { margin: 0; padding: 12px; background: var(--surface-container-high); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; color: var(--on-surface); white-space: pre-wrap; word-break: break-all; overflow: auto; max-height: 40vh; }
+.error-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
