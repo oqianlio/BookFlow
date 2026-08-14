@@ -49,7 +49,7 @@ describe("BookSourceManager", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
     vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
-      name: "网络书源", url: "https://net.com", bookSource: { bookSourceName: "网络书源", bookSourceUrl: "https://net.com" },
+      bookSources: [{ bookSourceName: "网络书源", bookSourceUrl: "https://net.com" }],
     });
     vi.mocked(imp.commitBookSource).mockResolvedValue(9);
     render(<BookSourceManager />);
@@ -64,7 +64,7 @@ describe("BookSourceManager", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
     vi.mocked(imp.importBookSourceFromFile).mockResolvedValue({
-      name: "本地书源", url: "https://local.com", bookSource: { bookSourceName: "本地书源", bookSourceUrl: "https://local.com" },
+      bookSources: [{ bookSourceName: "本地书源", bookSourceUrl: "https://local.com" }],
     });
     vi.mocked(imp.commitBookSource).mockResolvedValue(10);
     render(<BookSourceManager />);
@@ -77,8 +77,7 @@ describe("BookSourceManager", () => {
   it("aborts importing a @js: source when user cancels the confirm", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
-      name: "JS书源", url: "https://js.com",
-      bookSource: { bookSourceName: "JS书源", bookSourceUrl: "https://js.com", searchUrl: "@js:var a=1;" },
+      bookSources: [{ bookSourceName: "JS书源", bookSourceUrl: "https://js.com", searchUrl: "@js:var a=1;" }],
     });
     vi.mocked(imp.sourceUsesJs).mockReturnValue(true);
     vi.mocked(imp.commitBookSource).mockResolvedValue(11);
@@ -96,8 +95,7 @@ describe("BookSourceManager", () => {
   it("imports a @js: source after user confirms", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
-      name: "JS书源", url: "https://js.com",
-      bookSource: { bookSourceName: "JS书源", bookSourceUrl: "https://js.com", searchUrl: "@js:var a=1;" },
+      bookSources: [{ bookSourceName: "JS书源", bookSourceUrl: "https://js.com", searchUrl: "@js:var a=1;" }],
     });
     vi.mocked(imp.sourceUsesJs).mockReturnValue(true);
     vi.mocked(imp.commitBookSource).mockResolvedValue(11);

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { commitBookSource, extractBookSourceFromText, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "./bookSourceImport";
+import { commitBookSource, extractBookSourceFromText, importBookSourceFromFile, importBookSourceFromUrl, parseBookSourceCollection, sourceUsesJs } from "./bookSourceImport";
 import * as api from "./api";
 
 vi.mock("./api", () => ({
@@ -53,7 +53,9 @@ describe("validateBookSource (@js: now allowed)", () => {
 
   it("accepts @js: source via URL import", async () => {
     vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com", searchUrl: "@js:var a=1;" }));
-    await expect(importBookSourceFromUrl("https://x.com/src.json")).resolves.toMatchObject({ name: "X", url: "https://x.com" });
+    await expect(importBookSourceFromUrl("https://x.com/src.json")).resolves.toMatchObject({
+      bookSources: [{ bookSourceName: "X", bookSourceUrl: "https://x.com" }],
+    });
   });
 });
 
@@ -84,8 +86,8 @@ describe("bookSourceImport async functions", () => {
     vi.mocked(api.addBookSource).mockResolvedValue(1);
     const r = await importBookSourceFromUrl("  https://x.com/src.json  ");
     expect(api.httpGet).toHaveBeenCalledWith("https://x.com/src.json", undefined, 20000);
-    expect(r.name).toBe("X");
-    await commitBookSource(r.bookSource);
+    expect(r.bookSources[0]).toMatchObject({ bookSourceName: "X", bookSourceUrl: "https://x.com" });
+    await commitBookSource(r.bookSources[0]);
     expect(api.addBookSource).toHaveBeenCalledWith("X", "https://x.com", JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com" }));
   });
 
@@ -98,6 +100,47 @@ describe("bookSourceImport async functions", () => {
     vi.mocked(api.readFileContent).mockResolvedValue(JSON.stringify({ bookSourceName: "Y", bookSourceUrl: "https://y.com" }));
     const r = await importBookSourceFromFile("/path/source.json");
     expect(api.readFileContent).toHaveBeenCalledWith("/path/source.json");
-    expect(r.url).toBe("https://y.com");
+    expect(r.bookSources[0]).toMatchObject({ bookSourceName: "Y", bookSourceUrl: "https://y.com" });
+  });
+});
+
+describe("parseBookSourceCollection", () => {
+  it("returns all sources from a JSON array", () => {
+    const arr = JSON.stringify([VALID, { bookSourceName: "书源2", bookSourceUrl: "https://e2.com" }]);
+    const r = parseBookSourceCollection(arr);
+    expect(r.length).toBe(2);
+    expect(r[0]).toMatchObject(VALID);
+    expect(r[1]).toMatchObject({ bookSourceName: "书源2" });
+  });
+
+  it("returns single source wrapped in array", () => {
+    expect(parseBookSourceCollection(JSON.stringify(VALID))).toHaveLength(1);
+  });
+
+  it("filters out invalid entries in array", () => {
+    const arr = JSON.stringify([{ foo: 1 }, VALID]);
+    const r = parseBookSourceCollection(arr);
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatchObject(VALID);
+  });
+
+  it("throws on invalid JSON", () => {
+    expect(() => parseBookSourceCollection("not json")).toThrow();
+  });
+});
+
+describe("import functions return bookSources array", () => {
+  it("importBookSourceFromUrl returns bookSources array", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify([VALID, { bookSourceName: "B", bookSourceUrl: "https://b.com" }]));
+    const r = await importBookSourceFromUrl("https://x.json");
+    expect(r.bookSources).toHaveLength(2);
+    expect(r.bookSources[0]).toMatchObject(VALID);
+  });
+
+  it("importBookSourceFromFile returns bookSources array", async () => {
+    vi.mocked(api.readFileContent).mockResolvedValue(JSON.stringify(VALID));
+    const r = await importBookSourceFromFile("C:/s.json");
+    expect(r.bookSources).toHaveLength(1);
+    expect(r.bookSources[0]).toMatchObject(VALID);
   });
 });

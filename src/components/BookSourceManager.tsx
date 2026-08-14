@@ -29,8 +29,9 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
       const path = Array.isArray(picked) ? picked[0] : picked;
       if (!path) return;
       const result = await importBookSourceFromFile(path);
-      if (!confirmJsImport(result.bookSource)) return;
-      await commitBookSource(result.bookSource);
+      const bookSource = result.bookSources[0];
+      if (!confirmJsImport(bookSource)) return;
+      await commitBookSource(bookSource);
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -45,8 +46,9 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     setError(null);
     try {
       const result = await importBookSourceFromUrl(url.trim());
-      if (!confirmJsImport(result.bookSource)) return;
-      await commitBookSource(result.bookSource);
+      const bookSource = result.bookSources[0];
+      if (!confirmJsImport(bookSource)) return;
+      await commitBookSource(bookSource);
       setUrl("");
       await refresh();
     } catch (e) {
