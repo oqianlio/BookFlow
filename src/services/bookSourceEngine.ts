@@ -427,7 +427,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
   let body: string;
   if (/\breturn\b/.test(code)) {
     // 显式 return 语句
-    body = `"use strict"; ${code}`;
+    body = code;
   } else {
     // 取末尾独立语句作为返回表达式：优先按换行，其次按分号切分的最后一段
     const lastLine = code.split(/\n/).map((l) => l.trim()).filter((l) => l.length > 0).pop() ?? "";
@@ -435,23 +435,33 @@ export function evalJs(expr: string, ctx: JsContext): any {
     const last = segments[segments.length - 1] ?? lastLine;
     const lastIsDecl = /\b(var|let|const|if|for|while|function|return)\b/.test(last) || last.endsWith("}") || last.startsWith("}");
     if (last && !lastIsDecl) {
-      body = `"use strict"; ${code}\nreturn (${last.replace(/;\s*$/, "")});`;
+      body = `${code}\nreturn (${last.replace(/;\s*$/, "")});`;
     } else {
-      body = `"use strict"; ${code}\nreturn result;`;
+      body = `${code}\nreturn result;`;
     }
   }
-  // 读取 jsLib 代码并前缀注入；剥离原 body 开头的 "use strict" 前缀避免重复
+  // 读取 jsLib 代码并前缀注入（非严格模式：jsLib 内定义的函数调用时 this 指向全局，
+  // 通过临时挂载 globalThis.source 让书源里 this.source 约定可用）
   const jsLibCode = ctx.sourceKey ? getJsLib(ctx.sourceKey) : "";
   if (jsLibCode) {
-    const withoutStrict = body.replace(/^"use strict";\s*/, "");
-    body = `"use strict";\n${jsLibCode}\n${withoutStrict}`;
+    body = `${jsLibCode}\n${body}`;
   }
   const fn = new Function(
     "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
     body,
   );
   try {
-    return fn.call({ source }, ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "", TYPE);
+    const g = globalThis as Record<string, unknown>;
+    const prevSource = g.__ydSource;
+    g.__ydSource = source;
+    const prevThisSource = (g as Record<string, unknown>).source;
+    (g as Record<string, unknown>).source = source;
+    try {
+      return fn.call({ source }, ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "", TYPE);
+    } finally {
+      (g as Record<string, unknown>).source = prevThisSource;
+      g.__ydSource = prevSource;
+    }
   } catch (e) {
     console.warn("evalJs error:", expr, e);
     return "";

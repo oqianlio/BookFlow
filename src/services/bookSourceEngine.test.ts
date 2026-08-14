@@ -377,6 +377,12 @@ describe("parseExploreUrl", () => {
     ]);
   });
 
+  it("jsLib-defined functions can access this.source", () => {
+    loadJsLib("tabs.com", "function TAB(){ var v=String(this.source.getVariable()).split(','); return v[0]||'0'; }");
+    const r = evalJs("TAB()", { doc: emptyDoc(), source: { getVariable: () => "2" }, sourceKey: "tabs.com" });
+    expect(r).toBe("2");
+  });
+
   it("parses @js: returning JSON array", () => {
     const r = parseExploreUrl('@js:[{"title":"玄幻","url":"/x/"},{"title":"都市","url":"/d/"}]', { sourceKey: "none" });
     expect(r).toEqual([
