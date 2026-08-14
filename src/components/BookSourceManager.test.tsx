@@ -25,6 +25,13 @@ const sources = [
   { id: 1, name: "示例书源", url: "https://ex.com", json: "{}", enabled: true, last_used_at: null },
 ];
 
+const groupedSources = [
+  { id: 1, name: "番茄", url: "https://a.com", json: JSON.stringify({ bookSourceGroup: "r" }), enabled: true, last_used_at: null },
+  { id: 2, name: "可乐", url: "https://b.com", json: JSON.stringify({ bookSourceGroup: "r" }), enabled: true, last_used_at: null },
+  { id: 3, name: "同人书源", url: "https://c.com", json: JSON.stringify({ bookSourceGroup: "同人" }), enabled: true, last_used_at: null },
+  { id: 4, name: "无组", url: "https://d.com", json: "{}", enabled: true, last_used_at: null },
+];
+
 describe("BookSourceManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -185,5 +192,38 @@ describe("BookSourceManager", () => {
     await userEvent.type(screen.getByLabelText("书源网址"), "https://example.com/c.json");
     await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
     await waitFor(() => expect(screen.getByText(/含脚本/)).toBeInTheDocument());
+  });
+
+  it("groups sources by bookSourceGroup with 未分组 fallback", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(groupedSources as any);
+    render(<BookSourceManager />);
+    expect(await screen.findByText("r")).toBeInTheDocument();
+    expect(screen.getByText("同人")).toBeInTheDocument();
+    expect(screen.getByText("未分组")).toBeInTheDocument();
+    expect(screen.getByText("番茄")).toBeInTheDocument();
+    expect(screen.getByText("无组")).toBeInTheDocument();
+  });
+
+  it("collapses a group on header click and hides its sources", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(groupedSources as any);
+    render(<BookSourceManager />);
+    await screen.findByText("r");
+    await userEvent.click(screen.getByText("r"));
+    expect(screen.queryByText("番茄")).not.toBeInTheDocument();
+    expect(screen.getByText("同人")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("r"));
+    expect(screen.getByText("番茄")).toBeInTheDocument();
+  });
+
+  it("filters sources by name or url via search box", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(groupedSources as any);
+    render(<BookSourceManager />);
+    await screen.findByText("番茄");
+    await userEvent.type(screen.getByLabelText("搜索书源"), "可乐");
+    expect(screen.getByText("可乐")).toBeInTheDocument();
+    expect(screen.queryByText("番茄")).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText("搜索书源"));
+    await userEvent.type(screen.getByLabelText("搜索书源"), "https://c.com");
+    expect(screen.getByText("同人")).toBeInTheDocument();
   });
 });

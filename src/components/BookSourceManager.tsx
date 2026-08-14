@@ -4,10 +4,26 @@ import { deleteBookSource, listBookSources, setBookSourceEnabled, type BookSourc
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 import { useError } from "./ErrorDialog";
 
+export function groupSources(sources: BookSource[]): Array<{ group: string; items: BookSource[] }> {
+  const map = new Map<string, BookSource[]>();
+  for (const s of sources) {
+    let g = "未分组";
+    try {
+      const parsed = JSON.parse(s.json);
+      g = parsed?.bookSourceGroup || "未分组";
+    } catch { /* 归未分组 */ }
+    if (!map.has(g)) map.set(g, []);
+    map.get(g)!.push(s);
+  }
+  return [...map.entries()].map(([group, items]) => ({ group, items }));
+}
+
 export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: number, sourceName: string) => void }) {
   const [sources, setSources] = useState<BookSource[]>([]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
   const { showError } = useError();
   const [pendingSources, setPendingSources] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -140,32 +156,67 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     }
   };
 
+  const toggleGroup = (g: string) => {
+    const next = new Set(collapsed);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    setCollapsed(next);
+  };
+
   return (
     <div className="book-source-manager">
       <h3>书源</h3>
       {sources.length === 0 ? (
         <p className="panel-empty">暂无书源</p>
       ) : (
-        <ul className="source-list">
-          {sources.map((s) => (
-            <li key={s.id}>
-              <div className="source-info">
-                <span className="source-name">{s.name}</span>
-                <span className="source-url">{s.url}</span>
-              </div>
-              <div className="source-actions">
-                <input
-                  type="checkbox"
-                  aria-label={`启用 ${s.name}`}
-                  checked={s.enabled}
-                  onChange={(e) => void handleToggleEnable(s.id, e.target.checked)}
-                />
-                <button className="btn btn-ghost" onClick={() => onDebug?.(s.id, s.name)}>调试</button>
-                <button className="btn btn-ghost" onClick={() => void handleDelete(s.id)}>删除</button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <input
+            className="source-filter"
+            aria-label="搜索书源"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索书源名称或网址"
+          />
+          {(() => {
+            const filtered = query.trim()
+              ? sources.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()) || s.url.toLowerCase().includes(query.trim().toLowerCase()))
+              : sources;
+            if (filtered.length === 0) return <p className="panel-empty">无匹配书源</p>;
+            return groupSources(filtered).map(({ group, items }) => {
+              const isCollapsed = collapsed.has(group);
+              return (
+                <div key={group}>
+                  <div className="source-group-head" onClick={() => toggleGroup(group)} role="button" aria-expanded={!isCollapsed}>
+                    <span className={`caret${isCollapsed ? "" : " open"}`}>▶</span>
+                    <span>{group}</span>
+                    <span className="count">{items.length}</span>
+                  </div>
+                  {!isCollapsed && (
+                    <ul className="source-list">
+                      {items.map((s) => (
+                        <li key={s.id}>
+                          <div className="source-info">
+                            <span className="source-name">{s.name}</span>
+                            <span className="source-url">{s.url}</span>
+                          </div>
+                          <div className="source-actions">
+                            <input
+                              type="checkbox"
+                              aria-label={`启用 ${s.name}`}
+                              checked={s.enabled}
+                              onChange={(e) => void handleToggleEnable(s.id, e.target.checked)}
+                            />
+                            <button className="btn btn-ghost" onClick={() => onDebug?.(s.id, s.name)}>调试</button>
+                            <button className="btn btn-ghost" onClick={() => void handleDelete(s.id)}>删除</button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            });
+          })()}
+        </>
       )}
       <div className="source-import">
         <button className="btn btn-ghost" onClick={() => void handleFileImport()}>从文件导入</button>
