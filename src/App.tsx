@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage";
 import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
+import BookSourceManager from "./components/BookSourceManager";
 import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
 import SourceBookPage from "./pages/SourceBookPage";
 import SourceReaderPage from "./pages/SourceReaderPage";
@@ -18,6 +19,7 @@ type DetailState =
   | { area: "detail"; page: "reader"; book: Book; back: AppArea }
   | { area: "detail"; page: "explore"; sourceId: number; sourceName: string; back: AppArea }
   | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppArea }
+  | { area: "detail"; page: "sourceManager"; back: AppArea }
   | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppArea }
   | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppArea };
 
@@ -55,6 +57,13 @@ function AppInner() {
             sourceId={state.sourceId}
             sourceName={state.sourceName}
             onBack={() => go(state.back)}
+          />
+        );
+      case "sourceManager":
+        return (
+          <BookSourceManager
+            onBack={() => go(state.back)}
+            onDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: "my" })}
           />
         );
       case "sourceBook":
@@ -114,7 +123,7 @@ function AppInner() {
         )}
         {state.area === "rss" && <RssPage key="rss" />}
         {state.area === "my" && (
-          <SettingsPage key="my" onOpenDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: "my" })} />
+          <SettingsPage key="my" onOpenSourceManager={() => setState({ area: "detail", page: "sourceManager", back: "my" })} />
         )}
       </main>
     </div>

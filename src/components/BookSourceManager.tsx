@@ -18,7 +18,10 @@ export function groupSources(sources: BookSource[]): Array<{ group: string; item
   return [...map.entries()].map(([group, items]) => ({ group, items }));
 }
 
-export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: number, sourceName: string) => void }) {
+export default function BookSourceManager({ onDebug, onBack }: {
+  onDebug?: (sourceId: number, sourceName: string) => void;
+  onBack?: () => void;
+}) {
   const [sources, setSources] = useState<BookSource[]>([]);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -163,8 +166,13 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   };
 
   return (
-    <div className="book-source-manager">
-      <h3>书源</h3>
+    <div className="source-manager page">
+      <header className="library-header">
+        <div className="brand"><h1>书源管理</h1></div>
+        {onBack && <button className="btn btn-ghost" onClick={onBack}>返回</button>}
+      </header>
+      <div className="book-source-manager">
+        <h3>书源</h3>
       {sources.length === 0 ? (
         <p className="panel-empty">暂无书源</p>
       ) : (
@@ -261,6 +269,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
         </div>
       )}
       {importMsg && <p className="error import-msg">{importMsg}</p>}
+      </div>
     </div>
   );
 }

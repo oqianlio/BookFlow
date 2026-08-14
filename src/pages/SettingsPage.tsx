@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { SCHEMES, SCHEME_NAMES, Theme, initTheme, setTheme, getTheme } from "../components/theme";
 import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
-import BookSourceManager from "../components/BookSourceManager";
 
-export default function SettingsPage({ onOpenDebug }: {
-  onOpenDebug?: (sourceId: number, sourceName: string) => void;
+export default function SettingsPage({ onOpenSourceManager }: {
+  onOpenSourceManager?: () => void;
 }) {
   const [theme, setThemeState] = useState<Theme>({ scheme: "sora", mode: "light" });
   const [fontSize, setFontSizeState] = useState(18);
@@ -77,7 +76,13 @@ export default function SettingsPage({ onOpenDebug }: {
             <span className="range-value">{rate.toFixed(1)}x</span>
           </div>
         </div>
-        <BookSourceManager onDebug={onOpenDebug} />
+        <div className="settings-group">
+          <div>
+            <div className="label">书源管理</div>
+            <div className="hint">管理书源列表，支持分组、导入、调试</div>
+          </div>
+          {onOpenSourceManager && <button className="btn btn-soft" onClick={onOpenSourceManager}>打开</button>}
+        </div>
         <div className="settings-group">
           <div>
             <div className="label">关于</div>

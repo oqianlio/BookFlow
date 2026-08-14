@@ -52,6 +52,17 @@ describe("BookSourceManager", () => {
     expect(onDebug).toHaveBeenCalledWith(1, "示例书源");
   });
 
+  it("renders a back button when onBack is provided", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(sources);
+    const onBack = vi.fn();
+    render(<BookSourceManager onBack={onBack} />);
+    await screen.findByText("示例书源");
+    const back = screen.getByRole("button", { name: /返回/ });
+    expect(back).toBeInTheDocument();
+    await userEvent.click(back);
+    expect(onBack).toHaveBeenCalled();
+  });
+
   it("imports a source from URL", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.sourceUsesJs).mockReturnValue(false);

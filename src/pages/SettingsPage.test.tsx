@@ -16,7 +16,6 @@ vi.mock("../components/theme", () => ({
   setTtsRate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../components/TtsBar", () => ({ getTtsRate: vi.fn().mockResolvedValue(1), setTtsRate: vi.fn().mockResolvedValue(undefined) }));
-vi.mock("../components/BookSourceManager", () => ({ default: () => null }));
 
 describe("SettingsPage", () => {
   it("renders scheme selector and switches scheme", async () => {
@@ -24,5 +23,13 @@ describe("SettingsPage", () => {
     expect(await screen.findByText("Sora 青")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Koharu 樱/ }));
     expect(themeMod.setTheme).toHaveBeenCalledWith({ scheme: "koharu", mode: "light" });
+  });
+
+  it("shows a 书源管理 entry that opens the source manager page", async () => {
+    const onOpen = vi.fn();
+    render(<SettingsPage onOpenSourceManager={onOpen} />);
+    expect(await screen.findByText(/书源管理/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /打开/ }));
+    expect(onOpen).toHaveBeenCalled();
   });
 });
