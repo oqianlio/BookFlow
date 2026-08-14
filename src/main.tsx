@@ -1,4 +1,3 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { initTheme, applyFontSize, getFontSize } from "./components/theme";
@@ -20,13 +19,14 @@ if (window.__TAURI_INTERNALS__) {
   window.addEventListener("unhandledrejection", (e) => {
     void logFrontend("error", "unhandled rejection: " + String(e.reason));
   });
-  console.error = (...args: unknown[]) => {
-    void logFrontend("error", args.map((a) => String(a)).join(" "));
+  const fwd = (level: string) => (...args: unknown[]) => {
+    void logFrontend(level, args.map((a) => String(a)).join(" "));
   };
+  console.log = fwd("log");
+  console.warn = fwd("warn");
+  console.error = fwd("error");
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
+  <App />,
 );
