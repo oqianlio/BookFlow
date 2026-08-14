@@ -307,11 +307,6 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.panel-empty {
-  color: var(--fg-muted);
-  font-size: 13px;
-}
-
 .annotation-yellow { border-left-color: #d9a13c; }
 .annotation-green { border-left-color: #6f9a63; }
 .annotation-blue { border-left-color: #6a8fb0; }
