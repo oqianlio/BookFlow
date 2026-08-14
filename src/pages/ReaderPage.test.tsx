@@ -34,7 +34,7 @@ beforeEach(() => {
 
 describe("ReaderPage", () => {
   it("Ctrl+B creates a bookmark via the request-bookmark event", async () => {
-    render(<ReaderPage book={book} onBack={() => {}} />);
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
     const w = window as any;
     w.__readerLocation = "cfi:base";
     w.__requestBookmark = () => {
@@ -55,7 +55,7 @@ describe("ReaderPage", () => {
     ]);
     const listener = vi.fn();
     window.addEventListener("reader-jump", listener);
-    render(<ReaderPage book={book} onBack={() => {}} />);
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
     await userEvent.click(screen.getByRole("button", { name: /标注/ }));
     await screen.findByText("高亮A");
     await userEvent.click(screen.getByText("高亮A"));
@@ -65,7 +65,7 @@ describe("ReaderPage", () => {
   });
 
   it("Ctrl+B falls back to __readerLocation when no EPUB request-bookmark hook", async () => {
-    render(<ReaderPage book={{ ...book, format: "pdf" }} onBack={() => {}} />);
+    render(<ReaderPage source={{ kind: "local", book: { ...book, format: "pdf" } }} onBack={() => {}} />);
     const w = window as any;
     w.__readerLocation = "7";
     w.__requestBookmark = undefined;
@@ -80,7 +80,7 @@ describe("ReaderPage", () => {
   it("routes a search-jump location to the reader via reader-jump", async () => {
     const listener = vi.fn();
     window.addEventListener("reader-jump", listener);
-    render(<ReaderPage book={book} onBack={() => {}} />);
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
     window.dispatchEvent(new CustomEvent("search-jump", { detail: { location: "line:120", format: "txt" } }));
     await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
     expect((window as any).__jumpTo).toBe("line:120");
@@ -91,7 +91,7 @@ describe("ReaderPage", () => {
     (window as any).__searchJump = { location: "3", format: "pdf" };
     const listener = vi.fn();
     window.addEventListener("reader-jump", listener);
-    render(<ReaderPage book={{ ...book, format: "pdf" }} onBack={() => {}} />);
+    render(<ReaderPage source={{ kind: "local", book: { ...book, format: "pdf" } }} onBack={() => {}} />);
     await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
     expect((window as any).__jumpTo).toBe("3");
     expect((window as any).__searchJump).toBeUndefined();
