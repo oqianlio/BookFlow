@@ -60,6 +60,22 @@ describe("BookSourceManager", () => {
     await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalled());
   });
 
+  it("skips single source that already exists", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "已有", url: "https://net.com", json: "{}", enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
+    vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
+      bookSources: [{ bookSourceName: "网络书源", bookSourceUrl: "https://net.com" }],
+    });
+    render(<BookSourceManager />);
+    await screen.findByText("已有");
+    await userEvent.type(screen.getByLabelText("书源网址"), "https://example.com/source.json");
+    await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
+    await waitFor(() => expect(screen.getByText(/书源已存在，跳过/)).toBeInTheDocument());
+    expect(imp.commitBookSource).not.toHaveBeenCalled();
+  });
+
   it("imports a source from local file", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([]);
     vi.mocked(imp.sourceUsesJs).mockReturnValue(false);

@@ -26,6 +26,18 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     if (bookSources.length === 1) {
       const bs = bookSources[0];
       if (!confirmJsImport(bs)) return;
+      let existing: Set<string>;
+      try {
+        existing = new Set((await listBookSources()).map((s) => s.url));
+      } catch (e) {
+        setError(String(e));
+        return;
+      }
+      if (existing.has(bs.bookSourceUrl)) {
+        setImportMsg(`书源已存在，跳过：${bs.bookSourceName}`);
+        await refresh();
+        return;
+      }
       await commitBookSource(bs);
       await refresh();
       return;
