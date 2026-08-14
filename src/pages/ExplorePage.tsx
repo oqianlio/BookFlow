@@ -78,7 +78,9 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         ))}
       </div>
       <div className="discover-results">
-        {busy ? <p className="panel-empty">加载中…</p> : books.length === 0 ? (
+        {busy ? (
+          <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
+        ) : books.length === 0 ? (
           active ? <p className="panel-empty">该分类暂无书籍</p> : <p className="panel-empty">选择一个分类开始浏览</p>
         ) : (
           <>

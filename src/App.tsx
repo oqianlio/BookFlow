@@ -97,22 +97,24 @@ function AppInner() {
       <main className="app-main">
         {state.area === "home" && (
           <HomePage
+            key="home"
             onGoBookshelf={() => setState({ area: "bookshelf" })}
             onGoDiscover={() => setState({ area: "discover" })}
           />
         )}
         {state.area === "bookshelf" && (
-          <LibraryPage onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "bookshelf" })} />
+          <LibraryPage key="bookshelf" onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "bookshelf" })} />
         )}
         {state.area === "discover" && (
           <DiscoverPage
+            key="discover"
             onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: "discover" })}
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: "discover" })}
           />
         )}
-        {state.area === "rss" && <RssPage />}
+        {state.area === "rss" && <RssPage key="rss" />}
         {state.area === "my" && (
-          <SettingsPage onOpenDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: "my" })} />
+          <SettingsPage key="my" onOpenDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: "my" })} />
         )}
       </main>
     </div>

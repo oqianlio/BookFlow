@@ -142,7 +142,9 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
         </div>
       </header>
       <main className="reader-main">
-        {loading && <p className="panel-empty">加载中…</p>}
+        {loading && (
+          <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
+        )}
         {!loading && failed && (
           <div className="panel-empty">
             <p>章节加载失败</p>
