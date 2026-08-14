@@ -1020,11 +1020,6 @@ input[type="range"] {
 .source-toc li { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
 .source-toc li .btn { width: 100%; justify-content: flex-start; text-align: left; }
 
-/* ============ 书源阅读页 ============ */
-.source-reader .reader-toolbar { justify-content: space-between; }
-.source-reader .reader-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-reader .reader-chapter { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--on-surface-variant); font-size: 13px; font-weight: 500; }
-
 /* ============ 探索浏览页 ============ */
 .explore-cats { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 16px; }
 .explore-cats .btn.active { background: var(--secondary-container); color: var(--primary); border-color: var(--primary); }

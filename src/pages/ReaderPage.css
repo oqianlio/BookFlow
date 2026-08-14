@@ -65,6 +65,25 @@
   color: var(--fg);
 }
 
+.reader-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-chapter {
+  flex-shrink: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .reader-body {
   flex: 1;
   display: flex;
