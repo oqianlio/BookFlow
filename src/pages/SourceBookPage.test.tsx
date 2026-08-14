@@ -110,4 +110,18 @@ describe("SourceBookPage", () => {
     expect(img!.getAttribute("src")).toBe("https://cdn.com/c.jpg");
     expect(screen.getByRole("heading", { name: "目录" })).toBeInTheDocument();
   });
+
+  it("resolves relative cover URLs against the book URL", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><div class="cover"><img src="/files/c.jpg"></div><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: coverSourceJson, enabled: true, last_used_at: null },
+    ]);
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    await screen.findByText("三体");
+    const img = document.querySelector("img.source-book-cover") as HTMLImageElement | null;
+    expect(img).not.toBeNull();
+    expect(img!.getAttribute("src")).toBe("https://ex.com/files/c.jpg");
+  });
 });

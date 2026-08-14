@@ -34,7 +34,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const title = bi.name ? extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : initialTitle;
         const author = bi.author ? extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
         const intro = bi.intro ? extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
-        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : "";
         console.warn("[sourcebook] info title=", title, "author=", author, "introLen=", intro.length, "cover=", cover.slice(0, 60));
         const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
         console.warn("[sourcebook] tocUrl=", tocUrl);
