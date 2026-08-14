@@ -28,15 +28,22 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
           onKeyDown={(e) => e.key === "Enter" && void run()} placeholder="搜索书名与正文" />
         <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
       </div>
-      <ul>
-        {results.map((h, i) => (
-          <li key={`${h.book_id}-${i}`}>
-            {/* location 由 Rust 侧按格式填充（EPUB 章节 href / PDF 页码 / 文本行号） */}
-            <p className="hit-title" onClick={() => onJump(h)}>{h.title}</p>
-            <p className="hit-text">{h.text}</p>
-          </li>
-        ))}
-      </ul>
+      {query.trim() && !busy && results.length === 0 ? (
+        <p className="panel-empty">无搜索结果</p>
+      ) : (
+        <>
+          {results.length > 0 && <p className="panel-empty search-count">共 {results.length} 条</p>}
+          <ul>
+            {results.map((h, i) => (
+              <li key={`${h.book_id}-${i}`}>
+                {/* location 由 Rust 侧按格式填充（EPUB 章节 href / PDF 页码 / 文本行号） */}
+                <p className="hit-title" onClick={() => onJump(h)}>{h.title}</p>
+                <p className="hit-text">{h.text}</p>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </aside>
   );
 }

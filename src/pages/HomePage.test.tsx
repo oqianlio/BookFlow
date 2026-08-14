@@ -43,6 +43,13 @@ describe("HomePage", () => {
     expect(await screen.findByText(/书架空空/)).toBeInTheDocument();
   });
 
+  it("renders 概览 and 快捷操作 section headings", async () => {
+    vi.mocked(api.listBooks).mockResolvedValue(books);
+    render(<HomePage />);
+    expect(await screen.findByText("概览")).toBeInTheDocument();
+    expect(screen.getByText("快捷操作")).toBeInTheDocument();
+  });
+
   it("calls importFiles and refreshes on 导入书籍 click", async () => {
     vi.mocked(api.listBooks).mockResolvedValueOnce([]).mockResolvedValueOnce(books);
     vi.mocked(api.importFiles).mockResolvedValue(books as any);

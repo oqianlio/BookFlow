@@ -675,7 +675,7 @@ button {
 /* ============ 全文搜索 ============ */
 .search-panel {
   max-width: 720px;
-  margin: 8px auto 28px;
+  margin: 8px auto 12px;
   padding: 18px 22px;
   background: var(--surface-container-lowest);
   border: 1px solid var(--outline-variant);
@@ -689,6 +689,8 @@ button {
   font-size: 16px;
   color: var(--on-surface);
 }
+
+.search-panel .search-count { text-align: left; padding: 12px 0 4px; color: var(--on-surface-variant); font-size: 12.5px; }
 
 .search-panel .panel-add {
   display: flex;
@@ -1000,7 +1002,9 @@ input[type="range"] {
 }
 
 /* ============ 书源书籍页 ============ */
-.source-book .brand h1 { font-size: 20px; }
+.explore .brand h1,
+.source-manager .brand h1 { font-size: 20px; }
+.source-book .brand h1 { font-size: 20px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-book-info { max-width: 720px; margin: 18px auto 24px; display: flex; flex-direction: column; gap: 6px; }
 .source-intro { font-size: 13px; line-height: 1.7; color: var(--on-surface-variant); }
 .source-toc { max-width: 720px; margin: 0 auto; }
@@ -1070,7 +1074,7 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: 8px;
   padding: 16px 10px;
   background: var(--surface-container-low);
   border-right: 1px solid var(--outline-variant);
@@ -1082,10 +1086,11 @@ input[type="range"] {
   gap: 4px;
   padding: 10px 6px;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--on-surface-variant);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: background-color 0.18s ease, color 0.18s ease;
 }
@@ -1106,10 +1111,9 @@ input[type="range"] {
 
 /* ============ 首页 ============ */
 .home .library-header { padding: 28px 0 16px; }
-.home-stats { display: flex; flex-wrap: wrap; gap: 14px; padding: 20px 0 8px; }
+.home-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; padding: 0 0 8px; }
 .stat-card {
-  flex: 1 1 120px;
-  min-width: 110px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1123,7 +1127,7 @@ input[type="range"] {
 }
 .stat-value { font-size: 26px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 12px; color: var(--on-surface-variant); letter-spacing: 0.05em; }
-.home-section { margin: 8px 0 0; font-family: var(--font-read); font-size: 18px; color: var(--on-surface); }
+.home-section { margin: 20px 0 12px; font-family: var(--font-read); font-size: 18px; color: var(--on-surface); }
 .home-quick { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 0 24px; }
 
 /* ============ 我的页 ============ */

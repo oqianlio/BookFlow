@@ -66,14 +66,18 @@ export default function HomePage({ onGoBookshelf, onGoDiscover }: {
           <p>去书架页导入书籍，开始你的阅读之旅。</p>
         </div>
       ) : (
-        <div className="home-stats">
-          <div className="stat-card"><span className="stat-value">{stats.total}</span><span className="stat-label">藏书</span></div>
-          {stats.byFormat.map((f) => (
-            <div className="stat-card" key={f.format}><span className="stat-value">{f.count}</span><span className="stat-label">{f.format.toUpperCase()}</span></div>
-          ))}
-          <div className="stat-card"><span className="stat-value">{stats.openedLast7}</span><span className="stat-label">近 7 天打开</span></div>
-        </div>
+        <>
+          <h2 className="home-section">概览</h2>
+          <div className="home-stats">
+            <div className="stat-card"><span className="stat-value">{stats.total}</span><span className="stat-label">藏书</span></div>
+            {stats.byFormat.map((f) => (
+              <div className="stat-card" key={f.format}><span className="stat-value">{f.count}</span><span className="stat-label">{f.format.toUpperCase()}</span></div>
+            ))}
+            <div className="stat-card"><span className="stat-value">{stats.openedLast7}</span><span className="stat-label">近 7 天打开</span></div>
+          </div>
+        </>
       )}
+      <h2 className="home-section">快捷操作</h2>
       <div className="home-quick">
         <button className="btn btn-primary" onClick={() => void handleImport()} disabled={busy}>
           {busy ? "导入中…" : "导入书籍"}

@@ -43,4 +43,12 @@ describe("SearchPanel", () => {
       expect.objectContaining({ book_id: 1, location: "line:12", format: "txt" }),
     );
   });
+
+  it("shows 无搜索结果 after a search with no hits", async () => {
+    invokeMock.mockResolvedValue([]);
+    render(<SearchPanel onJump={() => {}} />);
+    await userEvent.type(screen.getByLabelText("搜索关键词"), "不存在");
+    await userEvent.click(screen.getByRole("button", { name: /搜索/ }));
+    expect(await screen.findByText(/无搜索结果/)).toBeInTheDocument();
+  });
 });

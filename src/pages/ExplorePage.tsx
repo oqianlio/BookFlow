@@ -65,7 +65,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
   const canPage = active ? active.url.includes("{{page}}") : false;
 
   return (
-    <div className="discover page">
+    <div className="discover explore page">
       <header className="library-header">
         <div className="brand"><h1>{sourceName} · 浏览</h1></div>
         <button className="btn btn-ghost" onClick={onBack}>返回</button>
