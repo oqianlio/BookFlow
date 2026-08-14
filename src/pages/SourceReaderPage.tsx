@@ -143,6 +143,12 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       </header>
       <main className="reader-main">
         {loading && <p className="panel-empty">加载中…</p>}
+        {!loading && failed && (
+          <div className="panel-empty">
+            <p>章节加载失败</p>
+            <button className="btn btn-primary" onClick={() => void loadChapter(chapter)}>重试</button>
+          </div>
+        )}
         {!loading && !failed && (
           isManga ? (
             <MangaViewer images={images} />
