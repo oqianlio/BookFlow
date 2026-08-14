@@ -7,7 +7,6 @@ import SettingsPage from "./pages/SettingsPage";
 import BookSourceManager from "./components/BookSourceManager";
 import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
 import SourceBookPage from "./pages/SourceBookPage";
-import SourceReaderPage from "./pages/SourceReaderPage";
 import ExplorePage from "./pages/ExplorePage";
 import DebugSourcePage from "./pages/DebugSourcePage";
 import RssPage from "./pages/RssPage";
@@ -41,7 +40,7 @@ function AppInner() {
     const go = (back: AppArea) => setState({ area: back });
     switch (state.page) {
       case "reader":
-        return <ReaderPage book={state.book} onBack={() => go(state.back)} />;
+        return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} />;
       case "explore":
         return (
           <ExplorePage
@@ -83,13 +82,16 @@ function AppInner() {
         );
       case "sourceReader":
         return (
-          <SourceReaderPage
-            sourceId={state.sourceId}
-            bookUrl={state.bookUrl}
-            bookTitle={state.bookTitle}
-            initialChapterIndex={state.chapterIndex}
-            initialChapterUrl={state.chapterUrl}
-            initialChapterName={state.chapterName}
+          <ReaderPage
+            source={{
+              kind: "source",
+              sourceId: state.sourceId,
+              bookUrl: state.bookUrl,
+              bookTitle: state.bookTitle,
+              chapterIndex: state.chapterIndex,
+              chapterUrl: state.chapterUrl,
+              chapterName: state.chapterName,
+            }}
             onBack={() => setState({
               area: "detail", page: "sourceBook",
               hit: { title: state.bookTitle, author: "", coverUrl: "", bookUrl: state.bookUrl, sourceId: state.sourceId, sourceName: "" },
