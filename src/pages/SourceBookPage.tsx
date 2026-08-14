@@ -72,19 +72,32 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   return (
     <div className="source-book page">
       <header className="library-header">
-        <div className="brand"><h1>{info.title}</h1></div>
+        <div className="brand"><h1>{sourceName}</h1></div>
         <div className="library-actions">
           {source?.loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
       <div className="source-book-info">
-        <span className="source-name">{sourceName}</span>
-        {info.author && <span className="hit-author">{info.author}</span>}
-        {info.intro && <p className="source-intro">{info.intro}</p>}
-        <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+        {info.coverUrl ? (
+          <img
+            className="source-book-cover"
+            src={info.coverUrl}
+            alt={info.title || "封面"}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          <div className="source-book-cover-ph" aria-hidden />
+        )}
+        <div className="source-book-meta">
+          <h2 className="source-book-title">{info.title || sourceName}</h2>
+          {info.author && <span className="hit-author">{info.author}</span>}
+          {info.intro && <p className="source-intro">{info.intro}</p>}
+          <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+        </div>
       </div>
       <div className="source-toc">
+        <h2 className="home-section">目录</h2>
         {toc.length === 0 ? (
           <p className="panel-empty">暂无目录</p>
         ) : (

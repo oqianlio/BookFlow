@@ -23,6 +23,12 @@ const sourceJson = JSON.stringify({
   },
 });
 
+const coverSourceJson = JSON.stringify({
+  bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+  ruleBookInfo: { name: "h1@text", author: ".author@text", coverUrl: ".cover img@src" },
+  ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href", nextTocUrl: "" },
+});
+
 describe("SourceBookPage", () => {
   it("renders book info and chapter list", async () => {
     vi.mocked(api.httpGet).mockResolvedValue(
@@ -88,5 +94,20 @@ describe("SourceBookPage", () => {
     const calls = vi.mocked(api.httpGet).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     for (const c of calls) expect(c[6]).toBe("ex.com");
+  });
+
+  it("renders cover image when ruleBookInfo provides coverUrl", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><div class="cover"><img src="https://cdn.com/c.jpg"></div><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: coverSourceJson, enabled: true, last_used_at: null },
+    ]);
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    expect(await screen.findByText("三体")).toBeInTheDocument();
+    const img = document.querySelector("img.source-book-cover") as HTMLImageElement | null;
+    expect(img).not.toBeNull();
+    expect(img!.getAttribute("src")).toBe("https://cdn.com/c.jpg");
+    expect(screen.getByRole("heading", { name: "目录" })).toBeInTheDocument();
   });
 });

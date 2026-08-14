@@ -226,6 +226,7 @@ export default function BookSourceManager({ onDebug, onBack }: {
           })()}
         </>
       )}
+      <h3 className="source-import-title">导入书源</h3>
       <div className="source-import">
         <button className="btn btn-ghost" onClick={() => void handleFileImport()}>从文件导入</button>
         <div className="source-import-row">
