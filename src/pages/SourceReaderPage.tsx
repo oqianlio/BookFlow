@@ -35,9 +35,11 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       let cookieJarHost = "";
       try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
       const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+      console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
       const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+      console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
       const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
       nextUrlRef.current = next;
       const urls = extractImageUrls(text, c.url);

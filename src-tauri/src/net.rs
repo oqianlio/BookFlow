@@ -56,6 +56,7 @@ pub async fn http_get(
 ) -> Result<String, String> {
     let cookies = state.cookies.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let t0 = std::time::Instant::now();
         let jar = cookie_jar.map(|key| cookies.jar_for(&key));
         let mut client_builder = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)));
@@ -80,6 +81,7 @@ pub async fn http_get(
         if let Some(j) = &jar {
             j.save();
         }
+        eprintln!("[net] request took {}ms url={}", t0.elapsed().as_millis(), &url[..url.len().min(80)]);
         // 手动读取原始字节而非 resp.bytes()/text()：
         // reqwest 0.13 在无 gzip feature 时对部分 chunked 响应会报 "error decoding response body"，
         // 而原始字节是有效的（copy_to 可正常读出）。绕过后交由 decode_body 处理。
