@@ -37,11 +37,19 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
 
   const confirmImportSelection = async () => {
     if (!pendingSources) return;
-    const existing = new Set((await listBookSources()).map((s) => s.url));
+    let existing: Set<string>;
+    try {
+      existing = new Set((await listBookSources()).map((s) => s.url));
+    } catch (e) {
+      setImportMsg(`读取现有书源失败：${String(e)}`);
+      return;
+    }
+    const dedup = new Set(existing);
     let added = 0, skipped = 0;
     for (const i of selected) {
       const bs = pendingSources[i];
-      if (existing.has(bs.bookSourceUrl)) { skipped++; continue; }
+      if (dedup.has(bs.bookSourceUrl)) { skipped++; continue; }
+      dedup.add(bs.bookSourceUrl);
       try {
         await commitBookSource(bs);
         added++;
