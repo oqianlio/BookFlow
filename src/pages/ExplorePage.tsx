@@ -3,6 +3,7 @@ import { httpGet, listBookSources, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadJsLib } from "../services/jsLib";
 import type { SearchHit } from "./DiscoverPage";
+import { useError } from "../components/ErrorDialog";
 
 export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }: {
   sourceId: number; sourceName: string; onBack: () => void; onOpenBook: (h: SearchHit) => void;
@@ -10,24 +11,24 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
   const [categories, setCategories] = useState<Array<{ title: string; url: string }>>([]);
   const [books, setBooks] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<{ title: string; url: string } | null>(null);
   const [page, setPage] = useState(1);
   const [src, setSrc] = useState<Src | null>(null);
   const reqIdRef = useRef(0);
+  const { showError } = useError();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const bs = (await listBookSources()).find((s) => s.id === sourceId);
-        if (!bs) { setError("书源不存在"); return; }
+        if (!bs) { showError("书源不存在"); return; }
         const s = parseBookSourceJson(bs.json);
         if (cancelled) return;
         setSrc(s);
         loadJsLib(s.bookSourceUrl, s.jsLib);
         setCategories(parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s }));
-      } catch (e) { if (!cancelled) setError(String(e)); }
+      } catch (e) { if (!cancelled) showError(String(e)); }
     })();
     return () => { cancelled = true; };
   }, [sourceId]);
@@ -35,7 +36,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
   const loadCategory = useCallback(async (cat: { title: string; url: string }, pg: number) => {
     if (!src) return;
     const seq = ++reqIdRef.current;
-    setBusy(true); setError(null);
+    setBusy(true);
     try {
       const rawUrl = cat.url.replace("{{page}}", String(pg));
       const url = resolveUrl(rawUrl, src.bookSourceUrl);
@@ -55,7 +56,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
     } catch (e) {
       if (seq !== reqIdRef.current) return;
       setBooks([]);
-      setError(String(e));
+      showError(String(e));
     } finally {
       if (seq === reqIdRef.current) setBusy(false);
     }
@@ -69,7 +70,6 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         <div className="brand"><h1>{sourceName} · 浏览</h1></div>
         <button className="btn btn-ghost" onClick={onBack}>返回</button>
       </header>
-      {error && <p className="error">{error}</p>}
       <div className="explore-cats">
         {categories.length === 0 ? <p className="panel-empty">此书源无分类</p> : categories.map((c) => (
           <button key={c.url} className={`btn btn-ghost${active?.url === c.url ? " active" : ""}`} onClick={() => void loadCategory(c, 1)}>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import BookCard from "../components/BookCard";
 import { listBooks, type Book } from "../services/api";
+import { useError } from "../components/ErrorDialog";
 
 export interface HomeStats {
   total: number;
@@ -25,7 +26,7 @@ export default function HomePage({ onOpenBook, onGoBookshelf }: {
   onOpenBook: (b: Book) => void; onGoBookshelf?: () => void;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { showError } = useError();
 
   useEffect(() => {
     let cancelled = false;
@@ -34,13 +35,11 @@ export default function HomePage({ onOpenBook, onGoBookshelf }: {
         const list = await listBooks();
         if (!cancelled) setBooks(list);
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (!cancelled) showError(String(e));
       }
     })();
     return () => { cancelled = true; };
   }, []);
-
-  if (error) return <div className="page"><p className="error">{error}</p></div>;
 
   const stats = computeStats(books);
   const recent = [...books]

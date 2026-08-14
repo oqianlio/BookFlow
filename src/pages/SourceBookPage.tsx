@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { httpGet, openLoginWindow, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, extractList, type BookSource } from "../services/bookSourceEngine";
+import { useError } from "../components/ErrorDialog";
 
 interface TocItem { name: string; url: string }
 
@@ -10,18 +11,18 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 }) {
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<BookSource | null>(null);
+  const { showError } = useError();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const bs = await (await import("../services/api")).listBookSources().then((l) => l.find((x) => x.id === sourceId));
-        if (!bs) { setError("书源不存在"); return; }
+        if (!bs) { showError("书源不存在"); return; }
         const s = parseBookSourceJson(bs.json);
         if (!cancelled) setSource(s);
-        if (!bookUrl) { setError("书籍地址无效，无法打开"); return; }
+        if (!bookUrl) { showError("书籍地址无效，无法打开"); return; }
         const base = s.bookSourceUrl || bookUrl;
         const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
         let cookieJarHost = "";
@@ -55,7 +56,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           setToc(tocItems);
         }
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (!cancelled) showError(String(e));
       }
     })();
     return () => { cancelled = true; };
@@ -77,7 +78,6 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
-      {error && <p className="error">{error}</p>}
       <div className="source-book-info">
         <span className="source-name">{sourceName}</span>
         {info.author && <span className="hit-author">{info.author}</span>}

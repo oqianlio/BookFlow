@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listBookSources } from "../services/api";
 import { debugSource, type DebugResult } from "../services/sourceDebug";
+import { useError } from "../components/ErrorDialog";
 
 type Stage = "search" | "toc" | "content";
 
@@ -16,14 +17,14 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
   const [url, setUrl] = useState("");
   const [stage, setStage] = useState<Stage>("search");
   const [result, setResult] = useState<DebugResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [src, setSrc] = useState<{ json: string } | null>(null);
+  const { showError } = useError();
 
   const loadSource = async () => {
     const bs = (await listBookSources()).find((s) => s.id === sourceId);
-    if (!bs) { setError("书源不存在"); return; }
-    setError(null);
+    if (!bs) { setFailed(true); showError("书源不存在"); return; }
     setSrc(bs);
   };
 
@@ -32,10 +33,10 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
     (async () => {
       try {
         const bs = (await listBookSources()).find((s) => s.id === sourceId);
-        if (!bs) { if (!cancelled) setError("书源不存在"); return; }
+        if (!bs) { if (!cancelled) { setFailed(true); showError("书源不存在"); } return; }
         if (!cancelled) setSrc(bs);
       } catch (e) {
-        if (!cancelled) setError(String(e));
+        if (!cancelled) { setFailed(true); showError(String(e)); }
       }
     })();
     return () => { cancelled = true; };
@@ -43,13 +44,14 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
 
   const run = async () => {
     if (!src || busy) return;
+    setFailed(false);
     setBusy(true);
-    setError(null);
     try {
       setResult(await debugSource(src, stage, url));
     } catch (e) {
       setResult(null);
-      setError(String(e));
+      setFailed(true);
+      showError(String(e));
     } finally {
       setBusy(false);
     }
@@ -57,7 +59,7 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
 
   const retry = async () => {
     if (busy) return;
-    setError(null);
+    setFailed(false);
     try {
       if (src) {
         await run();
@@ -65,7 +67,8 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
         await loadSource();
       }
     } catch (e) {
-      setError(String(e));
+      setFailed(true);
+      showError(String(e));
     }
   };
 
@@ -79,9 +82,8 @@ export default function DebugSourcePage({ sourceId, sourceName, onBack }: {
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
-      {error && (
+      {failed && (
         <div className="debug-error">
-          <p className="error">{error}</p>
           <button className="btn btn-ghost" onClick={() => void retry()}>重试</button>
         </div>
       )}

@@ -2,19 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, type BookSource } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
+import { useError } from "./ErrorDialog";
 
 export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: number, sourceName: string) => void }) {
   const [sources, setSources] = useState<BookSource[]>([]);
   const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { showError } = useError();
   const [pendingSources, setPendingSources] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [existingUrls, setExistingUrls] = useState<Set<string>>(new Set());
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setSources(await listBookSources()); } catch (e) { setError(String(e)); }
+    try { setSources(await listBookSources()); } catch (e) { showError(String(e)); }
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -31,7 +32,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     try {
       existing = new Set((await listBookSources()).map((s) => s.url));
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
       return;
     }
     if (existing.has(bs.bookSourceUrl)) {
@@ -47,7 +48,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     try {
       existingUrls = new Set((await listBookSources()).map((s) => s.url));
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
       return;
     }
     setPendingSources(bookSources);
@@ -93,7 +94,6 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   const handleFileImport = async () => {
     if (busy) return;
     setBusy(true);
-    setError(null);
     try {
       const picked = await open({ multiple: false, filters: [{ name: "JSON", extensions: ["json"] }] });
       if (!picked) return;
@@ -102,7 +102,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
       const result = await importBookSourceFromFile(path);
       await handleImportResult(result.bookSources);
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     } finally {
       setBusy(false);
     }
@@ -111,42 +111,38 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   const handleUrlImport = async () => {
     if (!url.trim()) return;
     setBusy(true);
-    setError(null);
     try {
       const result = await importBookSourceFromUrl(url.trim());
       await handleImportResult(result.bookSources);
       setUrl("");
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     } finally {
       setBusy(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    setError(null);
     try {
       await deleteBookSource(id);
       await refresh();
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     }
   };
 
   const handleToggleEnable = async (id: number, enabled: boolean) => {
-    setError(null);
     try {
       await setBookSourceEnabled(id, enabled);
       await refresh();
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     }
   };
 
   return (
     <div className="book-source-manager">
       <h3>书源</h3>
-      {error && <p className="error">{error}</p>}
       {sources.length === 0 ? (
         <p className="panel-empty">暂无书源</p>
       ) : (

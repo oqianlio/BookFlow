@@ -3,20 +3,21 @@ import BookCard from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
 import { BookIcon, SearchIcon } from "../components/icons";
 import { importFiles, listBooks, removeBook, type Book } from "../services/api";
+import { useError } from "../components/ErrorDialog";
 
 export default function LibraryPage({ onOpenBook }: {
   onOpenBook: (b: Book) => void;
 }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const { showError } = useError();
 
   const refresh = useCallback(async () => {
     try {
       setBooks(await listBooks());
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     }
   }, []);
 
@@ -24,12 +25,11 @@ export default function LibraryPage({ onOpenBook }: {
 
   const handleImport = async () => {
     setBusy(true);
-    setError(null);
     try {
       await importFiles();
       await refresh();
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     } finally {
       setBusy(false);
     }
@@ -41,7 +41,7 @@ export default function LibraryPage({ onOpenBook }: {
       await removeBook(id);
       await refresh();
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     }
   };
 
@@ -76,7 +76,6 @@ export default function LibraryPage({ onOpenBook }: {
           </button>
         </div>
       </header>
-      {error && <p className="error">{error}</p>}
       {showSearch && <SearchPanel onJump={handleSearchJump} />}
       {books.length === 0 ? (
         <div className="empty">

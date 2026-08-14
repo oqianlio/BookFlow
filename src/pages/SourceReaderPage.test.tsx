@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SourceReaderPage from "./SourceReaderPage";
+import { ErrorProvider } from "../components/ErrorDialog";
 import * as api from "../services/api";
 
 vi.mock("../services/api", () => ({
@@ -82,18 +83,15 @@ describe("SourceReaderPage", () => {
     expect(screen.queryByText(/广告/)).not.toBeInTheDocument();
   });
 
-  it("shows a retry button on error and recovers on click", async () => {
+  it("shows the error dialog when a chapter fails to load", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet)
-      .mockRejectedValueOnce(new Error("网络错误"))
-      .mockResolvedValueOnce(ch1);
-    renderReader();
-    expect(await screen.findByText(/网络错误/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "重试" }));
-    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
-    expect(screen.queryByText(/网络错误/)).not.toBeInTheDocument();
+    vi.mocked(api.httpGet).mockRejectedValue(new Error("网络错误"));
+    render(<ErrorProvider><SourceReaderPage sourceId={1} bookUrl="https://ex.com/book/1.html" bookTitle="三体"
+      initialChapterIndex={0} initialChapterUrl="https://ex.com/c/1.html" initialChapterName="第一章" onBack={() => {}} /></ErrorProvider>);
+    expect(await screen.findByText("出错了")).toBeInTheDocument();
+    expect(screen.getByText(/网络错误/)).toBeInTheDocument();
   });
 
   it("does not override an explicit chapter choice with saved progress", async () => {

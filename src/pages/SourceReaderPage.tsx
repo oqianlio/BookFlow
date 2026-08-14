@@ -3,6 +3,7 @@ import { BackIcon } from "../components/icons";
 import { httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import MangaViewer from "../readers/MangaViewer";
+import { useError } from "../components/ErrorDialog";
 import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
@@ -17,8 +18,9 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   const [images, setImages] = useState<string[]>([]);
   const [isManga, setIsManga] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [src, setSrc] = useState<Src | null>(null);
+  const { showError } = useError();
   const nextUrlRef = useRef("");
   const prevUrlsRef = useRef<string[]>([]);
   const saveTimer = useRef<number | null>(null);
@@ -26,10 +28,11 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
   chapterRef.current = chapter;
 
   const loadChapter = useCallback(async (c: ChapterState) => {
-    setLoading(true); setError(null); setContent(""); setImages([]); setIsManga(false);
+    setFailed(false);
+    setLoading(true); setContent(""); setImages([]); setIsManga(false);
     try {
       const bs = (await listBookSources()).find((x) => x.id === sourceId);
-      if (!bs) { setError("书源不存在"); setLoading(false); return; }
+      if (!bs) { setFailed(true); showError("书源不存在"); setLoading(false); return; }
       const src: Src = parseBookSourceJson(bs.json);
       setSrc(src);
       let cookieJarHost = "";
@@ -51,7 +54,8 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
       }
       setLoading(false);
     } catch (e) {
-      setError(String(e));
+      setFailed(true);
+      showError(String(e));
       setLoading(false);
     }
   }, [sourceId]);
@@ -134,18 +138,12 @@ export default function SourceReaderPage({ sourceId, bookUrl, bookTitle, initial
             >登录</button>
           )}
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || prevUrlsRef.current.length === 0}>上一章</button>
-          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || !!error || !nextUrlRef.current}>下一章</button>
+          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || failed || !nextUrlRef.current}>下一章</button>
         </div>
       </header>
       <main className="reader-main">
         {loading && <p className="panel-empty">加载中…</p>}
-        {error && (
-          <div className="panel-empty">
-            <p className="error">{error}</p>
-            <button className="btn btn-ghost" onClick={() => void loadChapter(chapter)}>重试</button>
-          </div>
-        )}
-        {!loading && !error && (
+        {!loading && !failed && (
           isManga ? (
             <MangaViewer images={images} />
           ) : chapter.url ? (

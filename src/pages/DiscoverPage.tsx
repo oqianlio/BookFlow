@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent, type BookSource } from "../services/api";
 import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, type BookSource as Src } from "../services/bookSourceEngine";
+import { useError } from "../components/ErrorDialog";
 
 export interface SearchHit {
   title: string; author: string; coverUrl: string; bookUrl: string;
@@ -30,8 +31,8 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [exploreSources, setExploreSources] = useState<Array<{ id: number; name: string }>>([]);
+  const { showError } = useError();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,13 +58,13 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
 
   const run = async () => {
     if (!query.trim()) return;
-    setBusy(true); setError(null);
+    setBusy(true);
     try {
       const sources = (await listBookSources()).filter((s) => s.enabled);
       const all = await Promise.all(sources.map((s) => searchSource(query.trim(), s).catch(() => [] as SearchHit[])));
       setHits(all.flat());
     } catch (e) {
-      setError(String(e));
+      showError(String(e));
     } finally {
       setBusy(false);
     }
@@ -84,7 +85,6 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
           ))}
         </div>
       )}
-      {error && <p className="error">{error}</p>}
       <div className="discover-results">
         {hits.length === 0 && !busy ? (
           <p className="panel-empty">输入关键词开始搜索</p>
