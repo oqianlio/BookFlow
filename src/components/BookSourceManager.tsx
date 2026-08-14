@@ -64,7 +64,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     try {
       existing = new Set((await listBookSources()).map((s) => s.url));
     } catch (e) {
-      setImportMsg(`读取现有书源失败：${String(e)}`);
+      showError(`读取现有书源失败：${String(e)}`);
       return;
     }
     const dedup = new Set(existing);
