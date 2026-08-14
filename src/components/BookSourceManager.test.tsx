@@ -107,4 +107,63 @@ describe("BookSourceManager", () => {
     await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalled());
     confirmSpy.mockRestore();
   });
+
+  it("shows confirm list and imports selected collection sources", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([]);
+    vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
+      bookSources: [
+        { bookSourceName: "A源", bookSourceUrl: "https://a.com" },
+        { bookSourceName: "B源", bookSourceUrl: "https://b.com" },
+      ],
+    });
+    vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
+    vi.mocked(imp.commitBookSource).mockResolvedValue(1);
+    render(<BookSourceManager />);
+    await screen.findByText(/暂无书源/);
+    await userEvent.type(screen.getByLabelText("书源网址"), "https://example.com/collection.json");
+    await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
+    await waitFor(() => expect(screen.getByText("A源")).toBeInTheDocument());
+    expect(screen.getByText("B源")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: /B源/ }));
+    await userEvent.click(screen.getByRole("button", { name: /导入选中/ }));
+    await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalledTimes(1));
+    expect(imp.commitBookSource).toHaveBeenCalledWith(expect.objectContaining({ bookSourceName: "A源" }));
+  });
+
+  it("skips existing URLs when importing collection", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "A源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(imp.importBookSourceFromFile).mockResolvedValue({
+      bookSources: [
+        { bookSourceName: "A源", bookSourceUrl: "https://a.com" },
+        { bookSourceName: "B源", bookSourceUrl: "https://b.com" },
+      ],
+    });
+    vi.mocked(imp.sourceUsesJs).mockReturnValue(false);
+    vi.mocked(imp.commitBookSource).mockResolvedValue(2);
+    render(<BookSourceManager />);
+    await screen.findByText("A源");
+    await userEvent.click(screen.getByRole("button", { name: /从文件导入/ }));
+    await userEvent.click(screen.getByRole("button", { name: /导入选中/ }));
+    await waitFor(() => expect(screen.getByText(/成功导入 1 个，跳过 1 个/)).toBeInTheDocument());
+    expect(imp.commitBookSource).toHaveBeenCalledTimes(1);
+    expect(imp.commitBookSource).toHaveBeenCalledWith(expect.objectContaining({ bookSourceName: "B源" }));
+  });
+
+  it("marks JS sources in the confirm list", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([]);
+    vi.mocked(imp.importBookSourceFromUrl).mockResolvedValue({
+      bookSources: [
+        { bookSourceName: "J源", bookSourceUrl: "https://j.com", searchUrl: "@js:var a=1;" },
+        { bookSourceName: "K源", bookSourceUrl: "https://k.com" },
+      ],
+    });
+    vi.mocked(imp.sourceUsesJs).mockImplementation((bs) => bs?.bookSourceName === "J源");
+    render(<BookSourceManager />);
+    await screen.findByText(/暂无书源/);
+    await userEvent.type(screen.getByLabelText("书源网址"), "https://example.com/c.json");
+    await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
+    await waitFor(() => expect(screen.getByText(/含脚本/)).toBeInTheDocument());
+  });
 });

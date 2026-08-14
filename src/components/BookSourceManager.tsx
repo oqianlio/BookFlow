@@ -8,6 +8,9 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   const [url, setUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingSources, setPendingSources] = useState<any[] | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try { setSources(await listBookSources()); } catch (e) { setError(String(e)); }
@@ -17,6 +20,44 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
   const confirmJsImport = (bookSource: any): boolean => {
     if (!sourceUsesJs(bookSource)) return true;
     return window.confirm("此书源包含可在本机执行的 JS 脚本，仅导入你信任的书源。继续？");
+  };
+
+  const handleImportResult = async (bookSources: any[]) => {
+    if (bookSources.length === 1) {
+      const bs = bookSources[0];
+      if (!confirmJsImport(bs)) return;
+      await commitBookSource(bs);
+      await refresh();
+      return;
+    }
+    setPendingSources(bookSources);
+    setSelected(new Set(bookSources.map((_, i) => i)));
+    setImportMsg(null);
+  };
+
+  const confirmImportSelection = async () => {
+    if (!pendingSources) return;
+    const existing = new Set((await listBookSources()).map((s) => s.url));
+    let added = 0, skipped = 0;
+    for (const i of selected) {
+      const bs = pendingSources[i];
+      if (existing.has(bs.bookSourceUrl)) { skipped++; continue; }
+      try {
+        await commitBookSource(bs);
+        added++;
+      } catch {
+        skipped++;
+      }
+    }
+    setImportMsg(`成功导入 ${added} 个，跳过 ${skipped} 个`);
+    setPendingSources(null);
+    await refresh();
+  };
+
+  const toggleSelect = (i: number) => {
+    const next = new Set(selected);
+    if (next.has(i)) next.delete(i); else next.add(i);
+    setSelected(next);
   };
 
   const handleFileImport = async () => {
@@ -29,10 +70,7 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
       const path = Array.isArray(picked) ? picked[0] : picked;
       if (!path) return;
       const result = await importBookSourceFromFile(path);
-      const bookSource = result.bookSources[0];
-      if (!confirmJsImport(bookSource)) return;
-      await commitBookSource(bookSource);
-      await refresh();
+      await handleImportResult(result.bookSources);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -46,11 +84,8 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
     setError(null);
     try {
       const result = await importBookSourceFromUrl(url.trim());
-      const bookSource = result.bookSources[0];
-      if (!confirmJsImport(bookSource)) return;
-      await commitBookSource(bookSource);
+      await handleImportResult(result.bookSources);
       setUrl("");
-      await refresh();
     } catch (e) {
       setError(String(e));
     } finally {
@@ -121,6 +156,33 @@ export default function BookSourceManager({ onDebug }: { onDebug?: (sourceId: nu
           </button>
         </div>
       </div>
+      {pendingSources && (
+        <div className="import-confirm">
+          <h4>确认导入书源</h4>
+          <ul className="import-confirm-list">
+            {pendingSources.map((bs, i) => (
+              <li key={i}>
+                <input
+                  type="checkbox"
+                  aria-label={bs.bookSourceName}
+                  checked={selected.has(i)}
+                  onChange={() => toggleSelect(i)}
+                />
+                <span className="import-confirm-name">{bs.bookSourceName}</span>
+                <span className="import-confirm-url">{bs.bookSourceUrl}</span>
+                {sourceUsesJs(bs) && <span className="import-confirm-js">含脚本</span>}
+              </li>
+            ))}
+          </ul>
+          <div className="import-confirm-actions">
+            <button className="btn btn-primary" onClick={() => void confirmImportSelection()} disabled={selected.size === 0}>
+              导入选中 {selected.size} 个
+            </button>
+            <button className="btn btn-ghost" onClick={() => setPendingSources(null)}>取消</button>
+          </div>
+        </div>
+      )}
+      {importMsg && <p className="error import-msg">{importMsg}</p>}
     </div>
   );
 }

@@ -908,6 +908,15 @@ input[type="range"] {
 .source-import-row { display: flex; gap: 8px; }
 .source-import-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); background: var(--surface); color: var(--on-surface); font-size: 13px; }
 .source-import-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--secondary-container); }
+.import-confirm { margin-top: 14px; border: 1px solid var(--outline-variant); border-radius: var(--radius-md); padding: 14px 16px; background: var(--surface-container-lowest); }
+.import-confirm h4 { margin: 0 0 10px; font-size: 14px; color: var(--on-surface); }
+.import-confirm-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 240px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.import-confirm-list li { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius-sm); background: var(--surface-container-low); }
+.import-confirm-name { font-size: 13px; font-weight: 600; color: var(--on-surface); min-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-confirm-url { font-size: 11.5px; color: var(--on-surface-variant); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.import-confirm-js { flex-shrink: 0; font-size: 11px; color: var(--primary); padding: 2px 8px; border-radius: 999px; background: var(--secondary-container); }
+.import-confirm-actions { display: flex; gap: 10px; }
+.import-msg { margin: 10px 0 0; }
 
 /* ============ 发现与搜索（书源） ============ */
 .discover-search {
