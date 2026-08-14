@@ -100,7 +100,7 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         setLoading(false);
       }
     }
-  }, [isLocal, sourceId, showError]);
+  }, [isLocal, sourceId]);
 
   useEffect(() => {
     if (chapter.url) void loadChapter(chapter);
