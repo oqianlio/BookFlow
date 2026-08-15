@@ -44,6 +44,15 @@ export function TocIcon(props: IconProps) {
   );
 }
 
+export function SwitchIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 7h13M17 7l-3-3M17 7l-3 3" />
+      <path d="M20 17H7M7 17l3-3M7 17l3 3" />
+    </svg>
+  );
+}
+
 export function HighlightIcon(props: IconProps) {
   return (
     <svg {...base(props)}>

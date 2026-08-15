@@ -4,6 +4,17 @@ import SourceBookPage from "./SourceBookPage";
 import * as api from "../services/api";
 import { clearTocCache } from "../services/sourceToc";
 
+vi.mock("../components/SwitchSourcePanel", () => ({
+  default: (props: any) => (
+    <div data-testid="switch-panel">
+      <button onClick={() => props.onPick({ title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://c.com/b.html", sourceId: 3, sourceName: "源C" })}>
+        pick-c
+      </button>
+      <button onClick={props.onClose}>close</button>
+    </div>
+  ),
+}));
+
 vi.mock("../services/api", () => ({
   httpGet: vi.fn(),
   getBookSourceProgress: vi.fn().mockResolvedValue(null),
@@ -162,5 +173,22 @@ describe("SourceBookPage", () => {
     fireEvent.click(btn);
     await waitFor(() => expect(api.removeShelfSourceBook).toHaveBeenCalledWith(9));
     expect(await screen.findByRole("button", { name: "加入书架" })).toBeInTheDocument();
+  });
+
+  it("opens the switch source panel and calls onSwitchSource on pick", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    const onSwitchSource = vi.fn();
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} onSwitchSource={onSwitchSource} />);
+    fireEvent.click(await screen.findByRole("button", { name: "换源" }));
+    expect(document.querySelector('[data-testid="switch-panel"]')).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "pick-c" }));
+    expect(onSwitchSource).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 3, sourceName: "源C" }));
+    // 选择后面板关闭
+    expect(document.querySelector('[data-testid="switch-panel"]')).toBeNull();
   });
 });

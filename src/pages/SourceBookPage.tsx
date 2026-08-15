@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
 import { fetchToc, type TocItem } from "../services/sourceToc";
+import type { SearchHit } from "../services/searchService";
+import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
 
-export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead }: {
+export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead, onSwitchSource }: {
   sourceId: number; sourceName: string; bookUrl: string; initialTitle: string;
   onBack: () => void; onRead: (index: number, url: string, name: string) => void;
+  onSwitchSource?: (hit: SearchHit) => void;
 }) {
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
+  const [showSwitch, setShowSwitch] = useState(false);
   const { showError } = useError();
 
   useEffect(() => {
@@ -95,6 +99,9 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
               {onShelf ? "已在书架" : "加入书架"}
             </button>
+            {onSwitchSource && (
+              <button className="btn btn-ghost" onClick={() => setShowSwitch(true)}>换源</button>
+            )}
           </div>
         </div>
       </div>
@@ -112,6 +119,15 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           </ol>
         )}
       </div>
+      {showSwitch && onSwitchSource && (
+        <SwitchSourcePanel
+          title={info.title || initialTitle}
+          author={info.author}
+          excludeSourceId={sourceId}
+          onPick={(hit) => { setShowSwitch(false); onSwitchSource!(hit); }}
+          onClose={() => setShowSwitch(false)}
+        />
+      )}
     </div>
   );
 }

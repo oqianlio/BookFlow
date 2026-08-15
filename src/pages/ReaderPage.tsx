@@ -8,18 +8,22 @@ import MangaViewer from "../readers/MangaViewer";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
-import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon } from "../components/icons";
+import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { fetchToc, type TocItem } from "../services/sourceToc";
+import type { SearchHit } from "../services/searchService";
+import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
 import { type ReaderSource } from "../services/reading";
 import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
 
-export default function ReaderPage({ source, onBack }: { source: ReaderSource; onBack: () => void }) {
+export default function ReaderPage({ source, onBack, onSwitchSource }: {
+  source: ReaderSource; onBack: () => void; onSwitchSource?: (hit: SearchHit) => void;
+}) {
   const isLocal = source.kind === "local";
   const book = isLocal ? source.book : null;
   const sourceId = isLocal ? -1 : source.sourceId;
@@ -30,7 +34,7 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
   const initialChapterName = isLocal ? "" : source.chapterName;
 
   // ==== 通用 ====
-  const [panel, setPanel] = useState<"annotations" | "bookmarks" | "settings" | "toc" | null>(null);
+  const [panel, setPanel] = useState<"annotations" | "bookmarks" | "settings" | "toc" | "switch" | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(true);
   const { showError } = useError();
@@ -370,6 +374,16 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
               <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
                 {onShelf ? "已在书架" : "加入书架"}
               </button>
+              {onSwitchSource && (
+                <button
+                  className={`btn-icon${panel === "switch" ? " active" : ""}`}
+                  onClick={() => setPanel((p) => (p === "switch" ? null : "switch"))}
+                  aria-label="换源"
+                  title="换源"
+                >
+                  <SwitchIcon size={17} />
+                </button>
+              )}
               <button
                 className={`btn-icon${panel === "toc" ? " active" : ""}`}
                 onClick={() => setPanel((p) => (p === "toc" ? null : "toc"))}
@@ -473,6 +487,15 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
               </ol>
             )}
           </div>
+        )}
+        {!isLocal && panel === "switch" && onSwitchSource && (
+          <SwitchSourcePanel
+            title={bookTitle}
+            author=""
+            excludeSourceId={sourceId}
+            onPick={(hit) => { setPanel(null); onSwitchSource!(hit); }}
+            onClose={() => setPanel(null)}
+          />
         )}
         {!isLocal && panel === "settings" && (
           <div className="panel reader-settings-panel">

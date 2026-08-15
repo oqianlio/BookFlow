@@ -11,6 +11,17 @@ vi.mock("../readers/PdfReader", () => ({ default: () => null }));
 vi.mock("../readers/MdReader", () => ({ default: () => null }));
 vi.mock("../readers/TxtReader", () => ({ default: () => null }));
 
+vi.mock("../components/SwitchSourcePanel", () => ({
+  default: (props: any) => (
+    <div data-testid="switch-panel">
+      <button onClick={() => props.onPick({ title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://c.com/b.html", sourceId: 3, sourceName: "源C" })}>
+        pick-c
+      </button>
+      <button onClick={props.onClose}>close</button>
+    </div>
+  ),
+}));
+
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
   httpGet: vi.fn(),
@@ -413,5 +424,27 @@ describe("ReaderPage (source) shelf toggle", () => {
     await userEvent.click(btn);
     expect(api.removeShelfSourceBook).toHaveBeenCalledWith(7);
     expect(await screen.findByRole("button", { name: "加入书架" })).toBeInTheDocument();
+  });
+});
+
+describe("ReaderPage (source) switch source", () => {
+  const onSwitchSource = vi.fn();
+
+  function renderWithSwitch() {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    return render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} onSwitchSource={onSwitchSource} />);
+  }
+
+  it("opens the switch panel from the toolbar and calls onSwitchSource on pick", async () => {
+    const { container } = renderWithSwitch();
+    await screen.findByText("第一章正文内容。");
+    const btn = screen.getByRole("button", { name: "换源" });
+    await userEvent.click(btn);
+    expect(container.querySelector('[data-testid="switch-panel"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "pick-c" }));
+    expect(onSwitchSource).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 3, sourceName: "源C" }));
   });
 });

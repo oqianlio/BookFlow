@@ -78,6 +78,7 @@ function AppInner() {
               bookUrl: state.hit.bookUrl, bookTitle: state.hit.title,
               chapterIndex: index, chapterUrl: url, chapterName: name, back: state.back,
             })}
+            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
           />
         );
       case "sourceReader":
@@ -97,6 +98,7 @@ function AppInner() {
               hit: { title: state.bookTitle, author: "", coverUrl: "", bookUrl: state.bookUrl, sourceId: state.sourceId, sourceName: "" },
               back: state.back,
             })}
+            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
           />
         );
     }
