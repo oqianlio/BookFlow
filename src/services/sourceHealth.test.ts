@@ -15,13 +15,16 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    httpGet: vi.fn(async (url: string, headers?: Record<string, string>, timeoutMs?: number) => {
+    httpGet: vi.fn(async (url: string, headers?: Record<string, string>, timeoutMs?: number, method?: string, body?: string) => {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), timeoutMs ?? 8000);
       try {
         const res = await fetch(url, {
+          method: method ?? "GET",
+          body: method && method !== "GET" && body ? body : undefined,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            ...(method && method !== "GET" && body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
             ...(headers ?? {}),
           },
           signal: ctrl.signal,
@@ -50,7 +53,7 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
     if (!parsed.url) return { name: s.name, ok: false, count: 0, reason: "无搜索URL", ms: Date.now() - t0 };
     // 相对 searchUrl 基于书源域名解析（与 searchService 一致）
     const url = resolveUrl(parsed.url, src.bookSourceUrl);
-    const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000);
+    const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000, parsed.method, parsed.body);
     if (!html || html.length < 80) return { name: s.name, ok: false, count: 0, reason: "响应过短", ms: Date.now() - t0 };
     const doc = new DOMParser().parseFromString(html, "text/html");
     const items = await extractBookList(doc, src.ruleSearch ?? {}, {

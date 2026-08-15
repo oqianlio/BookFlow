@@ -1,0 +1,6 @@
+fix: 健康检查脚本正确转发 POST 搜索（method/body 之前被丢弃）
+
+- checkOne 现在把 resolveSearchUrl 得到的 method/body 传给 httpGet，
+  修复所有 POST 搜索书源在健康检查中全部误报"无结果"
+- mock httpGet 支持 method/body 及表单 Content-Type
+- 修复后 36小说网(31本)、PO18全本(4本) 等 POST 源恢复正常，可用源 41→52
