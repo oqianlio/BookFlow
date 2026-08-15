@@ -257,7 +257,7 @@ pub fn http_get_xml(url: &str) -> Result<String, String> {
     headers.insert("User-Agent".to_string(), crate::net::DEFAULT_UA.to_string());
     let mut resp = crate::net::build_request(&client, "GET", url, &headers, None, None)
         .send()
-        .map_err(|e| format!("网络请求失败: {e}"))?;
+        .map_err(|e| crate::net::friendly_network_error(&e, url))?;
     if !resp.status().is_success() {
         return Err(format!("HTTP {}", resp.status()));
     }

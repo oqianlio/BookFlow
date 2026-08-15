@@ -12,6 +12,30 @@ pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, 
     Ok(cow.into_owned())
 }
 
+/// 从 URL 提取 host（供错误提示与测试）
+pub fn url_host(url: &str) -> String {
+    url.split("://")
+        .nth(1)
+        .and_then(|rest| rest.split(['/', '?']).next())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// 把 reqwest 底层网络错误翻译成可操作的友好中文提示（区分 DNS/连接/超时）。
+pub fn friendly_network_error(e: &reqwest::Error, url: &str) -> String {
+    let host = url_host(url);
+    if e.is_timeout() {
+        format!("请求超时，站点响应过慢：{host}")
+    } else if e.is_connect() {
+        format!("无法连接到站点，可能网络不通或站点已失效：{host}")
+    } else if e.is_builder() {
+        format!("请求构建失败：{host}")
+    } else {
+        // DNS 解析失败、TLS 等：给出站点可能失效的提示
+        format!("网络请求失败（{host} 无法访问，可能域名已失效或需要网络代理）：{e}")
+    }
+}
+
 /// 构造请求：书源 header 优先，未声明 UA 时注入默认浏览器 UA；POST 支持 form-urlencoded。
 pub fn build_request(
     client: &reqwest::blocking::Client,
@@ -76,7 +100,7 @@ pub async fn http_get(
             body.as_deref(),
             content_type.as_deref(),
         );
-        let mut resp = req.send().map_err(|e| format!("网络请求失败: {e}"))?;
+        let mut resp = req.send().map_err(|e| friendly_network_error(&e, &url))?;
         // reqwest 只在内存中读写 cookie，不会自动写回文件，需手动持久化
         if let Some(j) = &jar {
             j.save();

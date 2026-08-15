@@ -1,6 +1,27 @@
 use std::collections::HashMap;
 
-use yd_lib::net::{build_request, decode_body, DEFAULT_UA};
+use yd_lib::net::{build_request, decode_body, url_host, DEFAULT_UA};
+
+#[test]
+fn extracts_host_from_url() {
+    assert_eq!(url_host("https://www.101kanshu.net/novels/class/1.html"), "www.101kanshu.net");
+    assert_eq!(url_host("http://ex.com/a?x=1"), "ex.com");
+    assert_eq!(url_host("not-a-url"), "");
+}
+
+#[test]
+fn connect_error_gets_friendly_message() {
+    // 对不可达域名发起真实请求，验证错误消息被翻译成友好中文
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_millis(8000))
+        .build()
+        .unwrap();
+    let url = "https://this-domain-should-not-exist-12345.invalid/";
+    let err = client.get(url).send().unwrap_err();
+    let msg = yd_lib::net::friendly_network_error(&err, url);
+    assert!(msg.contains("无法连接到站点") || msg.contains("网络请求失败"), "got: {msg}");
+    assert!(msg.contains("this-domain-should-not-exist-12345.invalid"));
+}
 
 #[test]
 fn decodes_utf8() {
