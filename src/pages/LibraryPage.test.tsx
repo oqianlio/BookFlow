@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import LibraryPage from "./LibraryPage";
@@ -37,17 +37,16 @@ describe("LibraryPage", () => {
     expect(screen.getByText("算法导论")).toBeInTheDocument();
   });
 
-  it("shows read progress in list mode only", async () => {
+  it("shows read progress in both modes", async () => {
     vi.spyOn(api, "listBooks").mockResolvedValue(books);
     vi.spyOn(api, "getProgress").mockImplementation(async (id: number) => (id === 1 ? ["3", 0.42] : null));
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("三体");
-    // 无进度条；网格不显示百分比
-    expect(document.querySelector(".book-progress-bar")).toBeNull();
-    expect(screen.queryByText("42%")).not.toBeInTheDocument();
-    // 列表模式：副行显示阅读百分比
+    // 网格模式：卡片底部显示百分比
+    expect(await screen.findByText("42%")).toBeInTheDocument();
+    // 列表模式：副行同样显示百分比
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
-    await waitFor(() => expect(screen.getByText("42%")).toBeInTheDocument());
+    expect(screen.getAllByText("42%").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows relative last-opened time in list mode", async () => {

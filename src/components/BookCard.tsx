@@ -165,6 +165,11 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
       </div>
       <div className="book-meta">
         <h3>{title}</h3>
+        {percent != null && percent > 0 && (
+          <div className="book-sub">
+            <span className="progress">{percent}%</span>
+          </div>
+        )}
       </div>
       {onRemove && (
         <button
