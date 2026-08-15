@@ -433,7 +433,9 @@ pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
-    conn.execute(
+    // 进度 + 书架联动两次写包在同一事务，避免部分成功导致不一致
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "INSERT INTO book_source_progress (source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent, updated_at)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
          ON CONFLICT(source_id, book_url) DO UPDATE SET title=excluded.title, chapter_index=excluded.chapter_index,
@@ -441,10 +443,11 @@ pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<
         params![p.source_id, p.book_url, p.title, p.chapter_index, p.chapter_url, p.chapter_name, p.percent, now],
     )?;
     // 书架联动：书在架时更新打开时间（不在架则无操作）
-    conn.execute(
+    tx.execute(
         "UPDATE shelf_source_books SET last_opened_at = ?1 WHERE source_id = ?2 AND book_url = ?3",
         params![now, p.source_id, p.book_url],
     )?;
+    tx.commit()?;
     Ok(())
 }
 

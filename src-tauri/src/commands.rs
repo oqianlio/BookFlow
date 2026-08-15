@@ -160,13 +160,10 @@ pub fn delete_bookmark_cmd(id: i64, state: State<'_, AppState>) -> Result<(), St
     delete_bookmark(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
-/// 读取文本文件（UTF-8 优先，GBK 兜底）。命令层先做路径白名单校验。
+/// 读取文本文件（UTF-8/UTF-16/GBK 自动识别）。命令层先做路径白名单校验。
 fn read_text_bytes(path: &std::path::Path) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("读取文件失败: {e}"))?;
-    match std::str::from_utf8(&bytes) {
-        Ok(s) => Ok(s.to_owned()),
-        Err(_) => Ok(encoding_rs::GBK.decode(&bytes).0.into_owned()),
-    }
+    crate::net::decode_body(&bytes, None)
 }
 
 #[tauri::command]
@@ -458,10 +455,13 @@ pub fn add_rss_feed(url: String, state: State<'_, AppState>) -> Result<i64, Stri
     let xml = crate::rss::http_get_xml(&url)?;
     let preview = crate::rss::parse_rss_xml(&xml)?;
     let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
-    let id = crate::db::add_rss_feed_db(&conn, &preview.title, &url, preview.site_url.as_deref()).map_err(|e| e.to_string())?;
+    // feed + 全部文章写入同一事务，避免部分成功留下不完整订阅
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let id = crate::db::add_rss_feed_db(&tx, &preview.title, &url, preview.site_url.as_deref()).map_err(|e| e.to_string())?;
     for a in &preview.articles {
-        let _ = crate::db::upsert_rss_article(&conn, id, a);
+        crate::db::upsert_rss_article(&tx, id, a).map_err(|e| e.to_string())?;
     }
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(id)
 }
 

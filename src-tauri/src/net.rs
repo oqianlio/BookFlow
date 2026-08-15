@@ -18,13 +18,36 @@ pub fn ensure_within(root: &Path, path: &Path) -> Result<(), String> {
 }
 pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+/// 解码响应字节：UTF-16（BOM 检测）→ UTF-8 → GBK 兜底（保证不崩溃）
 pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, String> {
+    if bytes.len() >= 2 {
+        if bytes[0] == 0xFF && bytes[1] == 0xFE {
+            return Ok(String::from_utf16_lossy(&utf16_units(bytes, false)));
+        }
+        if bytes[0] == 0xFE && bytes[1] == 0xFF {
+            return Ok(String::from_utf16_lossy(&utf16_units(bytes, true)));
+        }
+    }
     if let Ok(s) = std::str::from_utf8(bytes) {
         return Ok(s.to_string());
     }
     // GBK 优先，其次 latin1 兜底（保证不崩溃）
     let (cow, _, _) = encoding_rs::GBK.decode(bytes);
     Ok(cow.into_owned())
+}
+
+/// 跳过 BOM 后按 2 字节切分 u16 码元
+fn utf16_units(bytes: &[u8], big_endian: bool) -> Vec<u16> {
+    bytes[2..]
+        .chunks_exact(2)
+        .map(|c| {
+            if big_endian {
+                u16::from_be_bytes([c[0], c[1]])
+            } else {
+                u16::from_le_bytes([c[0], c[1]])
+            }
+        })
+        .collect()
 }
 
 /// 从 URL 提取 host（供错误提示与测试）
