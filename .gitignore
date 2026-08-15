@@ -26,3 +26,4 @@ dist-ssr
 # 书源健康检查导出的临时文件（src-tauri/src/bin/export_sources.rs 生成）
 tmp_sources.json
 health_out.txt
+health_full.txt

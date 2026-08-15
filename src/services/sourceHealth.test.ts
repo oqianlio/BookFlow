@@ -94,8 +94,8 @@ describe.skipIf(!ENABLED)("source health check", () => {
     for (const r of ok.sort((a, b) => b.count - a.count)) {
       console.log(`[${r.count}本] ${r.name} (${r.ms}ms)`);
     }
-    console.log(`\n=== 失败/无结果的书源（前 40 个）===`);
-    for (const r of noResult.slice(0, 40)) {
+    console.log(`\n=== 失败/无结果的书源（全部 ${noResult.length} 个）===`);
+    for (const r of noResult) {
       console.log(`${r.name}: ${r.reason ?? "无结果"} (${r.ms}ms)`);
     }
     expect(results.length).toBe(sources.length);
