@@ -396,8 +396,16 @@
 
 /* ============ 切片翻页（书源正文） ============ */
 .reader-slice-wrap { position: relative; height: 100%; overflow: hidden; }
-.reader-page-slice { position: absolute; inset: 0; overflow: hidden; padding: 0 4px; }
-.reader-page-slice > * { margin: 0; }
+.reader-page-slice {
+  position: absolute; inset: 0; overflow: hidden;
+  padding: 4px 8px 32px;
+  font-family: var(--font-read);
+  line-height: 1.8;
+  max-width: 46em;
+  margin: 0 auto;
+}
+.reader-page-slice > * { margin: 0 0 1.1em; }
+.reader-page-slice > *:last-child { margin-bottom: 0; }
 .reader-page-slice.slide { transition: transform 0.3s ease; }
 .reader-slice-nav {
   position: absolute; bottom: 8px; right: 12px; display: flex; gap: 8px; align-items: center;

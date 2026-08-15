@@ -283,7 +283,10 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         </div>
       </header>
       <div className="reader-body">
-        <main className="reader-main">
+        <main
+          className="reader-main"
+          onClick={isLocal || isManga || !chapter.url || loading || failed ? () => setMenuVisible((v) => !v) : undefined}
+        >
           {isLocal ? (
             <>
               {openError && (
