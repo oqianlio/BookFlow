@@ -31,18 +31,18 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         console.warn("[sourcebook] bookUrl=", resolvedBookUrl, "len=", html.length, "head=", html.slice(0, 100));
         const doc = parseHtml(html);
         const bi = s.ruleBookInfo ?? {};
-        const title = bi.name ? extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : initialTitle;
-        const author = bi.author ? extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
-        const intro = bi.intro ? extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
-        const cover = bi.coverUrl ? extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : "";
+        const title = bi.name ? await extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : initialTitle;
+        const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
+        const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : "";
         console.warn("[sourcebook] info title=", title, "author=", author, "introLen=", intro.length, "cover=", cover.slice(0, 60));
-        const tocUrl = bi.tocUrl ? extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
+        const tocUrl = bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
         console.warn("[sourcebook] tocUrl=", tocUrl);
         const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
         console.warn("[sourcebook] tocHtml len=", tocHtml.length, "head=", tocHtml.slice(0, 100));
         const tocDoc = parseHtml(tocHtml);
         const rules = s.ruleToc ?? {};
-        const items = extractList(tocDoc, rules.chapterList ?? "", {
+        const items = await extractList(tocDoc, rules.chapterList ?? "", {
           name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
         }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl });
         console.warn("[sourcebook] toc items=", items.length, "first=", JSON.stringify(items.slice(0, 2)));

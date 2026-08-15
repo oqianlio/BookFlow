@@ -30,7 +30,7 @@ describe("mock book source end-to-end", () => {
     const resp = await fetch(url);
     const html = await resp.text();
     const doc = parseHtml(html);
-    const hits = extractList(doc, SOURCE.ruleSearch.bookList, {
+    const hits = await extractList(doc, SOURCE.ruleSearch.bookList, {
       name: SOURCE.ruleSearch.name,
       author: SOURCE.ruleSearch.author,
       bookUrl: SOURCE.ruleSearch.bookUrl,
@@ -44,9 +44,9 @@ describe("mock book source end-to-end", () => {
   it("fetches toc and chapters", async () => {
     const bookHtml = await (await fetch("http://127.0.0.1:8610/book/0")).text();
     const doc = parseHtml(bookHtml);
-    expect(extractSingle(doc, SOURCE.ruleBookInfo.name)).toBe("三体");
-    expect(extractSingle(doc, SOURCE.ruleBookInfo.author)).toBe("刘慈欣");
-    const toc = extractList(doc, SOURCE.ruleToc.chapterList, {
+    expect(await extractSingle(doc, SOURCE.ruleBookInfo.name)).toBe("三体");
+    expect(await extractSingle(doc, SOURCE.ruleBookInfo.author)).toBe("刘慈欣");
+    const toc = await extractList(doc, SOURCE.ruleToc.chapterList, {
       name: SOURCE.ruleToc.chapterName,
       url: SOURCE.ruleToc.chapterUrl,
     }, { baseUrl: "http://127.0.0.1:8610/book/0" });
@@ -56,7 +56,7 @@ describe("mock book source end-to-end", () => {
 
     const chHtml = await (await fetch("http://127.0.0.1:8610" + toc[0].url.replace("http://127.0.0.1:8610", ""))).text();
     const chDoc = parseHtml(chHtml);
-    const content = extractSingle(chDoc, SOURCE.ruleContent.content, { baseUrl: toc[0].url });
+    const content = await extractSingle(chDoc, SOURCE.ruleContent.content, { baseUrl: toc[0].url });
     expect(content).toContain("正文段落");
   }, 15000);
 });

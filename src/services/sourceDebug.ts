@@ -33,10 +33,10 @@ export async function debugSource(
       if (!rule) continue;
       let v: string;
       if (k === "bookList") {
-        const items = extractList(doc, rule, { name: "a@text", author: "a@text", bookUrl: "a@href" }, ctx);
+        const items = await extractList(doc, rule, { name: "a@text", author: "a@text", bookUrl: "a@href" }, ctx);
         v = JSON.stringify(items).slice(0, 200);
       } else {
-        v = extractSingle(doc, rule, ctx);
+        v = await extractSingle(doc, rule, ctx);
       }
       fields.push({ name: k, value: v });
     }
@@ -44,17 +44,17 @@ export async function debugSource(
     for (const k of ["name", "author", "intro", "tocUrl"]) {
       const rule = src.ruleBookInfo?.[k];
       if (!rule) continue;
-      fields.push({ name: k, value: extractSingle(doc, rule, ctx) });
+      fields.push({ name: k, value: await extractSingle(doc, rule, ctx) });
     }
     for (const k of ["chapterList", "chapterName", "chapterUrl"]) {
       const rule = src.ruleToc?.[k];
       if (!rule) continue;
       let v: string;
       if (k === "chapterList") {
-        const items = extractList(doc, rule, { name: "@text", url: "@href" }, ctx);
+        const items = await extractList(doc, rule, { name: "@text", url: "@href" }, ctx);
         v = JSON.stringify(items).slice(0, 200);
       } else {
-        v = extractSingle(doc, rule, ctx);
+        v = await extractSingle(doc, rule, ctx);
       }
       fields.push({ name: k, value: v });
     }
@@ -62,7 +62,7 @@ export async function debugSource(
     for (const k of ["content", "nextContentUrl"]) {
       const rule = src.ruleContent?.[k];
       if (!rule) continue;
-      fields.push({ name: k, value: extractSingle(doc, rule, ctx) });
+      fields.push({ name: k, value: await extractSingle(doc, rule, ctx) });
     }
   }
 

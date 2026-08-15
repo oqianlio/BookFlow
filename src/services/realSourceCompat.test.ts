@@ -36,7 +36,7 @@ describe.skipIf(!online)("real source biqumo (smoke, needs network)", () => {
       return;
     }
     const doc = parseHtml(await resp.text());
-    const hits = extractList(doc, BIQUMO.ruleSearch.bookList, {
+    const hits = await extractList(doc, BIQUMO.ruleSearch.bookList, {
       name: BIQUMO.ruleSearch.name,
       author: BIQUMO.ruleSearch.author,
       bookUrl: BIQUMO.ruleSearch.bookUrl,
@@ -62,7 +62,7 @@ describe.skipIf(!online)("real source biqumo (smoke, needs network)", () => {
       return;
     }
     const doc = parseHtml(await resp.text());
-    const items = extractList(doc, BIQUMO.ruleToc.chapterList, {
+    const items = await extractList(doc, BIQUMO.ruleToc.chapterList, {
       name: BIQUMO.ruleToc.name,
       url: BIQUMO.ruleToc.url,
     }, { baseUrl: BIQUMO.bookSourceUrl });

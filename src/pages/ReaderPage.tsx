@@ -82,9 +82,9 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
         const doc = parseHtml(html);
         const rules = src.ruleContent ?? {};
-        const text = extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+        const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
         console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
-        const next = rules.nextContentUrl ? extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
+        const next = rules.nextContentUrl ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
         nextUrlRef.current = next;
         const urls = extractImageUrls(text, c.url);
         if (isImageChapter(text) && urls.length !== 1) {

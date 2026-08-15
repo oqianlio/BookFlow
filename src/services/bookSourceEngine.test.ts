@@ -1,24 +1,39 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, jsonGet, extractFromJsonObject } from "./bookSourceEngine";
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { loadJsLib } from "./jsLib";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
+const { httpGetMock, mergeUserAgentMock } = vi.hoisted(() => ({
+  httpGetMock: vi.fn(),
+  mergeUserAgentMock: vi.fn((headers?: Record<string, string> | undefined, userAgent?: string) => {
+    if (!userAgent) return headers;
+    const hasUa = Object.keys(headers ?? {}).some((k) => k.toLowerCase() === "user-agent");
+    if (hasUa) return headers;
+    return { ...(headers ?? {}), "User-Agent": userAgent };
+  }),
+}));
+
+vi.mock("./api", () => ({
+  httpGet: httpGetMock,
+  mergeUserAgent: mergeUserAgentMock,
+}));
+
 describe("bookSourceEngine", () => {
   const doc = parseHtml(SAMPLE_HTML);
 
-  it("extracts a single CSS value with text", () => {
-    expect(extractSingle(doc, "a.b-name@text", { baseUrl: "https://example.com" })).toBe("三体");
+  it("extracts a single CSS value with text", async () => {
+    expect(await extractSingle(doc, "a.b-name@text", { baseUrl: "https://example.com" })).toBe("三体");
   });
 
-  it("extracts href and resolves to absolute URL", () => {
-    const href = extractSingle(doc, "a.b-name@href", { baseUrl: "https://example.com" });
+  it("extracts href and resolves to absolute URL", async () => {
+    const href = await extractSingle(doc, "a.b-name@href", { baseUrl: "https://example.com" });
     expect(href).toBe("https://example.com/book/1.html");
   });
 
-  it("extracts a list of items", () => {
-    const list = extractList(doc, "@css:ul.book-list>li", {
+  it("extracts a list of items", async () => {
+    const list = await extractList(doc, "@css:ul.book-list>li", {
       name: "a.b-name@text",
       bookUrl: "a.b-name@href",
       coverUrl: "img.b-cover@src",
@@ -28,11 +43,9 @@ describe("bookSourceEngine", () => {
     expect(list[1].bookUrl).toBe("https://example.com/book/2.html");
   });
 
-  it("handles empty list rule without throwing", () => {
-    expect(() => extractList(doc, "", { name: "a@text" })).not.toThrow();
-    expect(extractList(doc, "", { name: "a@text" })).toEqual([]);
-    expect(() => extractBookList(doc, {}, {})).not.toThrow();
-    expect(extractBookList(doc, {}, {})).toEqual([]);
+  it("handles empty list rule without throwing", async () => {
+    await expect(extractList(doc, "", { name: "a@text" })).resolves.toEqual([]);
+    await expect(extractBookList(doc, {}, {})).resolves.toEqual([]);
   });
 
   it("parses a valid book source JSON", () => {
@@ -84,9 +97,9 @@ describe("evalJs", () => {
     expect(out).toBe("你好");
   });
 
-  it("extracts list via @xpath:", () => {
+  it("extracts list via @xpath:", async () => {
     const doc4 = parseHtml(SAMPLE_HTML);
-    const list = extractList(doc4, "@xpath://ul[@class='book-list']/li", { name: "a.b-name@text" });
+    const list = await extractList(doc4, "@xpath://ul[@class='book-list']/li", { name: "a.b-name@text" });
     expect(list.length).toBe(2);
     expect(list[0].name).toBe("三体");
   });
@@ -98,21 +111,21 @@ describe("rule alternatives (||)", () => {
     expect(splitAlternatives("single@text")).toEqual(["single@text"]);
   });
 
-  it("uses first non-empty alternative", () => {
+  it("uses first non-empty alternative", async () => {
     const doc = parseHtml(`<div><span class="a"></span><p class="b">命中</p></div>`);
-    const out = extractSingle(doc, "span.a@text||p.b@text");
+    const out = await extractSingle(doc, "span.a@text||p.b@text");
     expect(out).toBe("命中");
   });
 
-  it("falls through when first alternative empty", () => {
+  it("falls through when first alternative empty", async () => {
     const doc = parseHtml(`<div><p class="b">只有B</p></div>`);
-    const out = extractSingle(doc, "span.a@text||p.b@text");
+    const out = await extractSingle(doc, "span.a@text||p.b@text");
     expect(out).toBe("只有B");
   });
 
-  it("handles tag.x inside alternatives", () => {
+  it("handles tag.x inside alternatives", async () => {
     const doc = parseHtml(`<div><a class="x" href="/1">一</a><a class="x" href="/2">二</a></div>`);
-    const out = extractSingle(doc, "tag.a.0@href||tag.a.1@href", { baseUrl: "https://ex.com" });
+    const out = await extractSingle(doc, "tag.a.0@href||tag.a.1@href", { baseUrl: "https://ex.com" });
     expect(out).toBe("https://ex.com/1");
   });
 });
@@ -131,23 +144,23 @@ describe("tag.x index selector", () => {
     expect(resolveTagIndex("tag.a.5", el)).toBeNull();
   });
 
-  it("extracts via tag.x in extractSingle", () => {
+  it("extracts via tag.x in extractSingle", async () => {
     const doc = parseHtml(`<div><a href="/1">一</a><a href="/2">二</a></div>`);
-    const href = extractSingle(doc, "tag.a.1@href", { baseUrl: "https://ex.com" });
+    const href = await extractSingle(doc, "tag.a.1@href", { baseUrl: "https://ex.com" });
     expect(href).toBe("https://ex.com/2");
   });
 
-  it("extracts via tag.x in extractList item rules", () => {
+  it("extracts via tag.x in extractList item rules", async () => {
     const doc = parseHtml(`<ul><li><a class="t" href="/a">甲</a><span class="t">乙</span></li><li><a class="t" href="/c">丙</a><span class="t">丁</span></li></ul>`);
-    const list = extractList(doc, "ul > li", { url: "tag.a.0@href", name: "tag.a.0@text" }, { baseUrl: "https://ex.com" });
+    const list = await extractList(doc, "ul > li", { url: "tag.a.0@href", name: "tag.a.0@text" }, { baseUrl: "https://ex.com" });
     expect(list.length).toBe(2);
     expect(list[0].url).toBe("https://ex.com/a");
     expect(list[1].url).toBe("https://ex.com/c");
   });
 
-  it("extracts @textNodes joining all descendant text", () => {
+  it("extracts @textNodes joining all descendant text", async () => {
     const doc = parseHtml(`<div class="content"><p>第一段</p><p>第二段</p><span>附注</span></div>`);
-    const out = extractSingle(doc, ".content@textNodes");
+    const out = await extractSingle(doc, ".content@textNodes");
     expect(out).toContain("第一段");
     expect(out).toContain("第二段");
     expect(out).toContain("附注");
@@ -274,9 +287,9 @@ describe("extractList @js: branch", () => {
   const jsList = "@js:JSON.parse(result).data";
   const itemRules = { name: "$.book_name", author: "$.author", bookUrl: "$.book_id" };
 
-  it("parses JSON array returned by @js:", () => {
+  it("parses JSON array returned by @js:", async () => {
     const doc = emptyDoc();
-    const items = extractList(doc, jsList, itemRules, { result: JSON.stringify({ data: [
+    const items = await extractList(doc, jsList, itemRules, { result: JSON.stringify({ data: [
       { book_name: "三体", author: "刘慈欣", book_id: "1" },
       { book_name: "活着", author: "余华", book_id: "2" },
     ] }) });
@@ -285,9 +298,9 @@ describe("extractList @js: branch", () => {
     expect(items[1].author).toBe("余华");
   });
 
-  it("handles @js: returning an array directly", () => {
+  it("handles @js: returning an array directly", async () => {
     const doc = emptyDoc();
-    const items = extractList(doc, "@js:[{a:'x'},{a:'y'}]", { a: "$.a" }, {});
+    const items = await extractList(doc, "@js:[{a:'x'},{a:'y'}]", { a: "$.a" }, {});
     expect(items.length).toBe(2);
     expect(items[0].a).toBe("x");
   });
@@ -322,13 +335,13 @@ describe("extractList @js: branch", () => {
     expect(extractFromJsObject("a string", "$.name")).toBe("");
   });
 
-  it("drives full extractList js list -> js item chain with per-source isolation", () => {
+  it("drives full extractList js list -> js item chain with per-source isolation", async () => {
     const doc = emptyDoc();
     const itemRule = { tag: "@js:java.get('tag')" };
     const listA = "@js:java.put('tag','A'); [{a:1},{a:2}]";
     const listB = "@js:[{a:1},{a:2}]";
-    const itemsA = extractList(doc, listA, itemRule, { sourceKey: "src-a" });
-    const itemsB = extractList(doc, listB, itemRule, { sourceKey: "src-b" });
+    const itemsA = await extractList(doc, listA, itemRule, { sourceKey: "src-a" });
+    const itemsB = await extractList(doc, listB, itemRule, { sourceKey: "src-b" });
     expect(itemsA[0].tag).toBe("A");
     expect(itemsA[1].tag).toBe("A");
     expect(itemsB[0].tag).toBe("");
@@ -410,10 +423,10 @@ describe("parseExploreUrl", () => {
 });
 
 describe("extractBookList", () => {
-  it("extracts books from itemRules", () => {
+  it("extracts books from itemRules", async () => {
     const doc = parseHtml(`<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li><li><a class="n" href="/b/2">活着</a><span class="a">余华</span></li></ul>`);
     const rules = { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" };
-    const books = extractBookList(doc, rules, { baseUrl: "https://ex.com" });
+    const books = await extractBookList(doc, rules, { baseUrl: "https://ex.com" });
     expect(books.length).toBe(2);
     expect(books[0].name).toBe("三体");
     expect(books[1].bookUrl).toBe("https://ex.com/b/2");
@@ -472,9 +485,9 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     expect(jsonGet({ x: 1 }, "x")).toBe(1);
   });
 
-  it("extractList extracts items from @Json:data", () => {
+  it("extractList extracts items from @Json:data", async () => {
     const doc = parseHtml("<div></div>");
-    const items = extractList(doc, "@Json:data.data.chapterListWithVolume", {
+    const items = await extractList(doc, "@Json:data.data.chapterListWithVolume", {
       name: "$.title", url: "$.itemId",
     }, { baseUrl: "http://x", result: json, sourceKey: "x" });
     expect(items.length).toBe(2);
@@ -483,9 +496,9 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     expect(items[1].name).toBe("第二章");
   });
 
-  it("extractSingle reads a scalar from $. path", () => {
+  it("extractSingle reads a scalar from $. path", async () => {
     const doc = parseHtml("<div></div>");
-    expect(extractSingle(doc, "$.data.data.book_name", { result: json, sourceKey: "x" })).toBe("三体");
+    expect(await extractSingle(doc, "$.data.data.book_name", { result: json, sourceKey: "x" })).toBe("三体");
   });
 
   it("extractFromJsonObject supports @js: composition and URL resolution", () => {
@@ -502,15 +515,15 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     expect(out).toBe("type=7");
   });
 
-  it("returns empty on invalid JSON without throwing", () => {
+  it("returns empty on invalid JSON without throwing", async () => {
     const doc = parseHtml("<div></div>");
-    expect(extractList(doc, "@Json:data", { name: "$.n" }, { result: "not json", sourceKey: "x" })).toEqual([]);
-    expect(extractSingle(doc, "$.a", { result: "not json", sourceKey: "x" })).toBe("");
+    await expect(extractList(doc, "@Json:data", { name: "$.n" }, { result: "not json", sourceKey: "x" })).resolves.toEqual([]);
+    expect(await extractSingle(doc, "$.a", { result: "not json", sourceKey: "x" })).toBe("");
   });
 });
 
 describe("JSON rule extraction: real source regression", () => {
-  it("real-source: 番茄聚合 ruleExplore extraction", () => {
+  it("real-source: 番茄聚合 ruleExplore extraction", async () => {
     const json = JSON.stringify({
       data: [
         { book_name: "三体", author: "刘慈欣", book_id: "1", thumb_url: "/c/1.jpg", abstract: "科幻", category: "科幻" },
@@ -518,7 +531,7 @@ describe("JSON rule extraction: real source regression", () => {
       ],
     });
     const doc = parseHtml("<div></div>");
-    const items = extractList(doc, "@Json:data", {
+    const items = await extractList(doc, "@Json:data", {
       author: "$.author",
       bookUrl: "$.book_id@js:'http://101.35.133.34:5000/api/detail?book_id=' + result",
       coverUrl: "$.thumb_url",
@@ -532,30 +545,67 @@ describe("JSON rule extraction: real source regression", () => {
     ]);
   });
 
-  it("real-source: 番茄聚合 ruleToc chapterList @Json:...@js: flatten", () => {
+  it("real-source: 番茄聚合 ruleToc chapterList @Json:...@js: flatten", async () => {
     const json = JSON.stringify({ data: { data: { chapterListWithVolume: [[{ title: "一", itemId: "a" }], [{ title: "二", itemId: "b" }]] } } });
     const doc = parseHtml("<div></div>");
     const listRule = "@Json:data.data.chapterListWithVolume@js:\nvar arr=[];\nfor(var i=0;i<result.length;i++){arr=arr.concat(result[i]);}\nresult=arr;";
-    const items = extractList(doc, listRule, { name: "$.title", url: "$.itemId" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
+    const items = await extractList(doc, listRule, { name: "$.title", url: "$.itemId" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
     expect(items.length).toBe(2);
     expect(items[0].name).toBe("一");
     expect(items[1].name).toBe("二");
   });
 
-  it("real-source: ruleBookInfo cover_url via extractSingle resolves against baseUrl", () => {
+  it("real-source: ruleBookInfo cover_url via extractSingle resolves against baseUrl", async () => {
     const json = JSON.stringify({ data: { data: { book_name: "三体", cover_url: "/c/1.jpg", book_url: "/book/1" } } });
     const doc = parseHtml("<div></div>");
-    const name = extractSingle(doc, "$.data.data.book_name", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
+    const name = await extractSingle(doc, "$.data.data.book_name", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
     expect(name).toBe("三体");
-    const cover = extractSingle(doc, "$.data.data.cover_url", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
+    const cover = await extractSingle(doc, "$.data.data.cover_url", { baseUrl: "http://101.35.133.34:5000", result: json, sourceKey: "x" });
     expect(cover).toBe("http://101.35.133.34:5000/c/1.jpg");
   });
 
-  it("does not resolve empty URL fields to site root", () => {
+  it("does not resolve empty URL fields to site root", async () => {
     const json = JSON.stringify({ data: [{ book_name: "无封面", thumb_url: "" }] });
     const doc = parseHtml("<div></div>");
-    const items = extractList(doc, "@Json:data", { name: "$.book_name", coverUrl: "$.thumb_url" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
+    const items = await extractList(doc, "@Json:data", { name: "$.book_name", coverUrl: "$.thumb_url" }, { baseUrl: "http://x", result: json, sourceKey: "x" });
     expect(items).toEqual([{ name: "无封面", coverUrl: "" }]);
-    expect(extractSingle(doc, "$.data[0].thumb_url", { baseUrl: "http://x", result: json, sourceKey: "x" })).toBe("");
+    expect(await extractSingle(doc, "$.data[0].thumb_url", { baseUrl: "http://x", result: json, sourceKey: "x" })).toBe("");
+  });
+});
+
+describe("jsBlock <js>...</js>", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("parseRule recognizes <js>...</js> as jsBlock with value and after", () => {
+    expect(parseRule("<js>java.ajax('https://ex.com/api/chapter');</js>.content@text")).toEqual({
+      type: "jsBlock",
+      value: "java.ajax('https://ex.com/api/chapter');",
+      after: ".content@text",
+    });
+  });
+
+  it("jsBlock with java.ajax calls httpGet and extracts from its response as context", async () => {
+    httpGetMock.mockResolvedValue(`<html><body><div class="content">ajax 响应正文</div></body></html>`);
+    const doc = parseHtml(`<html><body><div class="content">原始正文</div></body></html>`);
+    const rule = "<js>java.ajax('https://ex.com/api/chapter');</js>.content@text";
+    const out = await extractSingle(doc, rule, {
+      baseUrl: "https://ex.com",
+      source: { httpHeaders: undefined, httpUserAgent: "TestUA" },
+      sourceKey: "ex.com",
+    });
+    expect(httpGetMock).toHaveBeenCalledWith(
+      "https://ex.com/api/chapter",
+      { "User-Agent": "TestUA" },
+      undefined, undefined, undefined, undefined, "",
+    );
+    expect(out).toBe("ajax 响应正文");
+  });
+
+  it("jsBlock without java.ajax extracts from the original doc", async () => {
+    const doc = parseHtml(`<html><body><div class="content">原始正文</div></body></html>`);
+    const rule = "<js>var x = 1;</js>.content@text";
+    const out = await extractSingle(doc, rule, { baseUrl: "https://ex.com" });
+    expect(httpGetMock).not.toHaveBeenCalled();
+    expect(out).toBe("原始正文");
   });
 });
