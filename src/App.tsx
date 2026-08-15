@@ -1,6 +1,5 @@
 import { useState } from "react";
 import SideNav, { type AppArea } from "./components/SideNav";
-import HomePage from "./pages/HomePage";
 import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -42,7 +41,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const [state, setState] = useState<AppState>({ area: "home" });
+  const [state, setState] = useState<AppState>({ area: "bookshelf" });
   const area = rootArea(state);
 
   if (state.area === "detail") {
@@ -136,19 +135,6 @@ function AppInner() {
     <div className="app-shell">
       <SideNav area={area} onSelect={(a) => setState({ area: a })} />
       <main className="app-main">
-        {state.area === "home" && (
-          <HomePage
-            key="home"
-            onGoBookshelf={() => setState({ area: "bookshelf" })}
-            onGoDiscover={() => setState({ area: "discover" })}
-            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: state })}
-            onOpenSourceBook={(sb) => setState({
-              area: "detail", page: "sourceReader",
-              sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
-              chapterIndex: -1, chapterUrl: "", chapterName: "", back: state,
-            })}
-          />
-        )}
         {state.area === "bookshelf" && (
           <LibraryPage
             key="bookshelf"

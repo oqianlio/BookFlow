@@ -1,10 +1,9 @@
 import type { ReactNode } from "react";
-import { HomeIcon, BookIcon, SearchIcon, RssIcon, SettingsIcon } from "./icons";
+import { BookIcon, SearchIcon, RssIcon, SettingsIcon } from "./icons";
 
-export type AppArea = "home" | "bookshelf" | "discover" | "rss" | "my";
+export type AppArea = "bookshelf" | "discover" | "rss" | "my";
 
 const ITEMS: Array<{ area: AppArea; label: string; Icon: (p: { size?: number }) => ReactNode }> = [
-  { area: "home", label: "首页", Icon: HomeIcon },
   { area: "bookshelf", label: "书架", Icon: BookIcon },
   { area: "discover", label: "发现", Icon: SearchIcon },
   { area: "rss", label: "RSS", Icon: RssIcon },
