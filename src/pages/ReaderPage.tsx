@@ -79,6 +79,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
   const [toc, setToc] = useState<TocItem[]>([]);
   const tocRef = useRef<TocItem[]>([]);
   tocRef.current = toc;
+  const [author, setAuthor] = useState("");
   const [tocLoading, setTocLoading] = useState(false);
   const [tocFailed, setTocFailed] = useState(false);
   const tocSeqRef = useRef(0);
@@ -91,6 +92,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       const r = await fetchToc({ sourceId, bookUrl, initialTitle: bookTitle });
       if (seq !== tocSeqRef.current) return;
       setToc(r.toc);
+      setAuthor(r.info.author);
     } catch {
       if (seq !== tocSeqRef.current) return;
       setTocFailed(true);
@@ -604,7 +606,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
         {!isLocal && panel === "switch" && onSwitchSource && (
           <SwitchSourcePanel
             title={bookTitle}
-            author=""
+            author={author}
             excludeSourceId={sourceId}
             onPick={(hit) => { setPanel(null); onSwitchSource!(hit); }}
             onClose={() => setPanel(null)}

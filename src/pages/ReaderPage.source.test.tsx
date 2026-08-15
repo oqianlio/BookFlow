@@ -14,6 +14,8 @@ vi.mock("../readers/TxtReader", () => ({ default: () => null }));
 vi.mock("../components/SwitchSourcePanel", () => ({
   default: (props: any) => (
     <div data-testid="switch-panel">
+      <span data-testid="switch-title">{props.title}</span>
+      <span data-testid="switch-author">{props.author}</span>
       <button onClick={() => props.onPick({ title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://c.com/b.html", sourceId: 3, sourceName: "源C" })}>
         pick-c
       </button>
@@ -494,6 +496,24 @@ describe("ReaderPage (source) switch source", () => {
     expect(container.querySelector('[data-testid="switch-panel"]')).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "pick-c" }));
     expect(onSwitchSource).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 3, sourceName: "源C" }));
+  });
+
+  it("passes the book author to the switch panel for a precise same-book search", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/book/1.html") {
+        return `<html><body><h1>三体</h1><div class="author">刘慈欣</div><ol><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
+      }
+      return ch1;
+    });
+    render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} onSwitchSource={onSwitchSource} />);
+    await screen.findByText("第一章正文内容。");
+    // 等目录解析出作者后打开换源面板
+    await userEvent.click(screen.getByRole("button", { name: "换源" }));
+    await waitFor(() => expect(screen.getByTestId("switch-author")).toHaveTextContent("刘慈欣"));
+    expect(screen.getByTestId("switch-title")).toHaveTextContent("三体");
   });
 });
 

@@ -103,7 +103,11 @@ function AppInner() {
               chapterName: state.chapterName,
             }}
             onBack={() => go(state.back)}
-            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
+            onSwitchSource={(hit) => setState({
+              area: "detail", page: "sourceBook",
+              hit: { ...hit, title: state.bookTitle }, // 换源保持同一本书：书名以当前所读书为准
+              back: state,
+            })}
           />
         );
       case "rssArticle":
