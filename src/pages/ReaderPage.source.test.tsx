@@ -5,6 +5,7 @@ import ReaderPage from "./ReaderPage";
 import { ErrorProvider } from "../components/ErrorDialog";
 import * as api from "../services/api";
 import { clearTocCache } from "../services/sourceToc";
+import { clearSessionChapterCache } from "../services/chapterSessionCache";
 
 vi.mock("../readers/EpubReader", () => ({ default: () => null }));
 vi.mock("../readers/PdfReader", () => ({ default: () => null }));
@@ -62,7 +63,7 @@ const tocSourceJson = JSON.stringify({
 const tocHtml = `<html><body><h1>三体</h1><ol>
   <li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
 
-beforeEach(() => { vi.clearAllMocks(); clearTocCache(); });
+beforeEach(() => { vi.clearAllMocks(); clearTocCache(); clearSessionChapterCache(); });
 
 function renderReader() {
   return render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} />);
@@ -546,6 +547,29 @@ describe("ReaderPage (source) chapter cache", () => {
         content: expect.stringContaining("第一章正文内容。"),
       })),
     );
+  });
+
+  it("reopens a recently read chapter instantly from the session cache without refetching", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const { unmount } = renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    const callsBefore = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html")).length;
+    // 退出阅读页再重新打开（组件卸载 → 重新挂载）
+    unmount();
+    const reopened = renderReader();
+    // 会话缓存直接渲染：内容即刻显示，无「加载中…」
+    await waitFor(() => expect(reopened.container.textContent).toContain("第一章正文内容。"));
+    expect(reopened.container.textContent).not.toContain("加载中…");
+    // 章节 URL 未被重新请求
+    const callsAfter = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html")).length;
+    expect(callsAfter).toBe(callsBefore);
   });
 });
 

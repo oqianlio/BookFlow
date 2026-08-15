@@ -14,6 +14,7 @@ import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageCh
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
 import { fetchToc, type TocItem } from "../services/sourceToc";
+import { getSessionChapter, setSessionChapter } from "../services/chapterSessionCache";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
@@ -213,41 +214,34 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     return { content: purified, images: [], isManga: false, nextUrl: next };
   }, [sourceId, bookUrl]);
 
-  // ==== 书源：内存章节缓存（预加载结果 + 已读章节），上限 12 条 ====
-  const chapterCacheRef = useRef<Map<string, { content: string; images: string[]; isManga: boolean; nextUrl: string }>>(new Map());
-  const rememberChapter = useCallback((url: string, data: { content: string; images: string[]; isManga: boolean; nextUrl: string }) => {
-    const map = chapterCacheRef.current;
-    map.set(url, data);
-    if (map.size > 12) {
-      const oldest = map.keys().next().value;
-      if (oldest !== undefined) map.delete(oldest);
-    }
-  }, []);
+  // ==== 书源：会话级章节缓存（模块级，App 运行期间跨页面保留已读/预取章节）====
+  // 由 chapterSessionCache 提供：重新打开刚看过的书/换源返回时零加载直接显示
 
   // ==== 书源：后台预取下一章（翻到末页时无缝衔接，无加载闪烁）====
   const prefetchingRef = useRef<Set<string>>(new Set());
   const prefetchChapter = useCallback(async (c: ChapterState) => {
-    if (chapterCacheRef.current.has(c.url) || prefetchingRef.current.has(c.url)) return;
+    if (getSessionChapter(sourceId, bookUrl, c.url) || prefetchingRef.current.has(c.url)) return;
     prefetchingRef.current.add(c.url);
     try {
       const data = await fetchChapterData(c);
-      rememberChapter(c.url, data);
+      setSessionChapter(sourceId, bookUrl, c.url, data);
     } catch {
       // 预取失败静默：翻页时走正常加载
     } finally {
       prefetchingRef.current.delete(c.url);
     }
-  }, [fetchChapterData, rememberChapter]);
+  }, [fetchChapterData, sourceId, bookUrl]);
 
-  // ==== 书源：加载章节（内存缓存 → 持久缓存 → 网络）====
+  // ==== 书源：加载章节（会话缓存 → 持久缓存 → 网络）====
   const loadChapter = useCallback(async (c: ChapterState) => {
     if (!isLocal && c.url) {
-      // 0. 内存预加载命中：无缝渲染，无 loading
-      const mem = chapterCacheRef.current.get(c.url);
+      // 0. 会话缓存命中：无缝渲染，无 loading
+      const mem = getSessionChapter(sourceId, bookUrl, c.url);
       if (mem) {
         nextUrlRef.current = mem.nextUrl;
         if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
         else { setContent(mem.content); setIsManga(false); setImages([]); }
+        setLoading(false);
         return;
       }
       setFailed(false);
@@ -255,7 +249,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       try {
         const data = await fetchChapterData(c);
         nextUrlRef.current = data.nextUrl;
-        rememberChapter(c.url, data);
+        setSessionChapter(sourceId, bookUrl, c.url, data);
         if (data.isManga) { setImages(data.images); setIsManga(true); }
         else { setContent(data.content); }
         setLoading(false);
@@ -271,7 +265,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
         setLoading(false);
       }
     }
-  }, [isLocal, sourceId, bookUrl, fetchChapterData, rememberChapter, prefetchChapter]);
+  }, [isLocal, sourceId, bookUrl, fetchChapterData, prefetchChapter]);
 
   useEffect(() => {
     if (chapter.url) void loadChapter(chapter);
@@ -325,14 +319,14 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     };
   }, [isLocal, content, loading, persist]);
 
-  // ==== 书源：内存缓存命中时同步渲染，实现无缝章节切换（无 loading 闪烁）====
+  // ==== 书源：会话缓存命中时同步渲染，实现无缝章节切换（无 loading 闪烁）====
   const applyCachedChapter = useCallback((url: string) => {
-    const mem = chapterCacheRef.current.get(url);
+    const mem = getSessionChapter(sourceId, bookUrl, url);
     if (!mem) return;
     nextUrlRef.current = mem.nextUrl;
     if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
     else { setContent(mem.content); setIsManga(false); setImages([]); }
-  }, []);
+  }, [sourceId, bookUrl]);
 
   // ==== 书源：上一章/下一章 ====
   const goChapter = (delta: number) => {
