@@ -413,3 +413,24 @@
   padding: 2px 8px; font-size: 12px; color: var(--fg-muted);
 }
 .reader-slice-nav button { border: none; background: transparent; color: var(--fg); font-size: 14px; cursor: pointer; }
+
+/* ============ 阅读设置面板 ============ */
+.reader-settings-panel .settings-group { margin-bottom: 14px; }
+.reader-settings-panel .settings-label {
+  display: block; margin-bottom: 6px; font-size: 12.5px; color: var(--fg-muted);
+}
+.reader-settings-panel .segmented { width: 100%; }
+.bg-theme-options { display: flex; gap: 10px; }
+.bg-theme-swatch {
+  width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent;
+  cursor: pointer; box-shadow: var(--shadow-sm);
+}
+.bg-theme-swatch.active { border-color: var(--accent); }
+
+/* 背景主题前景色覆盖（paper 用默认 --fg，无需覆盖） */
+.reader-main[data-bg-theme="beige"] .reader-page-slice,
+.reader-main[data-bg-theme="beige"] .reader-slice-nav { color: #2b2b2b; }
+.reader-main[data-bg-theme="green"] .reader-page-slice,
+.reader-main[data-bg-theme="green"] .reader-slice-nav { color: #1f1f1f; }
+.reader-main[data-bg-theme="night"] .reader-page-slice,
+.reader-main[data-bg-theme="night"] .reader-slice-nav { color: #e5e2e1; }

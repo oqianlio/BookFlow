@@ -16,6 +16,8 @@ vi.mock("../services/api", () => ({
   listAnnotations: vi.fn().mockResolvedValue([]),
   deleteAnnotation: vi.fn().mockResolvedValue(undefined),
   deleteBookmark: vi.fn().mockResolvedValue(undefined),
+  getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
 }));
 
 const book = {

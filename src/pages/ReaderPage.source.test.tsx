@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ReaderPage from "./ReaderPage";
 import { ErrorProvider } from "../components/ErrorDialog";
 import * as api from "../services/api";
@@ -15,6 +16,8 @@ vi.mock("../services/api", () => ({
   getBookSourceProgress: vi.fn().mockResolvedValue(null),
   saveBookSourceProgress: vi.fn().mockResolvedValue(undefined),
   openLoginWindow: vi.fn().mockResolvedValue(undefined),
+  getSetting: vi.fn().mockResolvedValue(null),
+  setSetting: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -219,5 +222,78 @@ describe("ReaderPage (source)", () => {
     const { container } = render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/b/1.html", bookTitle: "漫画", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第1话" }} onBack={() => {}} />);
     expect(await screen.findByText("无图片")).toBeInTheDocument();
     expect(container.querySelector(".md-reader")).toBeNull();
+  });
+});
+
+describe("ReaderPage (source) reading settings", () => {
+  async function renderWithSettings(saved: Record<string, string> = {}) {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    vi.mocked(api.getSetting).mockImplementation(async (k: string) => saved[k] ?? null);
+    const utils = renderReader();
+    await screen.findByText("第一章正文内容。");
+    return utils;
+  }
+
+  it("opens the settings panel from the toolbar", async () => {
+    const { container } = await renderWithSettings();
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    expect(screen.getByText("翻页模式")).toBeInTheDocument();
+    expect(container.querySelector(".reader-settings-panel")).not.toBeNull();
+    // 面板关闭
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    expect(container.querySelector(".reader-settings-panel")).toBeNull();
+  });
+
+  it("switches page mode and re-renders PaginatedReader with the new mode", async () => {
+    const { container } = await renderWithSettings();
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    const slideBtn = screen.getByRole("button", { name: "滑动" });
+    await userEvent.click(slideBtn);
+    const slice = container.querySelector(".reader-page-slice") as HTMLElement;
+    expect(slice.className).toContain("slide");
+    // 持久化
+    await waitFor(() =>
+      expect(api.setSetting).toHaveBeenCalledWith("reading.pageMode", "slide"),
+    );
+  });
+
+  it("changes font size and line height sliders", async () => {
+    await renderWithSettings();
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    const font = screen.getByLabelText("字号") as HTMLInputElement;
+    // 用 fireEvent.change 设置值
+    fireEvent.change(font, { target: { value: "22" } });
+    expect(screen.getByText(/字号 22px/)).toBeInTheDocument();
+    const line = screen.getByLabelText("行距") as HTMLInputElement;
+    fireEvent.change(line, { target: { value: "2.2" } });
+    expect(screen.getByText(/行距 2\.2/)).toBeInTheDocument();
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.fontSizePx", "22"));
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.lineHeight", "2.2"));
+  });
+
+  it("applies the selected background theme to the reader main", async () => {
+    const { container } = await renderWithSettings();
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    await userEvent.click(screen.getByRole("button", { name: "夜间" }));
+    const main = container.querySelector(".reader-main") as HTMLElement;
+    expect(main.style.background).toBe("rgb(20, 19, 19)");
+    expect(main.getAttribute("data-bg-theme")).toBe("night");
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.bgTheme", "night"));
+  });
+
+  it("restores saved settings on mount", async () => {
+    const { container } = await renderWithSettings({
+      "reading.pageMode": "cover",
+      "reading.fontSizePx": "21",
+      "reading.lineHeight": "2",
+      "reading.bgTheme": "beige",
+    });
+    const main = container.querySelector(".reader-main") as HTMLElement;
+    expect(main.getAttribute("data-bg-theme")).toBe("beige");
+    const slice = container.querySelector(".reader-page-slice") as HTMLElement;
+    expect(slice.getAttribute("style")).toContain("2");
   });
 });

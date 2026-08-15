@@ -8,9 +8,10 @@ import MangaViewer from "../readers/MangaViewer";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
-import { BackIcon, BookmarkIcon, HighlightIcon } from "../components/icons";
+import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
+import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { useError } from "../components/ErrorDialog";
 import { type ReaderSource } from "../services/reading";
 import "./ReaderPage.css";
@@ -28,7 +29,7 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
   const initialChapterName = isLocal ? "" : source.chapterName;
 
   // ==== 通用 ====
-  const [panel, setPanel] = useState<"annotations" | "bookmarks" | null>(null);
+  const [panel, setPanel] = useState<"annotations" | "bookmarks" | "settings" | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(true);
   const { showError } = useError();
@@ -47,6 +48,26 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
   const saveTimer = useRef<number | null>(null);
   const chapterRef = useRef(chapter);
   chapterRef.current = chapter;
+
+  // ==== 阅读设置（书源正文） ====
+  const [settings, setSettings] = useState<ReadingSettings>(DEFAULT_READING_SETTINGS);
+  const persistSettingsTimer = useRef<number | null>(null);
+  const updateSetting = useCallback((patch: Partial<ReadingSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      if (persistSettingsTimer.current) window.clearTimeout(persistSettingsTimer.current);
+      persistSettingsTimer.current = window.setTimeout(() => {
+        void saveReadingSettings(next).catch(() => {});
+      }, 400);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadReadingSettings().then((s) => { if (!cancelled) setSettings(s); });
+    return () => { cancelled = true; };
+  }, []);
 
   // ==== 本地书：移除损坏书籍 ====
   const handleRemoveBroken = async () => {
@@ -232,6 +253,8 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
     return () => window.removeEventListener("search-jump", onSearchJump);
   }, [isLocal, jump]);
 
+  const activeTheme = BG_THEMES.find((t) => t.id === settings.bgTheme) ?? BG_THEMES[0];
+
   return (
     <div className="reader-page">
       <header className={`reader-toolbar${menuVisible ? "" : " reader-toolbar-hidden"}`}>
@@ -278,6 +301,14 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
                   }}
                 >登录</button>
               )}
+              <button
+                className={`btn-icon${panel === "settings" ? " active" : ""}`}
+                onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
+                aria-label="阅读设置"
+                title="阅读设置"
+              >
+                <SettingsIcon size={17} />
+              </button>
             </>
           )}
         </div>
@@ -285,6 +316,8 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
       <div className="reader-body">
         <main
           className="reader-main"
+          data-bg-theme={isLocal ? undefined : settings.bgTheme}
+          style={!isLocal ? { background: activeTheme.bg } : undefined}
           onClick={isLocal || isManga || !chapter.url || loading || failed ? () => setMenuVisible((v) => !v) : undefined}
         >
           {isLocal ? (
@@ -318,7 +351,9 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
                 ) : chapter.url ? (
                   <PaginatedReader
                     html={`<p>${content.replace(/\n/g, "</p><p>")}</p>`}
-                    mode="scroll"
+                    mode={settings.pageMode}
+                    fontSizePx={settings.fontSizePx}
+                    lineHeight={settings.lineHeight}
                     onMenuToggle={() => setMenuVisible((v) => !v)}
                   />
                 ) : (
@@ -333,6 +368,48 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         )}
         {isLocal && panel === "bookmarks" && (
           <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
+        )}
+        {!isLocal && panel === "settings" && (
+          <div className="panel reader-settings-panel">
+            <h3>阅读设置</h3>
+            <div className="settings-group">
+              <label className="settings-label">翻页模式</label>
+              <div className="segmented" role="group" aria-label="翻页模式">
+                {(["scroll", "cover", "slide"] as const).map((m) => (
+                  <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
+                    onClick={() => updateSetting({ pageMode: m })}>
+                    {{ scroll: "滚动", cover: "覆盖", slide: "滑动" }[m]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">字号 {settings.fontSizePx}px</label>
+              <div className="range-row">
+                <input type="range" min={14} max={24} value={settings.fontSizePx} aria-label="字号"
+                  onChange={(e) => updateSetting({ fontSizePx: Number(e.target.value) })} />
+                <span className="range-value">{settings.fontSizePx}</span>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">行距 {settings.lineHeight.toFixed(1)}</label>
+              <div className="range-row">
+                <input type="range" min={1.4} max={2.4} step={0.1} value={settings.lineHeight} aria-label="行距"
+                  onChange={(e) => updateSetting({ lineHeight: Number(e.target.value) })} />
+                <span className="range-value">{settings.lineHeight.toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">背景</label>
+              <div className="bg-theme-options">
+                {BG_THEMES.map((t) => (
+                  <button key={t.id} type="button" className={`bg-theme-swatch${settings.bgTheme === t.id ? " active" : ""}`}
+                    style={{ background: t.bg }} aria-label={t.name} title={t.name}
+                    onClick={() => updateSetting({ bgTheme: t.id })} />
+                ))}
+              </div>
+            </div>
+          </div>
         )}
       </div>
       {!isLocal && (
