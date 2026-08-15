@@ -1,7 +1,7 @@
 import { md5 } from "./md5";
 import { SymmetricCrypto } from "./aes";
 import { getSourceVars } from "./sourceVars";
-import { getJsLib } from "./jsLib";
+import { getJsLib, loadJsLib } from "./jsLib";
 import { httpGet, mergeUserAgent } from "./api";
 
 export type EngineResult = string;
@@ -67,11 +67,15 @@ export function purifyContent(html: string, replaceRules?: string[]): string {
   return out;
 }
 
-export function parseBookSourceJson(raw: string): BookSource {  const obj = JSON.parse(raw);
+export function parseBookSourceJson(raw: string): BookSource {
+  const obj = JSON.parse(raw);
   if (!obj.bookSourceUrl || !obj.bookSourceName) {
     throw new Error("书源缺少 bookSourceUrl 或 bookSourceName");
   }
-  return obj as BookSource;
+  const src = obj as BookSource;
+  // 注册源自带 jsLib（legado 源常内嵌 jsLib 供 @js: 规则调用，如加密函数）
+  if (src.jsLib) loadJsLib(src.bookSourceUrl, src.jsLib);
+  return src;
 }
 
 export function parseHtml(html: string): Document {
@@ -779,8 +783,8 @@ export interface JsContext {
 export function evalJs(expr: string, ctx: JsContext): any {
   const vars = getSourceVars(ctx.sourceKey ?? "default");
   const java = {
-    encodeURI: (s: string) => encodeURIComponent(String(s)),
-    decodeURI: (s: string) => decodeURIComponent(String(s)),
+    encodeURI: (s: string, _charset?: string) => encodeURIComponent(String(s)),
+    decodeURI: (s: string, _charset?: string) => decodeURIComponent(String(s)),
     base64Decode: (b64: string) =>
       new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
     base64Encode: (s: string) => {
@@ -822,6 +826,10 @@ export function evalJs(expr: string, ctx: JsContext): any {
       return new TextDecoder("utf-8").decode(Uint8Array.from(arr));
     },
     getByteLength: (s: string) => new TextEncoder().encode(String(s ?? "")).length,
+    // 同步上下文无法真实发请求：返回空响应对象，避免源抛错（URL 生成可继续）
+    post: (_url: string, _body: string, _opts?: any) => ({ header: () => "", status: 200, body: "" }),
+    longToast: () => "",
+    shortToast: () => "",
     guid: () => {
       const c = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
       return `${c()}${c()}-${c()}-${c()}-${c()}-${c()}${c()}${c()}`;
@@ -859,13 +867,21 @@ export function evalJs(expr: string, ctx: JsContext): any {
   // 读取 jsLib 代码并前缀注入（非严格模式：jsLib 内定义的函数调用时 this 指向全局，
   // 通过临时挂载 globalThis.source 让书源里 this.source 约定可用）
   const jsLibCode = ctx.sourceKey ? getJsLib(ctx.sourceKey) : "";
-  if (jsLibCode) {
-    body = `${jsLibCode}\n${body}`;
+  const srcLib = (ctx.source as any)?.jsLib as string | undefined;
+  const lib = jsLibCode || (srcLib && !/^https?:\/\//i.test(srcLib.trim()) ? srcLib.trim() : "");
+  if (lib) {
+    body = `${lib}\n${body}`;
   }
   try {
+    // cookie 全局（legado 书源常用 cookie.removeCookie/getCookie/setCookie）
+    const cookie = {
+      removeCookie: (_name: string) => "",
+      getCookie: (_name: string) => "",
+      setCookie: (_name: string, _value: string) => "",
+    };
     // new Function 构造时即解析语法：须在 try 内，否则书源 @js: 表达式的语法错误会冒泡导致整条规则失败
     const fn = new Function(
-      "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
+      "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie",
       body,
     );
     const g = globalThis as Record<string, unknown>;
@@ -880,7 +896,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
         ctx.node ? jsoupNode(ctx.node) : null,
         jsoupDoc(ctx.doc),
         ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
-        source, java, ctx.baseUrl ?? "", TYPE,
+        source, java, ctx.baseUrl ?? "", TYPE, cookie,
       );
     } finally {
       (g as Record<string, unknown>).source = prevThisSource;
