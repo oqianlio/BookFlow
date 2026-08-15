@@ -621,11 +621,12 @@ export function evalJs(expr: string, ctx: JsContext): any {
   if (jsLibCode) {
     body = `${jsLibCode}\n${body}`;
   }
-  const fn = new Function(
-    "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
-    body,
-  );
   try {
+    // new Function 构造时即解析语法：须在 try 内，否则书源 @js: 表达式的语法错误会冒泡导致整条规则失败
+    const fn = new Function(
+      "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE",
+      body,
+    );
     const g = globalThis as Record<string, unknown>;
     const prevSource = g.__ydSource;
     g.__ydSource = source;

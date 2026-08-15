@@ -241,6 +241,14 @@ describe("evalJs extended", () => {
     expect(r).toBeFalsy();
   });
 
+  it("swallows syntax errors in @js: expressions (new Function construction)", () => {
+    // 书源 @js: 表达式语法错误（如多余花括号）不得冒泡导致整条规则失败
+    const r = evalJs("var x = {; }", { doc });
+    expect(r).toBeFalsy();
+    const r2 = evalJs("function f( { return 1; }", { doc });
+    expect(r2).toBeFalsy();
+  });
+
   it("runs multi-statement scripts returning last expression", () => {
     const r = evalJs("var base='http://x.com'; base + '/api?key=' + java.encodeURI(key)", { doc, key: "斗破" });
     expect(r).toBe("http://x.com/api?key=" + encodeURIComponent("斗破"));
