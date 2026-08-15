@@ -5,6 +5,7 @@ import {
   saveReadingSettings,
   BG_THEMES,
   DEFAULT_READING_SETTINGS,
+  resolveFontCss,
 } from "./readingSettings";
 
 vi.mock("./api", () => ({
@@ -56,5 +57,60 @@ describe("readingSettings", () => {
 
   it("exposes four preset background themes", () => {
     expect(BG_THEMES.map((t) => t.id)).toEqual(["paper", "beige", "green", "night"]);
+  });
+
+  it("includes typography defaults", async () => {
+    vi.mocked(api.getSetting).mockResolvedValue(null);
+    const s = await loadReadingSettings();
+    expect(s.letterSpacingPx).toBe(0);
+    expect(s.paragraphSpacingPx).toBe(11);
+    expect(s.indentEm).toBe(0);
+    expect(s.bold).toBe(false);
+    expect(s.fontFamily).toBe("serif");
+  });
+
+  it("loads and sanitizes typography values", async () => {
+    vi.mocked(api.getSetting).mockImplementation(async (k) => {
+      if (k === "reading.letterSpacingPx") return "1.5";
+      if (k === "reading.paragraphSpacingPx") return "16";
+      if (k === "reading.indentEm") return "1";
+      if (k === "reading.bold") return "1";
+      if (k === "reading.fontFamily") return "sans";
+      return null;
+    });
+    const s = await loadReadingSettings();
+    expect(s.letterSpacingPx).toBe(1.5);
+    expect(s.paragraphSpacingPx).toBe(16);
+    expect(s.indentEm).toBe(1);
+    expect(s.bold).toBe(true);
+    expect(s.fontFamily).toBe("sans");
+  });
+
+  it("falls back to defaults for invalid typography values", async () => {
+    vi.mocked(api.getSetting).mockImplementation(async (k) => {
+      if (k === "reading.letterSpacingPx") return "99";
+      if (k === "reading.paragraphSpacingPx") return "-5";
+      if (k === "reading.indentEm") return "9";
+      return null;
+    });
+    const s = await loadReadingSettings();
+    expect(s.letterSpacingPx).toBe(0);
+    expect(s.paragraphSpacingPx).toBe(11);
+    expect(s.indentEm).toBe(0);
+  });
+
+  it("saveReadingSettings persists typography keys", async () => {
+    await saveReadingSettings({ ...DEFAULT_READING_SETTINGS, letterSpacingPx: 2, paragraphSpacingPx: 14, indentEm: 1.5, bold: true, fontFamily: "kai" });
+    expect(api.setSetting).toHaveBeenCalledWith("reading.letterSpacingPx", "2");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.paragraphSpacingPx", "14");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.indentEm", "1.5");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.bold", "1");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.fontFamily", "kai");
+  });
+
+  it("resolveFontCss maps presets and passes through custom names", () => {
+    expect(resolveFontCss("serif")).toContain("Georgia");
+    expect(resolveFontCss("custom-font")).toBe("custom-font");
+    expect(resolveFontCss("")).toContain("Georgia");
   });
 });
