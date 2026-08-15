@@ -67,6 +67,18 @@ describe("SwitchSourcePanel", () => {
     expect(screen.getAllByText("三体", { selector: ".hit-title" }).length).toBe(2);
   });
 
+  it("prefers the exact-title match per source regardless of result order", async () => {
+    // 精确匹配「三体」排在「三体（全集）」之后，仍应被选中
+    vi.mocked(searchService.searchBookSources).mockResolvedValue([
+      { title: "三体（全集）", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/2.html", sourceId: 2, sourceName: "源B" },
+      { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/1.html", sourceId: 2, sourceName: "源B" },
+    ]);
+    const onPick = vi.fn();
+    render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={onPick} onClose={() => {}} />);
+    fireEvent.click(await screen.findByText("源B"));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ title: "三体", bookUrl: "https://b.com/1.html" }));
+  });
+
   it("shows empty state when no candidates found", async () => {
     vi.mocked(searchService.searchBookSources).mockResolvedValue([]);
     render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={() => {}} onClose={() => {}} />);

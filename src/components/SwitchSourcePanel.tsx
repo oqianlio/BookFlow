@@ -32,15 +32,22 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
 
   useEffect(() => { void run(); }, [excludeSourceId, title, author]);
 
-  // 同一书源只保留一个候选（源搜索可能返回同名多个版本），避免列表出现同源多行
+  // 同一书源只保留一个候选：按书名匹配度评分（3=完全一致 > 2=互相包含 > 1=其他），每个源取最高分，同分保留先出现
   const candidates = useMemo(() => {
-    const seen = new Set<number>();
-    return hits.filter((h) => {
-      if (seen.has(h.sourceId)) return false;
-      seen.add(h.sourceId);
-      return true;
-    });
-  }, [hits]);
+    const a = title.trim();
+    const score = (h: SearchHit) => {
+      const b = h.title.trim();
+      if (b === a) return 3;
+      if (b.includes(a) || a.includes(b)) return 2;
+      return 1;
+    };
+    const best = new Map<number, SearchHit>();
+    for (const h of hits) {
+      const cur = best.get(h.sourceId);
+      if (!cur || score(h) > score(cur)) best.set(h.sourceId, h);
+    }
+    return [...best.values()];
+  }, [hits, title]);
 
   return (
     <div className="panel switch-source-panel">
