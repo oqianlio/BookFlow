@@ -87,4 +87,14 @@ describe("PaginatedReader", () => {
     rerender(<PaginatedReader html={CONTENT} mode="scroll" lineHeight={2.4} measure={mockMeasure} onPageChange={onPageChange} />);
     expect(container.querySelector(".reader-page-slice")!.getAttribute("style")).toContain("2.4");
   });
+
+  it("applies typography styles to the slice container", () => {
+    const typography = { letterSpacingPx: 1.5, paragraphSpacingPx: 16, indentEm: 1, bold: true, fontFamily: "serif" };
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" typography={typography} measure={mockMeasure} />);
+    const slice = container.querySelector(".reader-page-slice") as HTMLElement;
+    expect(slice.style.letterSpacing).toBe("1.5px");
+    expect(slice.style.textIndent).toBe("1em");
+    expect(slice.style.fontWeight).toBe("700");
+    expect(slice.style.fontFamily).toBe("serif");
+  });
 });

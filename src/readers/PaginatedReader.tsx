@@ -2,10 +2,21 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 
 export type PageMode = "scroll" | "cover" | "slide";
 
+export interface TypographyStyle {
+  letterSpacingPx: number;
+  paragraphSpacingPx: number;
+  indentEm: number;
+  bold: boolean;
+  fontFamily: string;
+}
+
+const DEFAULT_TYPO: TypographyStyle = { letterSpacingPx: 0, paragraphSpacingPx: 11, indentEm: 0, bold: false, fontFamily: "serif" };
+
 export default function PaginatedReader({
-  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, onPageChange, measure, onMenuToggle,
+  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle,
 }: {
   html: string; mode?: PageMode; fontSizePx?: number; lineHeight?: number;
+  typography?: TypographyStyle;
   onPageChange?: (cur: number, total: number) => void;
   measure?: (h: string) => number;
   onMenuToggle?: () => void;
@@ -13,6 +24,7 @@ export default function PaginatedReader({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<string[]>([]);
   const [page, setPage] = useState(0);
+  const ty = { ...DEFAULT_TYPO, ...typography };
 
   // 真实测量：隐藏容器
   const measureRef = useRef(measure);
@@ -22,13 +34,13 @@ export default function PaginatedReader({
     const wrap = wrapRef.current;
     if (!wrap) return 0;
     const el = document.createElement("div");
-    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;line-height:${lineHeight};white-space:normal;`;
-    el.innerHTML = h;
+    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;line-height:${lineHeight};letter-spacing:${ty.letterSpacingPx}px;text-indent:${ty.indentEm}em;font-weight:${ty.bold ? 700 : 400};font-family:${ty.fontFamily};white-space:normal;`;
+    el.innerHTML = `<style>.m-p p{margin:0 0 ${ty.paragraphSpacingPx}px}</style><div class="m-p">${h}</div>`;
     wrap.appendChild(el);
     const height = el.getBoundingClientRect().height;
     wrap.removeChild(el);
     return height;
-  }, [fontSizePx, lineHeight]);
+  }, [fontSizePx, lineHeight, ty.letterSpacingPx, ty.paragraphSpacingPx, ty.indentEm, ty.bold, ty.fontFamily]);
 
   useEffect(() => {
     const h = wrapRef.current?.clientHeight || 500;
@@ -63,7 +75,15 @@ export default function PaginatedReader({
         <div
           key={i}
           className={`reader-page-slice${i === page ? " active" : ""}${mode === "slide" ? " slide" : ""}`}
-          style={{ display: i === page ? "block" : "none", lineHeight }}
+          style={{
+            display: i === page ? "block" : "none",
+            lineHeight,
+            letterSpacing: `${ty.letterSpacingPx}px`,
+            textIndent: `${ty.indentEm}em`,
+            fontWeight: ty.bold ? 700 : 400,
+            fontFamily: ty.fontFamily,
+            ["--para-gap" as any]: `${ty.paragraphSpacingPx}px`,
+          }}
           dangerouslySetInnerHTML={{ __html: p }}
         />
       ))}
