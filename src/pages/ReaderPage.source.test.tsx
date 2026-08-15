@@ -19,6 +19,9 @@ vi.mock("../services/api", () => ({
   openLoginWindow: vi.fn().mockResolvedValue(undefined),
   getSetting: vi.fn().mockResolvedValue(null),
   setSetting: vi.fn().mockResolvedValue(undefined),
+  listShelfSourceBooks: vi.fn().mockResolvedValue([]),
+  addShelfSourceBook: vi.fn().mockResolvedValue(1),
+  removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -377,5 +380,38 @@ describe("ReaderPage (source) toc panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "重试" }));
     expect(await screen.findByText("第一章")).toBeInTheDocument();
     expect(screen.getByText("第二章")).toBeInTheDocument();
+  });
+});
+
+describe("ReaderPage (source) shelf toggle", () => {
+  it("adds the book to the shelf from the reader toolbar", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    const addBtn = screen.getByRole("button", { name: "加入书架" });
+    await userEvent.click(addBtn);
+    expect(api.addShelfSourceBook).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 1, bookUrl: "https://ex.com/book/1.html", title: "三体",
+    }));
+    expect(await screen.findByRole("button", { name: "已在书架" })).toBeInTheDocument();
+  });
+
+  it("shows 已在书架 when already on the shelf and removes on click", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    vi.mocked(api.listShelfSourceBooks).mockResolvedValue([
+      { id: 7, source_id: 1, source_name: "示例", book_url: "https://ex.com/book/1.html", title: "三体", author: null, cover_url: null, added_at: 1, last_opened_at: null },
+    ]);
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    const btn = screen.getByRole("button", { name: "已在书架" });
+    await userEvent.click(btn);
+    expect(api.removeShelfSourceBook).toHaveBeenCalledWith(7);
+    expect(await screen.findByRole("button", { name: "加入书架" })).toBeInTheDocument();
   });
 });

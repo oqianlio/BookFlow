@@ -9,7 +9,7 @@ import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon } from "../components/icons";
-import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow } from "../services/api";
+import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { fetchToc, type TocItem } from "../services/sourceToc";
@@ -102,6 +102,38 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
     setChapter({ index: idx, url, name });
     setPanel(null);
   }, []);
+
+  // ==== 书源：加入书架 ====
+  const [onShelf, setOnShelf] = useState(false);
+  const [shelfBusy, setShelfBusy] = useState(false);
+  useEffect(() => {
+    if (isLocal) return;
+    let cancelled = false;
+    void listShelfSourceBooks().then((l) => {
+      if (!cancelled) setOnShelf(l.some((s) => s.source_id === sourceId && s.book_url === bookUrl));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isLocal, sourceId, bookUrl]);
+
+  const toggleShelf = async () => {
+    if (shelfBusy) return;
+    setShelfBusy(true);
+    try {
+      if (onShelf) {
+        const l = await listShelfSourceBooks();
+        const hit = l.find((s) => s.source_id === sourceId && s.book_url === bookUrl);
+        if (hit) await removeShelfSourceBook(hit.id);
+        setOnShelf(false);
+      } else {
+        await addShelfSourceBook({ sourceId, bookUrl, title: bookTitle, author: "", coverUrl: "" });
+        setOnShelf(true);
+      }
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setShelfBusy(false);
+    }
+  };
 
   // ==== 本地书：移除损坏书籍 ====
   const handleRemoveBroken = async () => {
@@ -335,6 +367,9 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
                   }}
                 >登录</button>
               )}
+              <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
+                {onShelf ? "已在书架" : "加入书架"}
+              </button>
               <button
                 className={`btn-icon${panel === "toc" ? " active" : ""}`}
                 onClick={() => setPanel((p) => (p === "toc" ? null : "toc"))}

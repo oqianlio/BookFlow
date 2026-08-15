@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { openLoginWindow } from "../services/api";
+import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import { useError } from "../components/ErrorDialog";
 
@@ -10,6 +10,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
+  const [onShelf, setOnShelf] = useState(false);
+  const [shelfBusy, setShelfBusy] = useState(false);
   const { showError } = useError();
 
   useEffect(() => {
@@ -28,6 +30,34 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     })();
     return () => { cancelled = true; };
   }, [sourceId, bookUrl, initialTitle]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listShelfSourceBooks().then((l) => {
+      if (!cancelled) setOnShelf(l.some((s) => s.source_id === sourceId && s.book_url === bookUrl));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sourceId, bookUrl]);
+
+  const toggleShelf = async () => {
+    if (shelfBusy) return;
+    setShelfBusy(true);
+    try {
+      if (onShelf) {
+        const l = await listShelfSourceBooks();
+        const hit = l.find((s) => s.source_id === sourceId && s.book_url === bookUrl);
+        if (hit) await removeShelfSourceBook(hit.id);
+        setOnShelf(false);
+      } else {
+        await addShelfSourceBook({ sourceId, bookUrl, title: info.title, author: info.author, coverUrl: info.coverUrl });
+        setOnShelf(true);
+      }
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setShelfBusy(false);
+    }
+  };
 
   const handleLogin = () => {
     if (!loginUrl) return;
@@ -60,7 +90,12 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           <h2 className="source-book-title">{info.title || sourceName}</h2>
           {info.author && <span className="hit-author">{info.author}</span>}
           {info.intro && <p className="source-intro">{info.intro}</p>}
-          <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+          <div className="source-book-actions">
+            <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+            <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
+              {onShelf ? "已在书架" : "加入书架"}
+            </button>
+          </div>
         </div>
       </div>
       <div className="source-toc">

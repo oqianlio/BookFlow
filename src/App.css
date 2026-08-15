@@ -1015,6 +1015,7 @@ input[type="range"] {
 .source-book-meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .source-book-title { margin: 0; font-size: 20px; font-weight: 700; color: var(--on-surface); }
 .source-intro { font-size: 13px; line-height: 1.7; color: var(--on-surface-variant); }
+.source-book-actions { display: flex; gap: 8px; margin-top: 4px; }
 .source-toc { max-width: 720px; margin: 0 auto; }
 .source-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .source-toc li { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }

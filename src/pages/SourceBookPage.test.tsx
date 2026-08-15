@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SourceBookPage from "./SourceBookPage";
 import * as api from "../services/api";
 import { clearTocCache } from "../services/sourceToc";
@@ -9,6 +9,9 @@ vi.mock("../services/api", () => ({
   getBookSourceProgress: vi.fn().mockResolvedValue(null),
   listBookSources: vi.fn(),
   openLoginWindow: vi.fn().mockResolvedValue(undefined),
+  listShelfSourceBooks: vi.fn().mockResolvedValue([]),
+  addShelfSourceBook: vi.fn().mockResolvedValue(1),
+  removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -126,5 +129,38 @@ describe("SourceBookPage", () => {
     const img = document.querySelector("img.source-book-cover") as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img!.getAttribute("src")).toBe("https://ex.com/files/c.jpg");
+  });
+
+  it("adds the book to the shelf and toggles back", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    const addBtn = await screen.findByRole("button", { name: "加入书架" });
+    fireEvent.click(addBtn);
+    expect(api.addShelfSourceBook).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 1, bookUrl: "https://ex.com/book/1.html", title: "三体",
+    }));
+    expect(await screen.findByRole("button", { name: "已在书架" })).toBeInTheDocument();
+  });
+
+  it("shows 已在书架 when the book is already on the shelf", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.listShelfSourceBooks).mockResolvedValue([
+      { id: 9, source_id: 1, source_name: "示例", book_url: "https://ex.com/book/1.html", title: "三体", author: null, cover_url: null, added_at: 1, last_opened_at: null },
+    ]);
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    const btn = await screen.findByRole("button", { name: "已在书架" });
+    fireEvent.click(btn);
+    await waitFor(() => expect(api.removeShelfSourceBook).toHaveBeenCalledWith(9));
+    expect(await screen.findByRole("button", { name: "加入书架" })).toBeInTheDocument();
   });
 });
