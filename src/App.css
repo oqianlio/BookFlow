@@ -1016,6 +1016,42 @@ input[type="range"] {
 .source-book-title { margin: 0; font-size: 20px; font-weight: 700; color: var(--on-surface); }
 .source-intro { font-size: 13px; line-height: 1.7; color: var(--on-surface-variant); }
 .source-book-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* ============ 换源面板 ============ */
+.switch-source-panel {
+  position: fixed;
+  top: 64px; right: 24px;
+  width: 340px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 16px;
+  z-index: 30;
+}
+.switch-source-panel h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.switch-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.switch-source-list .hit-card {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+}
+.panel-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
 .source-toc { max-width: 720px; margin: 0 auto; }
 .source-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .source-toc li { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
