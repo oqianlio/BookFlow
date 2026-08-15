@@ -7,14 +7,26 @@ import { useError } from "./ErrorDialog";
 
 export function groupSources(sources: BookSource[]): Array<{ group: string; items: BookSource[] }> {
   const map = new Map<string, BookSource[]>();
-  for (const s of sources) {
-    let g = "未分组";
-    try {
-      const parsed = JSON.parse(s.json);
-      g = parsed?.bookSourceGroup || "未分组";
-    } catch { /* 归未分组 */ }
+  const addToGroup = (g: string, s: BookSource) => {
     if (!map.has(g)) map.set(g, []);
     map.get(g)!.push(s);
+  };
+  for (const s of sources) {
+    let groups: string[] = [];
+    try {
+      const parsed = JSON.parse(s.json);
+      // legado 原版支持多分组：bookSourceGroup 用英文逗号分隔，书源同时出现在多个分组
+      const raw = String(parsed?.bookSourceGroup ?? "").trim();
+      groups = raw
+        .split(",")
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0);
+    } catch { /* 解析失败归未分组 */ }
+    if (groups.length === 0) {
+      addToGroup("未分组", s);
+    } else {
+      for (const g of groups) addToGroup(g, s);
+    }
   }
   return [...map.entries()].map(([group, items]) => ({ group, items }));
 }

@@ -235,6 +235,32 @@ describe("BookSourceManager", () => {
     expect(screen.getByText("番茄")).toBeInTheDocument();
   });
 
+  it("splits comma-separated multi groups like legado", async () => {
+    const multi = [
+      { id: 1, name: "多组书源", url: "https://a.com", json: JSON.stringify({ bookSourceGroup: "小说, 玄幻" }), enabled: true, last_used_at: null },
+      { id: 2, name: "单组书源", url: "https://b.com", json: JSON.stringify({ bookSourceGroup: "小说" }), enabled: true, last_used_at: null },
+    ];
+    vi.mocked(api.listBookSources).mockResolvedValue(multi as any);
+    render(<BookSourceManager />);
+    // 两个分组头都出现
+    expect(await screen.findByText("小说")).toBeInTheDocument();
+    expect(screen.getByText("玄幻")).toBeInTheDocument();
+    // 多组书源同时出现在两个分组（渲染两次）
+    expect(screen.getAllByText("多组书源").length).toBe(2);
+    expect(screen.getByText("单组书源")).toBeInTheDocument();
+  });
+
+  it("treats empty or missing group as 未分组", async () => {
+    const emptyGroup = [
+      { id: 1, name: "无组A", url: "https://a.com", json: JSON.stringify({ bookSourceGroup: "" }), enabled: true, last_used_at: null },
+      { id: 2, name: "无组B", url: "https://b.com", json: "{}", enabled: true, last_used_at: null },
+    ];
+    vi.mocked(api.listBookSources).mockResolvedValue(emptyGroup as any);
+    render(<BookSourceManager />);
+    expect(await screen.findByText("未分组")).toBeInTheDocument();
+    expect(screen.getAllByText(/无组/).length).toBe(2);
+  });
+
   it("filters sources by name or url via search box", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue(groupedSources as any);
     render(<BookSourceManager />);
