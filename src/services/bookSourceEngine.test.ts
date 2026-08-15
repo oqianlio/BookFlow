@@ -839,6 +839,13 @@ describe("legado jsoup-style node API in @js:", () => {
     expect(evalJs("java.md5Encode16('abc')", { doc: emptyDoc() })).toBe(md5("abc").slice(8, 24));
   });
 
+  it("java byte-level helpers roundtrip", () => {
+    // base64 → 字节数组 → 字符串
+    expect(evalJs("java.byteArrayToString(java.base64DecodeToByteArray('5L2g5aW9'))", { doc: emptyDoc() })).toBe("你好");
+    expect(evalJs("java.byteArrayToString(java.stringToByteArray('你好'))", { doc: emptyDoc() })).toBe("你好");
+    expect(evalJs("java.getByteLength('你好')", { doc: emptyDoc() })).toBe(6);
+  });
+
   it("extractList item rule @js: uses the current node", async () => {
     const items = await extractList(doc, ".item", {
       name: "@js:node.select('a').first().text()",

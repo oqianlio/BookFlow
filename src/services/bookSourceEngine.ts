@@ -738,6 +738,14 @@ export function evalJs(expr: string, ctx: JsContext): any {
     },
     base64ToString: (b64: string) =>
       new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
+    base64DecodeToByteArray: (b64: string) =>
+      Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0)),
+    stringToByteArray: (s: string) => new TextEncoder().encode(String(s ?? "")),
+    byteArrayToString: (b: any) => {
+      const arr = Array.from((b ?? []) as ArrayLike<number>);
+      return new TextDecoder("utf-8").decode(Uint8Array.from(arr));
+    },
+    getByteLength: (s: string) => new TextEncoder().encode(String(s ?? "")).length,
     guid: () => {
       const c = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
       return `${c()}${c()}-${c()}-${c()}-${c()}-${c()}${c()}${c()}`;
