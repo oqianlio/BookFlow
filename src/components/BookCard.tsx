@@ -38,7 +38,8 @@ function BookCard({ item, onOpen, onRemove }: {
   item: ShelfItem; onOpen: (item: ShelfItem) => void; onRemove?: (item: ShelfItem) => void;
 }) {
   const title = item.kind === "local" ? item.book.title : item.sb.title;
-  const subLabel = item.kind === "local" ? formatLabel(item.book.format) : item.sb.source_name;
+  // 副行左侧：本地书显示格式标签，在线书统一显示「在线」（不暴露具体书源）
+  const subLabel = item.kind === "local" ? formatLabel(item.book.format) : "在线";
 
   // 回调用 ref 持有最新引用：memo 只按 item 比较，回调变化不触发重绘但始终使用最新值
   const onOpenRef = useRef(onOpen);

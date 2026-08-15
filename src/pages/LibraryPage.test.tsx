@@ -76,7 +76,9 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText("球状闪电")).toBeInTheDocument();
-    expect(screen.getByText("示例")).toBeInTheDocument();
+    // 在线书卡片显示「在线」而非具体书源名（副行标签 + 无封面占位均可能）
+    expect(screen.getAllByText("在线").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("示例")).not.toBeInTheDocument();
   });
 
   it("opens a source book via onOpenSourceBook", async () => {
