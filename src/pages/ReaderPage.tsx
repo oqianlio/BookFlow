@@ -719,7 +719,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         )}
       </div>
       {!isLocal && (
-        <footer className="reader-bottom-bar">
+        <footer className={`reader-bottom-bar${menuVisible ? "" : " reader-bottom-bar-hidden"}`}>
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || (prevUrlsRef.current.length === 0 && !toc[chapter.index - 1])}>上一章</button>
           <span className="reader-progress">第 {chapter.index + 1} 章</span>
           <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || failed || (!nextUrlRef.current && !toc[chapter.index + 1])}>下一章</button>
