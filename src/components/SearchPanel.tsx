@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface SearchHit {
@@ -9,14 +9,21 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
+  const seqRef = useRef(0);
 
   const run = async () => {
     if (!query.trim()) return;
+    const seq = ++seqRef.current;
     setBusy(true);
     try {
-      setResults(await invoke<SearchHit[]>("search_books", { query }));
+      const r = await invoke<SearchHit[]>("search_books", { query });
+      if (seq !== seqRef.current) return; // 丢弃过期搜索响应
+      setResults(r);
+    } catch {
+      if (seq !== seqRef.current) return;
+      setResults([]);
     } finally {
-      setBusy(false);
+      if (seq === seqRef.current) setBusy(false);
     }
   };
 

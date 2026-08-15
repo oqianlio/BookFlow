@@ -11,7 +11,7 @@ async function searchSource(key: string, bs: ApiBookSource): Promise<SearchHit[]
   const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl });
   if (!parsed.url) return [];
   const cookieJarHost = hostOf(src.bookSourceUrl);
-  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body, undefined, cookieJarHost);
+  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 10000, parsed.method, parsed.body, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
   const items = await extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });

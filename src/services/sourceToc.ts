@@ -9,7 +9,9 @@ export interface TocResult {
   loginUrl?: string;
 }
 
-const cache = new Map<string, Promise<TocResult>>();
+// 目录缓存：TTL 内复用（连载书目录会更新，长期不失效会看不到新章节）
+const cache = new Map<string, { at: number; p: Promise<TocResult> }>();
+const TTL_MS = 10 * 60 * 1000; // 10 分钟
 
 export function clearTocCache(): void {
   cache.clear();
@@ -22,9 +24,9 @@ export async function fetchToc(opts: {
 }): Promise<TocResult> {
   const key = `${opts.sourceId}:${opts.bookUrl}`;
   const hit = cache.get(key);
-  if (hit) return hit;
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.p;
   const p = doFetch(opts);
-  cache.set(key, p);
+  cache.set(key, { at: Date.now(), p });
   try {
     return await p;
   } catch (e) {

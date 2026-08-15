@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 
 interface ErrorContextValue {
   showError: (msg: string) => void;
@@ -20,15 +20,16 @@ export function ErrorProvider({ children }: { children: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
 
-  const showError = (msg: string) => {
+  // useCallback 稳定引用：避免依赖 [showError] 的页面 effect 因 Provider 重渲染而连锁重跑
+  const showError = useCallback((msg: string) => {
     setMessage(String(msg));
     setSeq((n) => n + 1);
     setCopied(false);
-  };
-  const clearError = () => {
+  }, []);
+  const clearError = useCallback(() => {
     setMessage(null);
     setCopied(false);
-  };
+  }, []);
 
   const copy = async () => {
     if (!message) return;
