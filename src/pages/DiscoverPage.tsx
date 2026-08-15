@@ -29,6 +29,45 @@ export function groupExploreSources(sources: Array<{ id: number; name: string; j
     .sort((a, b) => b.sources.length - a.sources.length);
 }
 
+export interface ChannelCard {
+  group: string;
+  count: number;
+  representative: string;
+  icon: string;
+}
+
+function emojiOf(name: string): string {
+  const m = name.match(/\p{Extended_Pictographic}/u);
+  if (m) return m[0];
+  return name.trim().charAt(0) || "📚";
+}
+
+export function toChannelCards(groups: ExploreGroup[]): ChannelCard[] {
+  return groups.map((g) => ({
+    group: g.group,
+    count: g.sources.length,
+    representative: g.sources[0]?.name ?? "",
+    icon: emojiOf(g.group),
+  }));
+}
+
+export interface GroupedHit {
+  title: string;
+  author: string;
+  sources: SearchHit[];
+}
+
+export function groupSearchHits(hits: SearchHit[]): GroupedHit[] {
+  const map = new Map<string, GroupedHit>();
+  for (const h of hits) {
+    const key = `${h.title.trim()}|${(h.author ?? "").trim()}`;
+    const existing = map.get(key);
+    if (existing) existing.sources.push(h);
+    else map.set(key, { title: h.title, author: h.author, sources: [h] });
+  }
+  return [...map.values()];
+}
+
 export default function DiscoverPage({ onOpenBook, onOpenExplore, onOpenGroupExplore }: {
   onOpenBook: (h: SearchHit) => void;
   onOpenExplore?: (sourceId: number, sourceName: string) => void;
@@ -76,38 +115,59 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore, onOpenGroupExp
     }
   };
 
+  const grouped = groupSearchHits(hits);
+
   return (
     <div className="discover page">
       <header className="library-header"><h1>发现</h1></header>
       <div className="discover-search">
-        <input aria-label="搜索关键词" placeholder="输入书名搜索所有已启用书源" value={query}
+        <input aria-label="搜索关键词" placeholder="输入书名，跨书源搜索" value={query}
           onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />
         <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
       </div>
       {groups.length > 0 && onOpenExplore && (
-        <div className="explore-groups">
-          <h2 className="home-section">书源频道</h2>
-          <div className="explore-channels">
-            {groups.map((g) => (
-              <button key={g.group} className="group-channel" onClick={() => onOpenGroupExplore?.(g.group, g.sources)}>
-                <span className="group-name">{g.group}</span>
-                <span className="count">{g.sources.length}</span>
+        <section className="discover-channels">
+          <div className="section-head">
+            <h2 className="home-section">书源频道</h2>
+            <span className="section-sub">{exploreSources.length} 个书源可浏览</span>
+          </div>
+          <div className="channel-grid">
+            {toChannelCards(groups).map((c) => (
+              <button key={c.group} className="channel-card" onClick={() => {
+                const g = groups.find((x) => x.group === c.group);
+                if (g) onOpenGroupExplore?.(g.group, g.sources);
+              }}>
+                <span className="channel-icon">{c.icon}</span>
+                <div className="channel-body">
+                  <span className="channel-name">{c.group}</span>
+                  <span className="channel-sub">{c.count} 个书源{c.representative ? ` · ${c.representative}` : ""}</span>
+                </div>
               </button>
             ))}
           </div>
-        </div>
+        </section>
       )}
       <div className="discover-results">
-        {hits.length === 0 && !busy ? (
-          <p className="panel-empty">输入关键词开始搜索</p>
+        {busy ? (
+          <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>搜索中…</span></span></p>
+        ) : query.trim() && grouped.length === 0 ? (
+          <p className="panel-empty">未找到相关书籍，试试其他关键词</p>
+        ) : !query.trim() && grouped.length === 0 ? (
+          <p className="panel-empty">输入书名，跨书源搜索</p>
         ) : (
-          hits.map((h, i) => (
-            <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onOpenBook(h)}>
-              <div className="hit-info">
-                <span className="hit-title">{h.title}</span>
-                <span className="hit-author">{h.author}</span>
+          grouped.map((g, i) => (
+            <div className="hit-card result-card" key={i}>
+              <div className="hit-info" onClick={() => onOpenBook(g.sources[0])}>
+                <span className="hit-title">{g.title}</span>
+                <span className="hit-author">
+                  {g.author || (g.sources.length > 1 ? `来自 ${g.sources.length} 个书源` : g.sources[0]?.sourceName)}
+                </span>
               </div>
-              <span className="hit-source">{h.sourceName}</span>
+              <div className="result-sources">
+                {g.sources.map((s) => (
+                  <button key={`${s.sourceId}-${s.bookUrl}`} className="result-source" onClick={() => onOpenBook(s)}>{s.sourceName}</button>
+                ))}
+              </div>
             </div>
           ))
         )}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import DiscoverPage, { groupExploreSources } from "./DiscoverPage";
+import DiscoverPage, { groupExploreSources, groupSearchHits, toChannelCards } from "./DiscoverPage";
 import * as api from "../services/api";
 
 vi.mock("../services/api", () => ({
@@ -39,7 +39,7 @@ describe("DiscoverPage", () => {
     ]);
     const onOpenExplore = vi.fn();
     render(<DiscoverPage onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
-    await screen.findByPlaceholderText("输入书名搜索所有已启用书源");
+    await screen.findByPlaceholderText("输入书名，跨书源搜索");
     expect(await screen.findByText(/书源频道/)).toBeInTheDocument();
     expect(screen.getByText(/未分组/)).toBeInTheDocument();
   });
@@ -67,5 +67,28 @@ describe("groupExploreSources", () => {
     expect(groups.find((g) => g.group === "小说")?.sources.length).toBe(2);
     expect(groups.find((g) => g.group === "玄幻")?.sources.length).toBe(1);
     expect(groups.find((g) => g.group === "未分组")?.sources.length).toBe(1);
+  });
+});
+
+describe("groupSearchHits", () => {
+  it("merges same-title same-author hits across sources", () => {
+    const hits = [
+      { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://a.com/1", sourceId: 1, sourceName: "源A" },
+      { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/1", sourceId: 2, sourceName: "源B" },
+      { title: "球状闪电", author: "刘慈欣", coverUrl: "", bookUrl: "https://a.com/2", sourceId: 1, sourceName: "源A" },
+    ];
+    const grouped = groupSearchHits(hits);
+    expect(grouped.length).toBe(2);
+    expect(grouped[0].sources.length).toBe(2);
+    expect(grouped[1].title).toBe("球状闪电");
+  });
+});
+
+describe("toChannelCards", () => {
+  it("builds cards with icon, count and representative", () => {
+    const cards = toChannelCards([{ group: "📒 小说", sources: [{ id: 1, name: "源A" }, { id: 2, name: "源B" }] }]);
+    expect(cards[0].icon).toBe("📒");
+    expect(cards[0].count).toBe(2);
+    expect(cards[0].representative).toBe("源A");
   });
 });
