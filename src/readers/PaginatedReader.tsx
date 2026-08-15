@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react
 export type PageMode = "scroll" | "cover" | "slide";
 
 export default function PaginatedReader({
-  html, mode = "scroll", fontSizePx = 18, onPageChange, measure, onMenuToggle,
+  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, onPageChange, measure, onMenuToggle,
 }: {
-  html: string; mode?: PageMode; fontSizePx?: number;
+  html: string; mode?: PageMode; fontSizePx?: number; lineHeight?: number;
   onPageChange?: (cur: number, total: number) => void;
   measure?: (h: string) => number;
   onMenuToggle?: () => void;
@@ -22,13 +22,13 @@ export default function PaginatedReader({
     const wrap = wrapRef.current;
     if (!wrap) return 0;
     const el = document.createElement("div");
-    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;white-space:normal;`;
+    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;line-height:${lineHeight};white-space:normal;`;
     el.innerHTML = h;
     wrap.appendChild(el);
     const height = el.getBoundingClientRect().height;
     wrap.removeChild(el);
     return height;
-  }, [fontSizePx]);
+  }, [fontSizePx, lineHeight]);
 
   useEffect(() => {
     const h = wrapRef.current?.clientHeight || 500;
@@ -63,7 +63,7 @@ export default function PaginatedReader({
         <div
           key={i}
           className={`reader-page-slice${i === page ? " active" : ""}${mode === "slide" ? " slide" : ""}`}
-          style={{ display: i === page ? "block" : "none" }}
+          style={{ display: i === page ? "block" : "none", lineHeight }}
           dangerouslySetInnerHTML={{ __html: p }}
         />
       ))}

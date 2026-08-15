@@ -76,4 +76,15 @@ describe("PaginatedReader", () => {
     render(<PaginatedReader html="" />);
     expect(screen.getByText(/无内容/)).toBeInTheDocument();
   });
+
+  it("applies lineHeight to the slice container and re-slices when it changes", () => {
+    const onPageChange = vi.fn();
+    const { container, rerender } = render(
+      <PaginatedReader html={CONTENT} mode="scroll" lineHeight={1.8} measure={mockMeasure} onPageChange={onPageChange} />,
+    );
+    const slice = container.querySelector(".reader-page-slice") as HTMLElement;
+    expect(slice.style.lineHeight).toBe("1.8");
+    rerender(<PaginatedReader html={CONTENT} mode="scroll" lineHeight={2.4} measure={mockMeasure} onPageChange={onPageChange} />);
+    expect(container.querySelector(".reader-page-slice")!.getAttribute("style")).toContain("2.4");
+  });
 });
