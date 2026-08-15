@@ -1,6 +1,6 @@
-import { memo, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { Book, ShelfSourceBook } from "../services/api";
-import { coverUrl } from "../services/api";
+import { coverUrl, getProgress } from "../services/api";
 
 export type ShelfItem =
   | { kind: "local"; book: Book }
@@ -20,6 +20,20 @@ function placeholderClass(format: string): string {
   }
 }
 
+function openedAt(item: ShelfItem): number | null {
+  return item.kind === "local" ? item.book.last_opened_at : item.sb.last_opened_at;
+}
+
+/** 相对时间：刚刚 / N 小时前 / N 天前 / 具体日期 */
+export function formatRelativeTime(ts: number, now: number = Math.floor(Date.now() / 1000)): string {
+  const diff = now - ts;
+  if (diff < 3600) return "刚刚";
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)} 天前`;
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function BookCard({ item, onOpen, onRemove }: {
   item: ShelfItem; onOpen: (item: ShelfItem) => void; onRemove?: (item: ShelfItem) => void;
 }) {
@@ -32,12 +46,26 @@ function BookCard({ item, onOpen, onRemove }: {
   const onRemoveRef = useRef(onRemove);
   onRemoveRef.current = onRemove;
 
+  // 本地书阅读进度（懒加载，读完显示百分比 + 封面进度条）
+  const [percent, setPercent] = useState<number | null>(null);
+  useEffect(() => {
+    if (item.kind !== "local") return;
+    let cancelled = false;
+    void getProgress(item.book.id)
+      .then((p) => { if (!cancelled && p) setPercent(Math.round(p[1] * 100)); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [item.kind, item.kind === "local" ? item.book.id : -1]);
+
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       onOpenRef.current(item);
     }
   };
+
+  const opened = openedAt(item);
+  const extra = percent != null && percent > 0 ? `${percent}%` : (opened ? formatRelativeTime(opened) : null);
 
   let cover: React.ReactNode;
   if (item.kind === "local") {
@@ -70,11 +98,19 @@ function BookCard({ item, onOpen, onRemove }: {
       tabIndex={0}
       aria-label={`打开 ${title}`}
     >
-      {cover}
+      <div className="book-cover-wrap">
+        {cover}
+        {percent != null && percent > 0 && (
+          <div className="book-progress-bar" aria-hidden>
+            <span style={{ width: `${percent}%` }} />
+          </div>
+        )}
+      </div>
       <div className="book-meta">
         <h3>{title}</h3>
         <div className="book-sub">
           <span className="fmt">{subLabel}</span>
+          {extra && <span className="progress">{extra}</span>}
         </div>
       </div>
       {onRemove && (

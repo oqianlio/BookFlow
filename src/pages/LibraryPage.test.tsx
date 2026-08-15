@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import LibraryPage from "./LibraryPage";
@@ -17,6 +17,7 @@ const shelfSource = {
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([]);
+  vi.spyOn(api, "getProgress").mockResolvedValue(null);
 });
 
 describe("LibraryPage", () => {
@@ -25,6 +26,23 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText("算法导论")).toBeInTheDocument();
+  });
+
+  it("shows read progress on local book cards", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    vi.spyOn(api, "getProgress").mockImplementation(async (id: number) => (id === 1 ? ["3", 0.42] : null));
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("42%")).toBeInTheDocument(), { timeout: 3000 });
+    // 卡片副行显示阅读百分比，封面出现进度条
+    expect(document.querySelector(".book-progress-bar")).not.toBeNull();
+  });
+
+  it("shows relative last-opened time on cards without progress", async () => {
+    const opened = [{ ...books[0], last_opened_at: Math.floor(Date.now() / 1000) - 2 * 86400 }];
+    vi.spyOn(api, "listBooks").mockResolvedValue(opened);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    expect(await screen.findByText("三体")).toBeInTheDocument();
+    expect(screen.getByText("2 天前")).toBeInTheDocument();
   });
 
   it("calls importFiles on import click", async () => {

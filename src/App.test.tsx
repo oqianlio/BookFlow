@@ -18,6 +18,7 @@ vi.mock("./services/api", () => ({
   httpGet: vi.fn().mockResolvedValue("<html><body></body></html>"),
   listBooks: vi.fn().mockResolvedValue([]),
   listShelfSourceBooks: vi.fn().mockResolvedValue([]),
+  getProgress: vi.fn().mockResolvedValue(null),
   removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   importFiles: vi.fn().mockResolvedValue([]),
   getSetting: vi.fn().mockResolvedValue(null),
