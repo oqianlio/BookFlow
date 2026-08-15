@@ -499,9 +499,9 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(144px, 1fr));
-  gap: 26px 22px;
-  padding: 28px 0 48px;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 20px 18px;
+  padding: 24px 0 48px;
 }
 
 .book-card {
@@ -563,7 +563,7 @@ button {
 
 .book-cover-placeholder span {
   font-family: var(--font-read);
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.1em;
 }
@@ -582,30 +582,30 @@ button {
 .ph-other { --ph-a: #a6a6a6; --ph-b: #6b6b6b; }
 
 .book-meta {
-  padding: 12px 14px 16px;
+  padding: 8px 10px 10px;
 }
 
 .book-meta h3 {
-  margin: 0 0 6px;
-  font-size: 14px;
+  margin: 0 0 4px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--on-surface);
-  line-height: 1.4;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 2.8em;
+  min-height: 2.7em;
 }
 
 .book-meta .book-sub {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  font-size: 11.5px;
+  gap: 6px;
+  font-size: 10.5px;
   color: var(--on-surface-variant);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .book-sub .fmt {
