@@ -22,10 +22,16 @@ impl AppState {
     pub fn books_dir(&self) -> PathBuf {
         self.app_data_dir.join("books")
     }
+
+    /// 持锁执行 DB 操作；锁中毒时返回可恢复错误而非 panic
+    pub fn with_db<T>(&self, f: impl FnOnce(&Connection) -> Result<T, String>) -> Result<T, String> {
+        let conn = self.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
+        f(&conn)
+    }
 }
 
 #[tauri::command]
-pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Vec<Book>, String> {
+pub async fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Vec<Book>, String> {
     let books_root = state.books_dir();
     fs::create_dir_all(&books_root).map_err(|e| e.to_string())?;
     let mut imported = Vec::new();
@@ -51,20 +57,26 @@ pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Ve
             path: imported_file.dest.to_string_lossy().into_owned(),
             cover_path,
         };
-        let id = upsert_book(&state.db.lock().unwrap(), &new_book).map_err(|e| {
+        let id = state.with_db(|conn| upsert_book(conn, &new_book).map_err(|e| e.to_string())).map_err(|e| {
             eprintln!("写入数据库失败 {}: {}", src.display(), e);
             format!("导入失败 {}: {}", src.display(), e)
         })?;
-        match get_book(&state.db.lock().unwrap(), id) {
+        match state.with_db(|conn| get_book(conn, id).map_err(|e| e.to_string())) {
             Ok(Some(b)) => imported.push(b),
             Ok(None) => eprintln!("导入后未找到记录 {}: {}", src.display(), id),
             Err(e) => eprintln!("读取导入记录失败 {}: {}", src.display(), e),
         }
     }
-    // 导入后重建全文索引，保证新书可立即被搜索到
+    // 导入后重建全文索引（锁外重活，不阻塞 DB 与 UI）
     if !imported.is_empty() {
-        if let Err(e) = crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap()) {
-            eprintln!("重建搜索索引失败: {e}");
+        let app_data_dir = state.app_data_dir.clone();
+        let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+        if let Err(e) = tauri::async_runtime::spawn_blocking(move || {
+            crate::search::build_index_from_books(&app_data_dir, &books)
+        })
+        .await
+        {
+            eprintln!("重建搜索索引失败: {e:?}");
         }
     }
     Ok(imported)
@@ -72,12 +84,12 @@ pub fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Result<Ve
 
 #[tauri::command]
 pub fn list_books_cmd(state: State<'_, AppState>) -> Result<Vec<Book>, String> {
-    list_books(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+    list_books(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn remove_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    let conn = state.db.lock().unwrap();
+    let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
     let path: Option<String> = conn
         .query_row("SELECT path FROM books WHERE id = ?1", [id], |r| r.get(0))
         .ok();
@@ -103,12 +115,12 @@ pub fn remove_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn save_progress_cmd(book_id: i64, location: String, percent: f64, state: State<'_, AppState>) -> Result<(), String> {
-    save_progress(&state.db.lock().unwrap(), book_id, &location, percent).map_err(|e| e.to_string())
+    save_progress(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, book_id, &location, percent).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_progress_cmd(book_id: i64, state: State<'_, AppState>) -> Result<Option<(String, f64)>, String> {
-    get_progress(&state.db.lock().unwrap(), book_id).map_err(|e| e.to_string())
+    get_progress(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, book_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -116,36 +128,36 @@ pub fn add_annotation_cmd(
     book_id: i64, format: String, location: String, text: String,
     note: Option<String>, color: String, state: State<'_, AppState>,
 ) -> Result<i64, String> {
-    add_annotation(&state.db.lock().unwrap(), &NewAnnotation {
+    add_annotation(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &NewAnnotation {
         book_id, format, location, text, note, color,
     }).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn list_annotations_cmd(book_id: i64, state: State<'_, AppState>) -> Result<Vec<Annotation>, String> {
-    list_annotations(&state.db.lock().unwrap(), book_id).map_err(|e| e.to_string())
+    list_annotations(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, book_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_annotation_cmd(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    delete_annotation(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    delete_annotation(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn add_bookmark_cmd(book_id: i64, location: String, label: String, state: State<'_, AppState>) -> Result<i64, String> {
-    add_bookmark(&state.db.lock().unwrap(), &NewBookmark {
+    add_bookmark(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &NewBookmark {
         book_id, location, label,
     }).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn list_bookmarks_cmd(book_id: i64, state: State<'_, AppState>) -> Result<Vec<Bookmark>, String> {
-    list_bookmarks(&state.db.lock().unwrap(), book_id).map_err(|e| e.to_string())
+    list_bookmarks(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, book_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_bookmark_cmd(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    delete_bookmark(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    delete_bookmark(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 /// 读取文本文件（UTF-8 优先，GBK 兜底）。命令层先做路径白名单校验。
@@ -202,28 +214,44 @@ mod tests {
 
 #[tauri::command]
 pub fn set_setting_cmd(key: String, value: String, state: State<'_, AppState>) -> Result<(), String> {
-    set_setting(&state.db.lock().unwrap(), &key, &value).map_err(|e| e.to_string())
+    set_setting(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &key, &value).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_setting_cmd(key: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
-    get_setting(&state.db.lock().unwrap(), &key).map_err(|e| e.to_string())
+    get_setting(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &key).map_err(|e| e.to_string())
 }
 
 use crate::search::SearchHit;
 
 #[tauri::command]
-pub fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<SearchHit>, String> {
-    // 懒构建：仅当索引缺失（如首次搜索）时自动重建；查询语法等真实错误原样返回
-    if !crate::search::index_exists(&state.app_data_dir) {
-        crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())?;
+pub async fn search_books(query: String, state: State<'_, AppState>) -> Result<Vec<SearchHit>, String> {
+    let app_data_dir = state.app_data_dir.clone();
+    // 懒构建：仅当索引缺失（如首次搜索）时自动重建；查询语法等真实错误原样返回。
+    // 锁内只收集书籍列表，索引构建在 blocking 线程执行（不阻塞 DB 与 UI）
+    if !crate::search::index_exists(&app_data_dir) {
+        let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+        let dir = app_data_dir.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            crate::search::build_index_from_books(&dir, &books)
+        })
+        .await
+        .map_err(|e| format!("索引构建任务失败: {e}"))??;
     }
-    crate::search::search(&state.app_data_dir, &query, 100)
+    tauri::async_runtime::spawn_blocking(move || crate::search::search(&app_data_dir, &query, 100))
+        .await
+        .map_err(|e| format!("搜索任务失败: {e}"))?
 }
 
 #[tauri::command]
-pub fn reindex(state: State<'_, AppState>) -> Result<(), String> {
-    crate::search::build_index(&state.app_data_dir, &state.db.lock().unwrap())
+pub async fn reindex(state: State<'_, AppState>) -> Result<(), String> {
+    let app_data_dir = state.app_data_dir.clone();
+    let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::search::build_index_from_books(&app_data_dir, &books)
+    })
+    .await
+    .map_err(|e| format!("索引重建任务失败: {e}"))?
 }
 
 #[tauri::command]
@@ -239,32 +267,32 @@ pub fn tts_stop(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn list_book_sources(state: State<'_, AppState>) -> Result<Vec<SourceRow>, String> {
-    list_sources(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+    list_sources(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn add_book_source(name: String, url: String, json: String, state: State<'_, AppState>) -> Result<i64, String> {
-    add_source(&state.db.lock().unwrap(), &name, &url, &json).map_err(|e| e.to_string())
+    add_source(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name, &url, &json).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn update_book_source(id: i64, name: String, url: String, json: String, state: State<'_, AppState>) -> Result<(), String> {
-    update_source(&state.db.lock().unwrap(), id, &name, &url, &json).map_err(|e| e.to_string())
+    update_source(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, &name, &url, &json).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_book_source(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    delete_source(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    delete_source(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn set_book_source_enabled(id: i64, enabled: bool, state: State<'_, AppState>) -> Result<(), String> {
-    set_source_enabled(&state.db.lock().unwrap(), id, enabled).map_err(|e| e.to_string())
+    set_source_enabled(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, enabled).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_book_source_progress(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Option<SourceProgress>, String> {
-    get_source_progress(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+    get_source_progress(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -278,7 +306,7 @@ pub fn save_book_source_progress(
     percent: f64,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    save_source_progress(&state.db.lock().unwrap(), &NewSourceProgress {
+    save_source_progress(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &NewSourceProgress {
         source_id, book_url, title, chapter_index, chapter_url, chapter_name, percent,
     }).map_err(|e| e.to_string())
 }
@@ -348,19 +376,19 @@ pub fn add_shelf_source_book(
     cover_url: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<i64, String> {
-    crate::db::add_shelf_source_book(&state.db.lock().unwrap(), &crate::db::NewShelfSourceBook {
+    crate::db::add_shelf_source_book(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &crate::db::NewShelfSourceBook {
         source_id, book_url, title, author, cover_url,
     }).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn list_shelf_source_books(state: State<'_, AppState>) -> Result<Vec<crate::db::ShelfSourceBook>, String> {
-    crate::db::list_shelf_source_books(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+    crate::db::list_shelf_source_books(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn remove_shelf_source_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::remove_shelf_source_book(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    crate::db::remove_shelf_source_book(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[derive(serde::Deserialize)]
@@ -375,7 +403,7 @@ pub struct CachedChapterInput {
 
 #[tauri::command]
 pub fn save_cached_chapter(input: CachedChapterInput, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::save_cached_chapter(&state.db.lock().unwrap(), &crate::db::NewCachedChapter {
+    crate::db::save_cached_chapter(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &crate::db::NewCachedChapter {
         source_id: input.source_id, book_url: input.book_url,
         chapter_index: input.chapter_index, chapter_url: input.chapter_url,
         chapter_name: input.chapter_name, content: input.content,
@@ -384,27 +412,27 @@ pub fn save_cached_chapter(input: CachedChapterInput, state: State<'_, AppState>
 
 #[tauri::command]
 pub fn list_cached_chapters(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Vec<crate::db::CachedChapter>, String> {
-    crate::db::list_cached_chapters(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+    crate::db::list_cached_chapters(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_cached_chapter(source_id: i64, book_url: String, chapter_url: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
-    crate::db::get_cached_chapter(&state.db.lock().unwrap(), source_id, &book_url, &chapter_url).map_err(|e| e.to_string())
+    crate::db::get_cached_chapter(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url, &chapter_url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_book_cache(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::delete_book_cache(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+    crate::db::delete_book_cache(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn record_read(source_id: i64, book_url: String, title: String, seconds: i64, increment_count: bool, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::record_read(&state.db.lock().unwrap(), source_id, &book_url, &title, seconds, increment_count).map_err(|e| e.to_string())
+    crate::db::record_read(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url, &title, seconds, increment_count).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_reading_stats(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Option<crate::db::ReadingStats>, String> {
-    crate::db::get_reading_stats(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+    crate::db::get_reading_stats(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url).map_err(|e| e.to_string())
 }
 
 #[derive(serde::Serialize)]
@@ -429,7 +457,7 @@ pub fn fetch_rss_feed(url: String) -> Result<RssFeedPreviewOut, String> {
 pub fn add_rss_feed(url: String, state: State<'_, AppState>) -> Result<i64, String> {
     let xml = crate::rss::http_get_xml(&url)?;
     let preview = crate::rss::parse_rss_xml(&xml)?;
-    let conn = state.db.lock().unwrap();
+    let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
     let id = crate::db::add_rss_feed_db(&conn, &preview.title, &url, preview.site_url.as_deref()).map_err(|e| e.to_string())?;
     for a in &preview.articles {
         let _ = crate::db::upsert_rss_article(&conn, id, a);
@@ -440,12 +468,12 @@ pub fn add_rss_feed(url: String, state: State<'_, AppState>) -> Result<i64, Stri
 #[tauri::command]
 pub fn refresh_rss_feed(feed_id: i64, state: State<'_, AppState>) -> Result<i64, String> {
     let row = {
-        let conn = state.db.lock().unwrap();
+        let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
         crate::db::get_rss_feed_db(&conn, feed_id).map_err(|e| e.to_string())?.ok_or("订阅源不存在")?
     };
     let xml = crate::rss::http_get_xml(&row.url)?;
     let preview = crate::rss::parse_rss_xml(&xml)?;
-    let conn = state.db.lock().unwrap();
+    let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
     let mut added = 0i64;
     for a in &preview.articles {
         added += crate::db::upsert_rss_article(&conn, feed_id, a).map_err(|e| e.to_string())?;
@@ -455,49 +483,49 @@ pub fn refresh_rss_feed(feed_id: i64, state: State<'_, AppState>) -> Result<i64,
 
 #[tauri::command]
 pub fn list_rss_feeds(state: State<'_, AppState>) -> Result<Vec<crate::db::RssFeedRow>, String> {
-    crate::db::list_rss_feeds_db(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+    crate::db::list_rss_feeds_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_rss_feed(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::delete_rss_feed_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    crate::db::delete_rss_feed_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn list_rss_articles(feed_id: i64, state: State<'_, AppState>) -> Result<Vec<crate::db::RssArticleRow>, String> {
-    crate::db::list_rss_articles_db(&state.db.lock().unwrap(), feed_id).map_err(|e| e.to_string())
+    crate::db::list_rss_articles_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, feed_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_rss_article(id: i64, state: State<'_, AppState>) -> Result<Option<crate::db::RssArticleRow>, String> {
-    crate::db::get_rss_article_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    crate::db::get_rss_article_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn add_subscription(url: String, state: State<'_, AppState>) -> Result<i64, String> {
     let text = crate::rss::http_get_xml(&url)?;
     let name = crate::rss::extract_first_source_name(&text).unwrap_or_else(|| "订阅源".to_string());
-    crate::db::add_subscription_db(&state.db.lock().unwrap(), &name, &url).map_err(|e| e.to_string())
+    crate::db::add_subscription_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name, &url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn list_subscriptions(state: State<'_, AppState>) -> Result<Vec<crate::db::SubscriptionRow>, String> {
-    crate::db::list_subscriptions_db(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+    crate::db::list_subscriptions_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn delete_subscription(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::delete_subscription_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    crate::db::delete_subscription_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn set_subscription_checked(id: i64, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::set_subscription_checked_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+    crate::db::set_subscription_checked_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn get_source_by_url(url: String, state: State<'_, AppState>) -> Result<Option<crate::db::SourceRow>, String> {
-    crate::db::get_source_by_url_db(&state.db.lock().unwrap(), &url).map_err(|e| e.to_string())
+    crate::db::get_source_by_url_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &url).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

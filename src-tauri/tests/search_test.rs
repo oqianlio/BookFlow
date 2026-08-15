@@ -2,7 +2,7 @@ use std::fs;
 use tempfile::tempdir;
 use yd_lib::db::init_db;
 use yd_lib::db::{upsert_book, NewBook};
-use yd_lib::search::{build_index, delete_book_from_index, search};
+use yd_lib::search::{collect_books, build_index_from_books, delete_book_from_index, search};
 
 fn add_book(conn: &rusqlite::Connection, title: &str, format: &str, path: &str) -> i64 {
     upsert_book(conn, &NewBook {
@@ -18,7 +18,8 @@ fn index_and_search() {
     fs::create_dir(&books_root).unwrap();
     fs::write(books_root.join("a.txt"), "云上的日子十分漫长").unwrap();
     let id = add_book(&conn, "甲", "txt", &books_root.join("a.txt").to_string_lossy());
-    build_index(dir.path(), &conn).unwrap();
+    let books = collect_books(&conn).unwrap();
+    build_index_from_books(dir.path(), &books).unwrap();
     let hits = search(dir.path(), "漫长", 10).unwrap();
     assert!(!hits.is_empty());
     assert_eq!(hits[0].book_id, id as u64);
@@ -45,7 +46,8 @@ fn txt_hit_carries_line_location() {
     let p = books_root.join("multi.txt");
     fs::write(&p, content).unwrap();
     add_book(&conn, "多行", "txt", &p.to_string_lossy());
-    build_index(dir.path(), &conn).unwrap();
+    let books = collect_books(&conn).unwrap();
+    build_index_from_books(dir.path(), &books).unwrap();
     let hits = search(dir.path(), "特殊词云", 10).unwrap();
     assert!(!hits.is_empty());
     // 150 行落在第二个 100 行块内，块首行号为 100
@@ -123,7 +125,8 @@ fn pdf_hits_carry_page_location() {
     let p = books_root.join("b.pdf");
     fs::write(&p, &pdf_bytes).unwrap();
     add_book(&conn, "两页", "pdf", &p.to_string_lossy());
-    build_index(dir.path(), &conn).unwrap();
+    let books = collect_books(&conn).unwrap();
+    build_index_from_books(dir.path(), &books).unwrap();
 
     let hits = search(dir.path(), "gamma", 10).unwrap();
     assert!(!hits.is_empty(), "第一页文本应被索引");
@@ -150,7 +153,8 @@ fn delete_book_removes_from_index() {
     fs::write(&b, "乙书的另一段漫长历史").unwrap();
     let id_a = add_book(&conn, "甲", "txt", &a.to_string_lossy());
     let id_b = add_book(&conn, "乙", "txt", &b.to_string_lossy());
-    build_index(dir.path(), &conn).unwrap();
+    let books = collect_books(&conn).unwrap();
+    build_index_from_books(dir.path(), &books).unwrap();
 
     assert!(search(dir.path(), "漫长", 10).unwrap().iter().any(|h| h.book_id == id_a as u64));
     assert!(search(dir.path(), "漫长", 10).unwrap().iter().any(|h| h.book_id == id_b as u64));

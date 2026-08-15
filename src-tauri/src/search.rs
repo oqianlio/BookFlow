@@ -1,4 +1,4 @@
-use crate::db::list_books;
+use crate::db::{list_books, Book};
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::fs;
@@ -242,7 +242,13 @@ fn strip_html(s: &str) -> String {
     out
 }
 
-pub fn build_index(app_data_dir: &Path, conn: &Connection) -> Result<(), String> {
+/// 锁内轻量：读取全部书籍元数据（重活放 build_index_from_books）
+pub fn collect_books(conn: &Connection) -> Result<Vec<Book>, String> {
+    list_books(conn).map_err(|e| e.to_string())
+}
+
+/// 从书籍列表构建全文索引（不持 DB 锁，重活应放 blocking 线程）
+pub fn build_index_from_books(app_data_dir: &Path, books: &[Book]) -> Result<(), String> {
     let index_dir = app_data_dir.join("index");
     // 幂等：重建前先删除旧索引，保证 reindex 可重复执行
     if index_dir.exists() {
@@ -254,7 +260,7 @@ pub fn build_index(app_data_dir: &Path, conn: &Connection) -> Result<(), String>
     let mut index = Index::create_in_dir(&index_dir, schema).map_err(|e| e.to_string())?;
     index.set_tokenizers(tokenizers());
     let mut writer = index.writer(50_000_000).map_err(|e| e.to_string())?;
-    for book in list_books(conn).map_err(|e| e.to_string())? {
+    for book in books {
         let p = Path::new(&book.path);
         for (section, location) in extract_sections(&book.format, p) {
             if section.trim().is_empty() {
