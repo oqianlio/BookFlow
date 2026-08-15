@@ -484,7 +484,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
               )}
               {!loading && !failed && (
                 isManga ? (
-                  <MangaViewer images={images} />
+                  <MangaViewer images={images} onReachEnd={() => goChapter(1)} />
                 ) : chapter.url ? (
                   <PaginatedReader
                     html={`<p>${convertText(content, settings.conversion).replace(/\n/g, "</p><p>")}</p>`}
@@ -499,6 +499,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                       fontFamily: resolveFontCss(settings.fontFamily),
                     }}
                     onMenuToggle={() => setMenuVisible((v) => !v)}
+                    onReachEnd={() => goChapter(1)}
                   />
                 ) : (
                   <p className="panel-empty">请从目录选择章节</p>

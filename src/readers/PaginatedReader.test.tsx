@@ -97,4 +97,37 @@ describe("PaginatedReader", () => {
     expect(slice.style.fontWeight).toBe("700");
     expect(slice.style.fontFamily).toBe("serif");
   });
+
+  it("does not call onReachEnd on initial render or when navigating away from the end", () => {
+    const onReachEnd = vi.fn();
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    expect(onReachEnd).not.toHaveBeenCalled();
+    // 点击左侧（clamp 到首页，非末页）也不触发
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(onReachEnd).not.toHaveBeenCalled();
+  });
+
+  it("calls onReachEnd when the user navigates to the last page", () => {
+    const onReachEnd = vi.fn();
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    const span = wrap.querySelector(".reader-slice-nav span")!;
+    const total = Number(span.textContent!.split("/")[1].trim());
+    expect(total).toBeGreaterThan(1);
+    // 一路翻到最后一页
+    for (let i = 1; i < total; i++) fireEvent.click(wrap, { clientX: 900 });
+    expect(onReachEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a single-page chapter flip as reaching the end", () => {
+    const onReachEnd = vi.fn();
+    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    fireEvent.click(wrap, { clientX: 900 });
+    expect(onReachEnd).toHaveBeenCalledTimes(1);
+  });
 });

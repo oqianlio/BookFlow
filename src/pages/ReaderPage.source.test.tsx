@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ReaderPage from "./ReaderPage";
@@ -542,5 +542,86 @@ describe("ReaderPage (source) reading stats", () => {
         sourceId: 1, bookUrl: "https://ex.com/book/1.html", seconds: 0, incrementCount: true,
       })),
     );
+  });
+});
+
+describe("ReaderPage (source) auto next chapter at page end", () => {
+  // jsdom 无布局：给分页容器注入宽度，让区域点击（右 1/3）可判定
+  function mockWrapRect(el: HTMLElement, width = 1200) {
+    el.getBoundingClientRect = () =>
+      ({
+        left: 0, top: 0, right: width, bottom: 100, width, height: 100, x: 0, y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  // jsdom 无 IntersectionObserver：可编程 mock（观察漫画最后一张图）
+  class MockIntersectionObserver {
+    static instances: MockIntersectionObserver[] = [];
+    private cb: IntersectionObserverCallback;
+    private el: Element | null = null;
+    constructor(cb: IntersectionObserverCallback) {
+      this.cb = cb;
+      MockIntersectionObserver.instances.push(this);
+    }
+    observe(el: Element) { this.el = el; }
+    unobserve() {}
+    disconnect() {}
+    trigger(intersecting: boolean) {
+      if (!this.el) return;
+      this.cb(
+        [{ isIntersecting: intersecting, target: this.el, intersectionRatio: intersecting ? 1 : 0 } as unknown as IntersectionObserverEntry],
+        this as unknown as IntersectionObserver,
+      );
+    }
+  }
+
+  beforeEach(() => { MockIntersectionObserver.instances = []; });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("auto-loads the next chapter when flipping to the end of a chapter page", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const { container } = renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    // jsdom 无布局 → 章节被切为单页；点击翻页区域 = 触达末页 → 自动进入下一章
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    fireEvent.click(wrap, { clientX: 900 });
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第 2 章");
+  });
+
+  it("auto-loads the next chapter when the last manga image enters the viewport", async () => {
+    vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
+    const src = JSON.parse(sourceJson);
+    src.ruleContent.content = "@css:.content@html";
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/c/1.html") {
+        return `<html><body><div class="content"><img src="/img/1.jpg"><img src="/img/2.jpg"></div><a id="next" href="/c/2.html">下一话</a></body></html>`;
+      }
+      return `<html><body><div class="content"><img src="/img/3.jpg"><img src="/img/4.jpg"></div></body></html>`;
+    });
+    const { container } = render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/b/1.html", bookTitle: "漫画", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第1话" }} onBack={() => {}} />);
+    expect(await screen.findByAltText("图片 2")).toBeInTheDocument();
+    // 最后一张图进入视口 → 自动进入下一话
+    const obs = MockIntersectionObserver.instances[MockIntersectionObserver.instances.length - 1];
+    obs.trigger(true);
+    await waitFor(() => {
+      const imgs = container.querySelectorAll(".manga-viewer img");
+      expect(imgs.length).toBe(2);
+      expect(imgs[0].getAttribute("src")).toBe("https://ex.com/img/3.jpg");
+      expect(imgs[1].getAttribute("src")).toBe("https://ex.com/img/4.jpg");
+    });
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第 2 章");
   });
 });
