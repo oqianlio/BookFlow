@@ -372,6 +372,37 @@ list1.map(x=>x)`;
     expect(items[0].bookUrl).toBe("https://m.suixkan.com/a/");
   });
 
+  it("chain class.X@tag.li collects all li (快眼看书 pattern)", async () => {
+    const doc = parseHtml(`<ul class="librarylist">
+      <li><a>斗破苍穹</a></li><li><a>武动乾坤</a></li><li><a>雪中悍刀行</a></li>
+    </ul>`);
+    const items = await extractList(doc, "class.librarylist@tag.li", { name: "a@text" });
+    expect(items.map((i) => i.name)).toEqual(["斗破苍穹", "武动乾坤", "雪中悍刀行"]);
+  });
+
+  it("chain !N segment skips first N elements (skip header row)", async () => {
+    const doc = parseHtml(`<table><tbody>
+      <tr><td>表头</td></tr><tr><td>书A</td></tr><tr><td>书B</td></tr>
+    </tbody></table>`);
+    const items = await extractList(doc, "tbody@tr!1", { name: "td@text" });
+    expect(items.map((i) => i.name)).toEqual(["书A", "书B"]);
+  });
+
+  it("bookList && merges multiple list rules (笔趣阁⑨ pattern)", async () => {
+    const doc = parseHtml(`<ul class="search">
+      <li><a>斗破苍穹之雷霆震碎</a></li><li><a>斗破苍穹前传</a></li>
+    </ul><ul class="wanben"><li><a>斗破苍穹完结篇</a></li></ul>`);
+    const items = await extractList(doc, ".search@li!0&&.gengxin@li&&.wanben@li", { name: "a@text" });
+    expect(items.map((i) => i.name)).toEqual(["斗破苍穹之雷霆震碎", "斗破苍穹前传", "斗破苍穹完结篇"]);
+  });
+
+  it("&& inside js block is not split", async () => {
+    const rule = `<js>var a = "x" && "y"; JSON.stringify([{n:'a'},{n:'b'}])</js>
+$[*]`;
+    const items = await extractList(emptyDoc(), rule, { name: "$.n" }, { result: "<html></html>" });
+    expect(items.map((i) => i.name)).toEqual(["a", "b"]);
+  });
+
   it("extractFromJsObject supports $.field and plain field", () => {
     expect(extractFromJsObject({ name: "N", id: 7 }, "$.name")).toBe("N");
     expect(extractFromJsObject({ name: "N", id: 7 }, "id")).toBe("7");

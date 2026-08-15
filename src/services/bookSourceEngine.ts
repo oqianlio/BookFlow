@@ -497,6 +497,28 @@ export async function extractList(
 ): Promise<Array<Record<string, string>>> {
   // 链式元素规则（legado A@B@C）：含 @ 且非已知前缀（@xpath/@js/json/纯属性）
   const trimmedList = listRule.trim();
+  // legado bookList 支持 && 合并多个列表规则（js 块内的 && 不受影响）
+  const masked = trimmedList.replace(/<js>[\s\S]*?<\/js>/g, (m) => "x".repeat(m.length));
+  if (masked.includes("&&")) {
+    const parts: string[] = [];
+    let last = 0;
+    let idx = masked.indexOf("&&");
+    while (idx !== -1) {
+      parts.push(trimmedList.slice(last, idx));
+      last = idx + 2;
+      idx = masked.indexOf("&&", last);
+    }
+    parts.push(trimmedList.slice(last));
+    const clean = parts.map((s) => s.trim()).filter(Boolean);
+    if (clean.length > 1) {
+      const merged: Array<Record<string, string>> = [];
+      for (const part of clean) {
+        const items = await extractList(doc, part, itemRules, ctx);
+        merged.push(...items);
+      }
+      return merged;
+    }
+  }
   const looksChain = trimmedList.includes("@")
     && !trimmedList.startsWith("@")
     && !trimmedList.startsWith("//")
@@ -524,6 +546,24 @@ export async function extractList(
         }
         const next: Element[] = [];
         for (const n of nodes) {
+          // legado tag.X 段：取节点内所有指定标签（如 tag.li）
+          if (/^tag\.[a-zA-Z][\w-]*$/.test(chain[i])) {
+            next.push(...Array.from(n.querySelectorAll(chain[i].slice(4))));
+            continue;
+          }
+          // legado `!N` 段（如 li!0 / tr!1）：列表语义 = 跳过前 N 个，取剩余全部（用于跳表头）
+          const bang = chain[i].match(/^(?:(?:tag\.)?)(.+?)!(\d+|last)$/);
+          if (bang) {
+            let all: Element[];
+            try {
+              all = Array.from(n.querySelectorAll(normalizeSelector(bang[1])));
+            } catch {
+              all = [];
+            }
+            const startIdx = bang[2] === "last" ? Math.max(0, all.length - 1) : parseInt(bang[2], 10);
+            next.push(...all.slice(startIdx));
+            continue;
+          }
           // 段含类索引（如 .clearfix.1）→ 取指定第 N 个；否则取全部匹配
           if (/\.\d+$/.test(chain[i])) {
             const hit = queryIndexed(chain[i], n);
@@ -737,6 +777,11 @@ function queryIndexed(selector: string, scope: Document | Element): Element | nu
     return scope.querySelector(normalizeSelector(sel));
   } catch {
     // 非法选择器（如 .author.0）→ 尝试拆分 .数字 后缀
+  }
+  // legado tag.X（无索引）→ 取第一个匹配标签
+  const tm = sel.match(/^tag\.([a-zA-Z][\w-]*)$/);
+  if (tm) {
+    try { return scope.querySelector(tm[1]) ?? null; } catch { return null; }
   }
   const m = sel.match(/^(.+?)\.(\d+)$/);
   if (!m) return null;
