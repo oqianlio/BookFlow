@@ -35,6 +35,15 @@ export interface BookSource {
 
 const REMOVE_SELECTORS = ["script", "style", "ins", "iframe", "noscript", "button", "footer", ".ad", ".ads", ".advert", "#ad"];
 
+/** 从书源地址提取 host（cookie jar 键），URL 非法时原样返回 */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url;
+  }
+}
+
 export function purifyContent(html: string, replaceRules?: string[]): string {
   const doc = new DOMParser().parseFromString(`<div id="__purify__">${html}</div>`, "text/html");
   const root = doc.getElementById("__purify__")!;
@@ -58,8 +67,7 @@ export function purifyContent(html: string, replaceRules?: string[]): string {
   return out;
 }
 
-export function parseBookSourceJson(raw: string): BookSource {
-  const obj = JSON.parse(raw);
+export function parseBookSourceJson(raw: string): BookSource {  const obj = JSON.parse(raw);
   if (!obj.bookSourceUrl || !obj.bookSourceName) {
     throw new Error("书源缺少 bookSourceUrl 或 bookSourceName");
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EpubReader from "../readers/EpubReader";
 import PdfReader from "../readers/PdfReader";
 import MdReader from "../readers/MdReader";
@@ -10,7 +10,7 @@ import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
 import { fetchToc, type TocItem } from "../services/sourceToc";
@@ -183,17 +183,23 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
   }, []);
 
   // ==== 书源：章节数据抓取（持久缓存优先 → 网络）====
+  // 已解析书源缓存（按 sourceId），避免每章重复 listBookSources + parse + setSrc
+  const srcRef = useRef<{ id: number; src: Src } | null>(null);
   const fetchChapterData = useCallback(async (c: ChapterState): Promise<{ content: string; images: string[]; isManga: boolean; nextUrl: string }> => {
     // 1. 持久缓存优先：命中直接渲染（离线可读）
     const cached = await getCachedChapter(sourceId, bookUrl, c.url);
     if (cached) return { content: cached, images: [], isManga: false, nextUrl: "" };
     // 2. 在线抓取
-    const bs = (await listBookSources()).find((x) => x.id === sourceId);
-    if (!bs) throw new Error("书源不存在");
-    const src: Src = parseBookSourceJson(bs.json);
-    setSrc(src);
-    let cookieJarHost = "";
-    try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+    let parsed = srcRef.current;
+    if (!parsed || parsed.id !== sourceId) {
+      const bs = (await listBookSources()).find((x) => x.id === sourceId);
+      if (!bs) throw new Error("书源不存在");
+      parsed = { id: sourceId, src: parseBookSourceJson(bs.json) };
+      srcRef.current = parsed;
+      setSrc(parsed.src);
+    }
+    const src = parsed.src;
+    const cookieJarHost = hostOf(src.bookSourceUrl);
     const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
     console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
     const doc = parseHtml(html);
@@ -233,6 +239,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
   }, [fetchChapterData, sourceId, bookUrl]);
 
   // ==== 书源：加载章节（会话缓存 → 持久缓存 → 网络）====
+  // 请求序号：快速翻章时丢弃过期响应，防止旧章节覆盖新章节
+  const chapterSeqRef = useRef(0);
   const loadChapter = useCallback(async (c: ChapterState) => {
     if (!isLocal && c.url) {
       // 0. 会话缓存命中：无缝渲染，无 loading
@@ -244,10 +252,12 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
         setLoading(false);
         return;
       }
+      const seq = ++chapterSeqRef.current;
       setFailed(false);
       setLoading(true); setContent(""); setImages([]); setIsManga(false);
       try {
         const data = await fetchChapterData(c);
+        if (seq !== chapterSeqRef.current) return; // 过期响应：已有更新的章节加载
         nextUrlRef.current = data.nextUrl;
         setSessionChapter(sourceId, bookUrl, c.url, data);
         if (data.isManga) { setImages(data.images); setIsManga(true); }
@@ -260,6 +270,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
           void prefetchChapter({ index: c.index + 1, url: nextUrl, name: nextName });
         }
       } catch (e) {
+        if (seq !== chapterSeqRef.current) return;
         setFailed(true);
         showError(String(e));
         setLoading(false);
@@ -419,6 +430,12 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     ? { bg: settings.customBg, fg: settings.customFg || "#1c1b1b" }
     : (BG_THEMES.find((t) => t.id === settings.bgTheme) ?? BG_THEMES[0]);
 
+  // 简繁转换 + HTML 拼装只在内容或转换模式变化时重算，避免每次渲染（切面板/调字号）全量重建
+  const convertedHtml = useMemo(
+    () => `<p>${convertText(content, settings.conversion).replace(/\n/g, "</p><p>")}</p>`,
+    [content, settings.conversion],
+  );
+
   return (
     <div className="reader-page">
       <header className={`reader-toolbar${menuVisible ? "" : " reader-toolbar-hidden"}`}>
@@ -546,7 +563,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                   <MangaViewer images={images} onReachEnd={() => goChapter(1)} />
                 ) : chapter.url ? (
                   <PaginatedReader
-                    html={`<p>${convertText(content, settings.conversion).replace(/\n/g, "</p><p>")}</p>`}
+                    html={convertedHtml}
                     mode={settings.pageMode}
                     fontSizePx={settings.fontSizePx}
                     lineHeight={settings.lineHeight}

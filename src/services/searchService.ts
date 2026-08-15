@@ -1,5 +1,5 @@
 import { httpGet, listBookSources, mergeUserAgent, type BookSource as ApiBookSource } from "./api";
-import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, type BookSource as Src } from "./bookSourceEngine";
+import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, hostOf, type BookSource as Src } from "./bookSourceEngine";
 
 export interface SearchHit {
   title: string; author: string; coverUrl: string; bookUrl: string;
@@ -10,8 +10,7 @@ async function searchSource(key: string, bs: ApiBookSource): Promise<SearchHit[]
   const src: Src = parseBookSourceJson(bs.json);
   const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl });
   if (!parsed.url) return [];
-  let cookieJarHost = "";
-  try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+  const cookieJarHost = hostOf(src.bookSourceUrl);
   const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};

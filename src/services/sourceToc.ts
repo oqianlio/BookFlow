@@ -1,5 +1,5 @@
 import { listBookSources, httpGet, mergeUserAgent } from "./api";
-import { parseBookSourceJson, parseHtml, extractSingle, extractList, type BookSource } from "./bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, type BookSource } from "./bookSourceEngine";
 
 export interface TocItem { name: string; url: string }
 export interface SourceBookInfo { title: string; author: string; intro: string; coverUrl: string }
@@ -40,8 +40,7 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   if (!opts.bookUrl) throw new Error("书籍地址无效，无法打开");
   const base = s.bookSourceUrl || opts.bookUrl;
   const resolvedBookUrl = opts.bookUrl.startsWith("http") ? opts.bookUrl : new URL(opts.bookUrl, base).toString();
-  let cookieJarHost = "";
-  try { cookieJarHost = new URL(s.bookSourceUrl).hostname; } catch { cookieJarHost = s.bookSourceUrl; }
+  const cookieJarHost = hostOf(s.bookSourceUrl);
   const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const bi = s.ruleBookInfo ?? {};

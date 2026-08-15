@@ -1,5 +1,5 @@
 import { httpGet, mergeUserAgent, saveCachedChapter, listCachedChapters } from "./api";
-import { parseHtml, extractSingle, purifyContent, type BookSource as Src } from "./bookSourceEngine";
+import { parseHtml, extractSingle, purifyContent, hostOf, type BookSource as Src } from "./bookSourceEngine";
 import type { TocItem } from "./sourceToc";
 
 export interface DownloadProgress { done: number; total: number; failed: number }
@@ -15,9 +15,10 @@ export interface DownloadOpts {
 
 export async function downloadBook(opts: DownloadOpts): Promise<DownloadProgress> {
   const src = await opts.getSrc();
-  let cookieJarHost = "";
-  try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+  const cookieJarHost = hostOf(src.bookSourceUrl);
   const cached = new Set((await listCachedChapters(opts.sourceId, opts.bookUrl)).map((c) => c.chapter_url));
+  // 预建 url → 目录索引，避免逐章 findIndex 的 O(n²)
+  const indexOf = new Map(opts.toc.map((t, i) => [t.url, i]));
   const pending = opts.toc.filter((t) => !cached.has(t.url));
   const total = opts.toc.length;
   let done = total - pending.length;
@@ -31,7 +32,7 @@ export async function downloadBook(opts: DownloadOpts): Promise<DownloadProgress
       const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: t.url, result: html, sourceKey: src.bookSourceUrl });
       await saveCachedChapter({
         sourceId: opts.sourceId, bookUrl: opts.bookUrl,
-        chapterIndex: opts.toc.findIndex((x) => x.url === t.url),
+        chapterIndex: indexOf.get(t.url) ?? 0,
         chapterUrl: t.url, chapterName: t.name,
         content: purifyContent(text, (src as any).purify),
       });
