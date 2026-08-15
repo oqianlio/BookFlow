@@ -80,17 +80,37 @@ export function parseHtml(html: string): Document {
 
 export function jsonGet(obj: any, path: string): any {
   if (obj == null) return undefined;
-  let cur: any = obj;
   let p = path.trim();
   if (p.startsWith("$.")) p = p.slice(2);
   else if (p.startsWith("$")) p = p.slice(1);
-  if (!p) return cur;
+  if (!p) return obj;
   const tokens = p.match(/[^.[\]]+|\d+(?=\])/g) ?? [];
-  for (const tok of tokens) {
-    if (cur == null) return undefined;
-    cur = cur[tok];
+  return jsonWalk(obj, tokens);
+}
+
+// legado JsonPath 子集：支持 [n] 索引、[*] 通配（返回匹配数组）、[a:b] 范围切片、数组上取字段
+function jsonWalk(cur: any, tokens: string[]): any {
+  if (tokens.length === 0 || cur == null) return cur;
+  const tok = tokens[0];
+  const rest = tokens.slice(1);
+  if (Array.isArray(cur)) {
+    if (/^\d+$/.test(tok)) return jsonWalk(cur[Number(tok)], rest);
+    if (tok === "*") {
+      const out = cur.map((it) => jsonWalk(it, rest)).filter((v) => v != null);
+      return out.length ? out : undefined;
+    }
+    if (/^\d+:\d+$/.test(tok)) {
+      const [a, b] = tok.split(":").map(Number);
+      const out = cur.slice(a, b).map((it) => jsonWalk(it, rest)).filter((v) => v != null);
+      return out.length ? out : undefined;
+    }
+    // 数组上取字段：逐项映射
+    const out = cur.map((it) => jsonWalk(it, tokens)).filter((v) => v != null);
+    return out.length ? out : undefined;
   }
-  return cur;
+  if (tok === "*") return jsonWalk(cur, rest);
+  if (/^\d+:\d+$/.test(tok)) return undefined;
+  return jsonWalk(cur[tok], rest);
 }
 
 export function parseRule(rule: string): ParsedRule {

@@ -712,6 +712,41 @@ describe("jsBlock <js>...</js>", () => {
   });
 });
 
+describe("legado JSON rules: wildcard and range", () => {
+  const data = {
+    list: [
+      { id: 1, name: "甲", tags: ["a", "b"] },
+      { id: 2, name: "乙", tags: ["c"] },
+      { id: 3, name: "丙", tags: [] },
+    ],
+  };
+
+  it("jsonGet supports [*] wildcard returning all items", () => {
+    const all = jsonGet(data, "$.list[*]");
+    expect(Array.isArray(all)).toBe(true);
+    expect(all.length).toBe(3);
+  });
+
+  it("jsonGet supports multi-level wildcard $.list[*].name", () => {
+    expect(jsonGet(data, "$.list[*].name")).toEqual(["甲", "乙", "丙"]);
+  });
+
+  it("jsonGet supports [a:b] range slice", () => {
+    expect(jsonGet(data, "$.list[0:2].id")).toEqual([1, 2]);
+  });
+
+  it("extractList works with @Json: wildcard chapterList", async () => {
+    const items = await extractList(emptyDoc(), "@Json:list[*]", {
+      name: "$.name", url: "$.id",
+    }, { result: JSON.stringify(data), sourceKey: "x" });
+    expect(items).toEqual([
+      { name: "甲", url: "1" },
+      { name: "乙", url: "2" },
+      { name: "丙", url: "3" },
+    ]);
+  });
+});
+
 describe("legado regex rules (/pattern/)", () => {
   it("parseRule recognizes slashed regex rules", () => {
     expect(parseRule("/第(\\d+)章/").type).toBe("regex");
