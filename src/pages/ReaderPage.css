@@ -40,16 +40,14 @@
   position: relative; /* 供悬浮底栏定位 */
 }
 
-/* ============ 顶部工具栏（毛玻璃） ============ */
+/* ============ 顶部工具栏 ============ */
 .reader-toolbar {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: color-mix(in srgb, var(--surface-2) 85%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 10;
   transition: transform 0.22s ease, opacity 0.22s ease;
@@ -417,10 +415,8 @@
   gap: 2px;
   padding: 5px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-2) 92%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
   flex-shrink: 0;
   z-index: 10;
@@ -463,10 +459,8 @@
 .reader-page-slice.slide { transition: transform 0.3s ease; }
 .reader-slice-nav {
   position: absolute; bottom: 14px; right: 14px; display: flex; gap: 6px; align-items: center;
-  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 999px;
   box-shadow: var(--shadow-sm);
   padding: 3px 10px; font-size: 12px; color: var(--fg-muted);
