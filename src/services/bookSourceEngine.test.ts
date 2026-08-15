@@ -816,6 +816,27 @@ describe("legado JSON rules: wildcard and range", () => {
   });
 });
 
+describe("legado chain css@js: rules", () => {
+  it("extractSingle css@js: passes css value as result to js", async () => {
+    const doc = parseHtml(`<html><body><div class="num">21</div></body></html>`);
+    const out = await extractSingle(doc, "@css:.num@js:result*2");
+    expect(out).toBe("42");
+  });
+
+  it("extractSingle plain selector@js: chain", async () => {
+    const doc = parseHtml(`<html><body><span class="name">  张三  </span></body></html>`);
+    const out = await extractSingle(doc, ".name@js:result.trim()");
+    expect(out).toBe("张三");
+  });
+
+  it("json@js: mixed rule still routes through the json branch", async () => {
+    const out = await extractSingle(emptyDoc(), "@Json:data.title", {
+      result: JSON.stringify({ data: { title: "斗破" } }),
+    });
+    expect(out).toBe("斗破");
+  });
+});
+
 describe("legado regex rules (/pattern/)", () => {
   it("parseRule recognizes slashed regex rules", () => {
     expect(parseRule("/第(\\d+)章/").type).toBe("regex");

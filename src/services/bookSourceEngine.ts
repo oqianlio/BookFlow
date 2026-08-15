@@ -359,6 +359,13 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     }
     return "";
   }
+  // 链式 css@js:...：先按前段提取，把结果作为 result 交给 js 处理（json 混合走下方 json 分支）
+  const jsIdx = rule.indexOf("@js:");
+  const trimmed = rule.trimStart();
+  if (jsIdx > 0 && !trimmed.startsWith("@Json:") && !trimmed.startsWith("$.") && !trimmed.startsWith("$[")) {
+    const base = await extractSingle(doc, rule.slice(0, jsIdx), ctx);
+    return String(evalJs(rule.slice(jsIdx + 4), { doc, result: base, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+  }
   const parsed = parseRule(rule);
   if (parsed.type === "regex") {
     // 匹配源字符串：优先 result（ajax/json 原始内容），否则文档文本
