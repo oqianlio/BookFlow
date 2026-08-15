@@ -499,8 +499,8 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
-  gap: 24px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 30px 26px;
   padding: 28px 0 48px;
 }
 
@@ -564,11 +564,11 @@ button {
 .ph-other { --ph-a: #a6a6a6; --ph-b: #6b6b6b; }
 
 .book-meta {
-  padding: 10px 12px 14px;
+  padding: 12px 14px 16px;
 }
 
 .book-meta h3 {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
   font-size: 14px;
   font-weight: 600;
   color: var(--on-surface);
@@ -1354,6 +1354,7 @@ input[type="range"] {
   background: var(--surface);
 }
 .app-main .page { max-width: 980px; margin: 0 auto; padding: 0 32px 64px; }
+.app-main .library { max-width: 980px; margin: 0 auto; padding: 0 32px 64px; }
 .app-main .library-header { padding: 28px 0 16px; }
 
 /* ============ 首页 ============ */
