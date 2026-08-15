@@ -322,6 +322,24 @@ describe("ReaderPage (source) reading settings", () => {
     const slice = container.querySelector(".reader-page-slice") as HTMLElement;
     expect(slice.getAttribute("style")).toContain("2");
   });
+
+  it("adjusts typography controls and passes them to PaginatedReader", async () => {
+    const { container } = await renderWithSettings();
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    fireEvent.change(screen.getByLabelText("字间距"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("段间距"), { target: { value: "16" } });
+    fireEvent.change(screen.getByLabelText("首行缩进"), { target: { value: "1" } });
+    await userEvent.click(screen.getByRole("button", { name: "加粗" }));
+    await userEvent.click(screen.getByRole("button", { name: "楷体" }));
+    const slice = container.querySelector(".reader-page-slice") as HTMLElement;
+    await waitFor(() => {
+      expect(slice.style.letterSpacing).toBe("2px");
+      expect(slice.style.fontWeight).toBe("700");
+    });
+    expect(slice.style.fontFamily).toContain("KaiTi");
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.bold", "1"));
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.fontFamily", "kai"));
+  });
 });
 
 describe("ReaderPage (source) toc panel", () => {

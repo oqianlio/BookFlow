@@ -405,6 +405,7 @@
   margin: 0 auto;
 }
 .reader-page-slice > * { margin: 0 0 1.1em; }
+.reader-page-slice p { margin: 0 0 var(--para-gap, 11px); }
 .reader-page-slice > *:last-child { margin-bottom: 0; }
 .reader-page-slice.slide { transition: transform 0.3s ease; }
 .reader-slice-nav {
@@ -426,6 +427,13 @@
   cursor: pointer; box-shadow: var(--shadow-sm);
 }
 .bg-theme-swatch.active { border-color: var(--accent); }
+
+.font-custom-input {
+  width: 100%; margin-top: 8px; padding: 7px 10px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--fg); font-size: 12.5px;
+}
+.font-custom-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 /* ============ 目录面板 ============ */
 .reader-toc-panel .toc-list {

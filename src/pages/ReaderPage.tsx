@@ -11,7 +11,7 @@ import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
-import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
+import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
@@ -459,6 +459,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                     mode={settings.pageMode}
                     fontSizePx={settings.fontSizePx}
                     lineHeight={settings.lineHeight}
+                    typography={{
+                      letterSpacingPx: settings.letterSpacingPx,
+                      paragraphSpacingPx: settings.paragraphSpacingPx,
+                      indentEm: settings.indentEm,
+                      bold: settings.bold,
+                      fontFamily: resolveFontCss(settings.fontFamily),
+                    }}
                     onMenuToggle={() => setMenuVisible((v) => !v)}
                   />
                 ) : (
@@ -540,6 +547,49 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                   onChange={(e) => updateSetting({ lineHeight: Number(e.target.value) })} />
                 <span className="range-value">{settings.lineHeight.toFixed(1)}</span>
               </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">字间距 {settings.letterSpacingPx.toFixed(1)}px</label>
+              <div className="range-row">
+                <input type="range" min={0} max={4} step={0.1} value={settings.letterSpacingPx} aria-label="字间距"
+                  onChange={(e) => updateSetting({ letterSpacingPx: Number(e.target.value) })} />
+                <span className="range-value">{settings.letterSpacingPx.toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">段间距 {settings.paragraphSpacingPx}px</label>
+              <div className="range-row">
+                <input type="range" min={0} max={24} step={1} value={settings.paragraphSpacingPx} aria-label="段间距"
+                  onChange={(e) => updateSetting({ paragraphSpacingPx: Number(e.target.value) })} />
+                <span className="range-value">{settings.paragraphSpacingPx}</span>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">首行缩进 {settings.indentEm.toFixed(1)}em</label>
+              <div className="range-row">
+                <input type="range" min={0} max={2} step={0.1} value={settings.indentEm} aria-label="首行缩进"
+                  onChange={(e) => updateSetting({ indentEm: Number(e.target.value) })} />
+                <span className="range-value">{settings.indentEm.toFixed(1)}</span>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">加粗</label>
+              <div className="segmented" role="group" aria-label="加粗">
+                <button type="button" className={!settings.bold ? "active" : ""} onClick={() => updateSetting({ bold: false })}>正常</button>
+                <button type="button" className={settings.bold ? "active" : ""} onClick={() => updateSetting({ bold: true })}>加粗</button>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">字体</label>
+              <div className="segmented" role="group" aria-label="字体">
+                {FONT_PRESETS.map((f) => (
+                  <button key={f.id} type="button" className={settings.fontFamily === f.id ? "active" : ""}
+                    onClick={() => updateSetting({ fontFamily: f.id })}>{f.name}</button>
+                ))}
+              </div>
+              <input className="font-custom-input" placeholder="自定义字体名（CSS font-family）"
+                value={FONT_PRESETS.some((f) => f.id === settings.fontFamily) ? "" : settings.fontFamily}
+                onChange={(e) => updateSetting({ fontFamily: e.target.value || "serif" })} aria-label="自定义字体" />
             </div>
             <div className="settings-group">
               <label className="settings-label">背景</label>
