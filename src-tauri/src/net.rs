@@ -1,7 +1,21 @@
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
 
 pub const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 10_000;
+
+/// 校验 path 位于 root 目录内（canonicalize 后前缀匹配），防目录穿越/任意文件读写。
+/// path 必须已存在（canonicalize 需要）；写入目标不存在时由调用方先校验父目录。
+pub fn ensure_within(root: &Path, path: &Path) -> Result<(), String> {
+    let root_c = root.canonicalize().map_err(|e| format!("目录不可访问: {e}"))?;
+    let path_c = path.canonicalize().map_err(|_| "路径不存在或不可访问".to_string())?;
+    if path_c.starts_with(&root_c) {
+        Ok(())
+    } else {
+        Err("路径不在允许的目录内".to_string())
+    }
+}
 pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, String> {
@@ -80,19 +94,35 @@ pub async fn http_get(
     state: tauri::State<'_, crate::commands::AppState>,
 ) -> Result<String, String> {
     let cookies = state.cookies.clone();
+    let http_clients = state.http_clients.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let t0 = std::time::Instant::now();
+        let client_key = cookie_jar.clone().unwrap_or_default();
         let jar = cookie_jar.map(|key| cookies.jar_for(&key));
-        let mut client_builder = reqwest::blocking::Client::builder()
-            // 连接超时单独设短（死链快速失败）；总超时放宽（慢站点给足响应时间）
-            .connect_timeout(std::time::Duration::from_millis(DEFAULT_CONNECT_TIMEOUT_MS))
-            .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)));
-        if let Some(j) = &jar {
-            client_builder = client_builder.cookie_provider(j.clone());
-        }
-        let client = client_builder
-            .build()
-            .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?;
+        // 按 jar key（host）复用 client，保留 keep-alive/连接池；无 jar 请求共享同一 client
+        let client = {
+            let mut map = http_clients
+                .lock()
+                .map_err(|_| "HTTP 客户端池锁失效".to_string())?;
+            if let Some(c) = map.get(&client_key) {
+                c.clone()
+            } else {
+                let mut builder = reqwest::blocking::Client::builder()
+                    // 连接超时单独设短（死链快速失败）；总超时放宽（慢站点给足响应时间）
+                    .connect_timeout(std::time::Duration::from_millis(DEFAULT_CONNECT_TIMEOUT_MS))
+                    .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)));
+                if let Some(j) = &jar {
+                    builder = builder.cookie_provider(j.clone());
+                }
+                let c = Arc::new(
+                    builder
+                        .build()
+                        .map_err(|e| format!("HTTP 客户端初始化失败: {e}"))?,
+                );
+                map.insert(client_key.clone(), c.clone());
+                c
+            }
+        };
         let empty = HashMap::new();
         let h = headers.as_ref().unwrap_or(&empty);
         let req = build_request(

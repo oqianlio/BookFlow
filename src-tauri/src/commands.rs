@@ -3,9 +3,10 @@ use crate::db::*;
 use crate::import::import_file;
 use crate::tts::TtsEngine;
 use rusqlite::Connection;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::State;
 
 pub struct AppState {
@@ -13,6 +14,8 @@ pub struct AppState {
     pub app_data_dir: PathBuf,
     pub tts: TtsEngine,
     pub cookies: CookieJarManager,
+    /// 按 cookie jar（host）复用的 reqwest blocking Client，保 keep-alive/连接池
+    pub http_clients: Arc<Mutex<HashMap<String, Arc<reqwest::blocking::Client>>>>,
 }
 
 impl AppState {
@@ -145,19 +148,26 @@ pub fn delete_bookmark_cmd(id: i64, state: State<'_, AppState>) -> Result<(), St
     delete_bookmark(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
 }
 
+/// 读取文本文件（UTF-8 优先，GBK 兜底）。命令层先做路径白名单校验。
+fn read_text_bytes(path: &std::path::Path) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("读取文件失败: {e}"))?;
+    match std::str::from_utf8(&bytes) {
+        Ok(s) => Ok(s.to_owned()),
+        Err(_) => Ok(encoding_rs::GBK.decode(&bytes).0.into_owned()),
+    }
+}
+
 #[tauri::command]
-pub fn read_file_content(path: String) -> Result<String, String> {
-    let bytes = std::fs::read(&path).map_err(|e| format!("读取文件失败: {e}"))?;
-    let text = match std::str::from_utf8(&bytes) {
-        Ok(s) => s.to_owned(),
-        Err(_) => encoding_rs::GBK.decode(&bytes).0.into_owned(),
-    };
-    Ok(text)
+pub fn read_file_content(path: String, state: State<'_, AppState>) -> Result<String, String> {
+    let p = std::path::PathBuf::from(&path);
+    crate::net::ensure_within(&state.app_data_dir, &p)?;
+    read_text_bytes(&p)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::read_file_content;
+    use super::read_text_bytes;
+    use crate::net::ensure_within;
 
     #[test]
     fn read_utf8_and_gbk_fallback() {
@@ -165,21 +175,28 @@ mod tests {
 
         let utf8_path = dir.path().join("utf8.txt");
         std::fs::write(&utf8_path, "你好，世界").unwrap();
-        assert_eq!(
-            read_file_content(utf8_path.to_string_lossy().into_owned()).unwrap(),
-            "你好，世界"
-        );
+        assert_eq!(read_text_bytes(&utf8_path).unwrap(), "你好，世界");
 
         let gbk_path = dir.path().join("gbk.txt");
         let (gbk_bytes, _, _) = encoding_rs::GBK.encode("你好，世界");
         std::fs::write(&gbk_path, gbk_bytes.as_ref()).unwrap();
-        assert_eq!(
-            read_file_content(gbk_path.to_string_lossy().into_owned()).unwrap(),
-            "你好，世界"
-        );
+        assert_eq!(read_text_bytes(&gbk_path).unwrap(), "你好，世界");
 
         let missing = dir.path().join("missing.txt");
-        assert!(read_file_content(missing.to_string_lossy().into_owned()).is_err());
+        assert!(read_text_bytes(&missing).is_err());
+    }
+
+    #[test]
+    fn ensure_within_allows_inside_and_rejects_outside() {
+        let root = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let inside = root.path().join("books/a.txt");
+        std::fs::create_dir_all(inside.parent().unwrap()).unwrap();
+        std::fs::write(&inside, "x").unwrap();
+        let out = outside.path().join("b.txt");
+        std::fs::write(&out, "y").unwrap();
+        assert!(ensure_within(root.path(), &inside).is_ok());
+        assert!(ensure_within(root.path(), &out).is_err());
     }
 }
 
@@ -484,8 +501,13 @@ pub fn get_source_by_url(url: String, state: State<'_, AppState>) -> Result<Opti
 }
 
 #[tauri::command]
-pub fn write_text_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
+pub fn write_text_file(path: String, content: String, state: State<'_, AppState>) -> Result<(), String> {
+    let p = std::path::PathBuf::from(&path);
+    // 写入目标可能尚不存在：校验父目录在数据目录内
+    if let Some(parent) = p.parent().filter(|x| !x.as_os_str().is_empty()) {
+        crate::net::ensure_within(&state.app_data_dir, parent)?;
+    }
+    std::fs::write(&p, content).map_err(|e| format!("写入文件失败: {e}"))
 }
 
 #[derive(serde::Serialize)]
@@ -498,20 +520,25 @@ pub struct FontFileRow {
 #[tauri::command]
 pub fn copy_font_file(src: String, state: State<'_, AppState>) -> Result<FontFileRow, String> {
     use std::time::{SystemTime, UNIX_EPOCH};
+    // 源文件只接受常见字体格式（配合前端 dialog 过滤，命令层防御）
+    const ALLOWED_EXTS: [&str; 4] = ["ttf", "otf", "woff", "woff2"];
+    let src_path = std::path::PathBuf::from(&src);
+    let ext = src_path
+        .extension()
+        .map(|s| s.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if !ALLOWED_EXTS.contains(&ext.as_str()) {
+        return Err(format!("不支持的字体格式: {ext}"));
+    }
     let fonts_dir = state.app_data_dir.join("fonts");
     std::fs::create_dir_all(&fonts_dir).map_err(|e| format!("创建字体目录失败: {e}"))?;
-    let src_path = std::path::PathBuf::from(&src);
     let stem = src_path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "font".to_string());
-    let ext = src_path
-        .extension()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "ttf".to_string());
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
     let file = format!("{}_{}.{}", stem, ts, ext);
-    std::fs::copy(&src, fonts_dir.join(&file)).map_err(|e| format!("复制字体文件失败: {e}"))?;
+    std::fs::copy(&src_path, fonts_dir.join(&file)).map_err(|e| format!("复制字体文件失败: {e}"))?;
     Ok(FontFileRow { name: stem, file })
 }
 
