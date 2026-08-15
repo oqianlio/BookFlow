@@ -183,3 +183,23 @@ fn reading_stats_record_and_get() {
     drop(conn);
     fs::remove_dir_all(dir.path()).unwrap();
 }
+
+#[test]
+fn subscription_crud_and_source_lookup() {
+    let dir = tempdir().unwrap();
+    let conn = init_db(dir.path().join("test.db")).unwrap();
+    let sid = add_source(&conn, "源A", "https://a.com", "{\"bookSourceUrl\":\"https://a.com\"}").unwrap();
+    let sub_id = add_subscription_db(&conn, "合集A", "https://repo.com/a.json").unwrap();
+    let subs = list_subscriptions_db(&conn).unwrap();
+    assert_eq!(subs.len(), 1);
+    assert_eq!(subs[0].name, "合集A");
+    set_subscription_checked_db(&conn, sub_id).unwrap();
+    assert!(list_subscriptions_db(&conn).unwrap()[0].last_checked_at.is_some());
+    let hit = get_source_by_url_db(&conn, "https://a.com").unwrap().unwrap();
+    assert_eq!(hit.id, sid);
+    assert!(get_source_by_url_db(&conn, "https://nope.com").unwrap().is_none());
+    delete_subscription_db(&conn, sub_id).unwrap();
+    assert!(list_subscriptions_db(&conn).unwrap().is_empty());
+    drop(conn);
+    fs::remove_dir_all(dir.path()).unwrap();
+}

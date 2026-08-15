@@ -233,3 +233,24 @@ export async function listRssArticles(feedId: number): Promise<RssArticleRow[]> 
 export async function getRssArticle(id: number): Promise<RssArticleRow | null> {
   return invoke<RssArticleRow | null>("get_rss_article", { id });
 }
+
+export interface SubscriptionRow { id: number; name: string; url: string; last_checked_at: number | null }
+
+export async function addSubscription(url: string): Promise<number> {
+  return invoke<number>("add_subscription", { url });
+}
+export async function listSubscriptions(): Promise<SubscriptionRow[]> {
+  return invoke<SubscriptionRow[]>("list_subscriptions");
+}
+export async function deleteSubscription(id: number): Promise<void> {
+  await invoke("delete_subscription", { id });
+}
+export async function setSubscriptionChecked(id: number): Promise<void> {
+  await invoke("set_subscription_checked", { id });
+}
+export async function getSourceByUrl(url: string): Promise<BookSource | null> {
+  return invoke<BookSource | null>("get_source_by_url", { url });
+}
+export async function writeTextFile(path: string, content: string): Promise<void> {
+  await invoke("write_text_file", { path, content });
+}

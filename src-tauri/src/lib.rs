@@ -56,6 +56,8 @@ pub fn run() {
             record_read, get_reading_stats,
             fetch_rss_feed, add_rss_feed, refresh_rss_feed,
             list_rss_feeds, delete_rss_feed, list_rss_articles, get_rss_article,
+            add_subscription, list_subscriptions, delete_subscription,
+            set_subscription_checked, get_source_by_url, write_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -455,3 +455,35 @@ pub fn list_rss_articles(feed_id: i64, state: State<'_, AppState>) -> Result<Vec
 pub fn get_rss_article(id: i64, state: State<'_, AppState>) -> Result<Option<crate::db::RssArticleRow>, String> {
     crate::db::get_rss_article_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn add_subscription(url: String, state: State<'_, AppState>) -> Result<i64, String> {
+    let text = crate::rss::http_get_xml(&url)?;
+    let name = crate::rss::extract_first_source_name(&text).unwrap_or_else(|| "订阅源".to_string());
+    crate::db::add_subscription_db(&state.db.lock().unwrap(), &name, &url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_subscriptions(state: State<'_, AppState>) -> Result<Vec<crate::db::SubscriptionRow>, String> {
+    crate::db::list_subscriptions_db(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_subscription(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::delete_subscription_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_subscription_checked(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::set_subscription_checked_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_source_by_url(url: String, state: State<'_, AppState>) -> Result<Option<crate::db::SourceRow>, String> {
+    crate::db::get_source_by_url_db(&state.db.lock().unwrap(), &url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
+}

@@ -265,3 +265,12 @@ pub fn http_get_xml(url: &str) -> Result<String, String> {
     resp.copy_to(&mut bytes).map_err(|e| format!("读取响应失败: {e}"))?;
     crate::net::decode_body(&bytes, None)
 }
+
+/// 从远程书源合集文本中提取第一个书源的名称（用于订阅显示名）
+pub fn extract_first_source_name(text: &str) -> Option<String> {
+    let obj: serde_json::Value = serde_json::from_str(text).ok()?;
+    let arr = if obj.is_array() { obj.as_array()? } else { std::slice::from_ref(&obj) };
+    arr.iter().find_map(|v| {
+        v.get("bookSourceName").and_then(|n| n.as_str()).map(|s| s.to_string())
+    })
+}

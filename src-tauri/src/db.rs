@@ -175,6 +175,12 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             fetched_at INTEGER NOT NULL,
             UNIQUE(feed_id, guid)
         );
+        CREATE TABLE IF NOT EXISTS source_subscriptions (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            url TEXT NOT NULL UNIQUE,
+            last_checked_at INTEGER
+        );
         "#,
     )?;
     Ok(conn)
@@ -726,6 +732,62 @@ pub fn get_rss_article_db(conn: &Connection, id: i64) -> Result<Option<RssArticl
         Ok(Some(RssArticleRow {
             id: r.get(0)?, feed_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?,
             link: r.get(4)?, content: r.get(5)?, published_at: r.get(6)?, fetched_at: r.get(7)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SubscriptionRow {
+    pub id: i64,
+    pub name: String,
+    pub url: String,
+    pub last_checked_at: Option<i64>,
+}
+
+pub fn add_subscription_db(conn: &Connection, name: &str, url: &str) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO source_subscriptions (name, url) VALUES (?1, ?2)",
+        params![name, url],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn list_subscriptions_db(conn: &Connection) -> Result<Vec<SubscriptionRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, url, last_checked_at FROM source_subscriptions ORDER BY name",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(SubscriptionRow {
+            id: r.get(0)?, name: r.get(1)?, url: r.get(2)?, last_checked_at: r.get(3)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn delete_subscription_db(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM source_subscriptions WHERE id=?1", [id])?;
+    Ok(())
+}
+
+pub fn set_subscription_checked_db(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE source_subscriptions SET last_checked_at=?1 WHERE id=?2",
+        params![now(), id],
+    )?;
+    Ok(())
+}
+
+pub fn get_source_by_url_db(conn: &Connection, url: &str) -> Result<Option<SourceRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, url, json, enabled, last_used_at FROM book_sources WHERE url=?1",
+    )?;
+    let mut rows = stmt.query([url])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(SourceRow {
+            id: r.get(0)?, name: r.get(1)?, url: r.get(2)?, json: r.get(3)?,
+            enabled: r.get::<_, i64>(4)? != 0, last_used_at: r.get(5)?,
         }))
     } else {
         Ok(None)
