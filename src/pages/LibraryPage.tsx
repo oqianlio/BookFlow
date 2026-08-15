@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import BookCard, { type ShelfItem } from "../components/BookCard";
+import BookCard, { type BookCardLayout, type ShelfItem } from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { BookIcon, SearchIcon } from "../components/icons";
+import { BookIcon, GridIcon, ListIcon, SearchIcon } from "../components/icons";
 import { importFiles, listBooks, removeBook, listShelfSourceBooks, removeShelfSourceBook, type Book, type ShelfSourceBook } from "../services/api";
 import { useError } from "../components/ErrorDialog";
+
+const LAYOUT_KEY = "library.layout";
+
+function loadLayout(): BookCardLayout {
+  const v = localStorage.getItem(LAYOUT_KEY);
+  return v === "list" ? "list" : "grid";
+}
 
 export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   onOpenBook: (b: Book, jumpTo?: string) => void;
@@ -14,7 +21,16 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   const [busy, setBusy] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
+  const [layout, setLayout] = useState<BookCardLayout>(loadLayout);
   const { showError } = useError();
+
+  const toggleLayout = () => {
+    setLayout((prev) => {
+      const next: BookCardLayout = prev === "grid" ? "list" : "grid";
+      localStorage.setItem(LAYOUT_KEY, next);
+      return next;
+    });
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -101,6 +117,14 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
           >
             <SearchIcon size={17} />
           </button>
+          <button
+            className="btn-icon"
+            onClick={toggleLayout}
+            aria-label={layout === "grid" ? "切换为列表" : "切换为网格"}
+            title={layout === "grid" ? "列表视图" : "网格视图"}
+          >
+            {layout === "grid" ? <ListIcon size={17} /> : <GridIcon size={17} />}
+          </button>
           <button className="btn btn-primary" onClick={handleImport} disabled={busy}>
             {busy ? "导入中…" : "导入书籍"}
           </button>
@@ -118,11 +142,12 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
           <p>支持 EPUB · PDF · Markdown · TXT 四种格式；也可在「发现」中把在线书加入书架</p>
         </div>
       ) : (
-        <div className="book-grid">
+        <div className={layout === "grid" ? "book-grid" : "book-list"}>
           {items.map((item) => (
             <BookCard
               key={item.kind === "local" ? `local-${item.book.id}` : `source-${item.sb.id}`}
               item={item}
+              layout={layout}
               onOpen={handleOpen}
               onRemove={handleRemove}
             />

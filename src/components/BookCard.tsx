@@ -34,8 +34,11 @@ export function formatRelativeTime(ts: number, now: number = Math.floor(Date.now
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function BookCard({ item, onOpen, onRemove }: {
+export type BookCardLayout = "grid" | "list";
+
+function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
   item: ShelfItem; onOpen: (item: ShelfItem) => void; onRemove?: (item: ShelfItem) => void;
+  layout?: BookCardLayout;
 }) {
   const title = item.kind === "local" ? item.book.title : item.sb.title;
   // 副行左侧：本地书显示格式标签，在线书统一显示「在线」（不暴露具体书源）
@@ -90,6 +93,42 @@ function BookCard({ item, onOpen, onRemove }: {
     );
   }
 
+  if (layout === "list") {
+    return (
+      <div
+        className="book-card book-card-list"
+        onClick={() => onOpenRef.current(item)}
+        onKeyDown={handleKey}
+        role="button"
+        tabIndex={0}
+        aria-label={`打开 ${title}`}
+      >
+        <div className="book-cover-wrap book-list-cover">
+          {cover}
+          {percent != null && percent > 0 && (
+            <div className="book-progress-bar" aria-hidden>
+              <span style={{ width: `${percent}%` }} />
+            </div>
+          )}
+        </div>
+        <div className="book-list-meta">
+          <h3>{title}</h3>
+          <div className="book-sub">
+            <span className="fmt">{subLabel}</span>
+            {extra && <span className="progress">{extra}</span>}
+          </div>
+        </div>
+        {onRemove && (
+          <button
+            className="book-remove"
+            onClick={(e) => { e.stopPropagation(); onRemoveRef.current?.(item); }}
+            aria-label={`删除 ${title}`}
+          >×</button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className="book-card"
@@ -125,5 +164,5 @@ function BookCard({ item, onOpen, onRemove }: {
   );
 }
 
-// 书架大列表：仅当 item 引用变化时重渲染（回调经 ref 保持最新）
-export default memo(BookCard, (a, b) => a.item === b.item);
+// 书架大列表：仅当 item/layout 引用变化时重渲染（回调经 ref 保持最新）
+export default memo(BookCard, (a, b) => a.item === b.item && a.layout === b.layout);

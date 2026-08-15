@@ -100,4 +100,16 @@ describe("LibraryPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(spy).toHaveBeenCalledWith(9);
   });
+
+  it("switches between grid and list layouts and persists the choice", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    // 默认网格 → 切到列表
+    expect(document.querySelector(".book-grid")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    expect(document.querySelector(".book-list")).not.toBeNull();
+    expect(document.querySelectorAll(".book-card-list").length).toBe(2);
+    expect(localStorage.getItem("library.layout")).toBe("list");
+  });
 });
