@@ -712,6 +712,37 @@ describe("jsBlock <js>...</js>", () => {
   });
 });
 
+describe("legado regex rules (/pattern/)", () => {
+  it("parseRule recognizes slashed regex rules", () => {
+    expect(parseRule("/第(\\d+)章/").type).toBe("regex");
+    expect(parseRule("/abc/gi").type).toBe("regex");
+  });
+
+  it("extractSingle matches /pattern/ against result, returning capture group", async () => {
+    const doc = parseHtml(`<html><body>第12章 标题</body></html>`);
+    const out = await extractSingle(doc, "/第(\\d+)章/", { result: "第12章 标题" });
+    expect(out).toBe("12");
+  });
+
+  it("extractSingle falls back to document text when result is empty", async () => {
+    const doc = parseHtml(`<html><body><div>编号：42</div></body></html>`);
+    const out = await extractSingle(doc, "/编号：(\\d+)/");
+    expect(out).toBe("42");
+  });
+
+  it("returns empty when no match", async () => {
+    const doc = parseHtml(`<html><body>无匹配</body></html>`);
+    const out = await extractSingle(doc, "/第(\\d+)章/");
+    expect(out).toBe("");
+  });
+
+  it("invalid regex is swallowed", async () => {
+    const doc = parseHtml(`<html><body>x</body></html>`);
+    const out = await extractSingle(doc, "/(unclosed/");
+    expect(out).toBe("");
+  });
+});
+
 describe("legado jsoup-style node API in @js:", () => {
   const html = `<div class="list"><div class="item"><a href="/b/1.html" class="t">第一章</a><span class="tag">连载</span></div></div>`;
   const doc = parseHtml(html);

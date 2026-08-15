@@ -126,6 +126,10 @@ export function parseRule(rule: string): ParsedRule {
   if (s.includes("{{")) {
     return { type: "regex", value: s };
   }
+  // legado 正则规则：/pattern/ 或 /pattern/flag（斜杠包裹）；css 选择器不会以 / 开头
+  if (s.startsWith("/") && /^\/.+\/[a-z]*$/.test(s)) {
+    return { type: "regex", value: s };
+  }
   return parseAttrRule(s);
 }
 
@@ -264,11 +268,26 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
   }
   const parsed = parseRule(rule);
   if (parsed.type === "regex") {
+    // 匹配源字符串：优先 result（ajax/json 原始内容），否则文档文本
+    const source = String(ctx?.result ?? "") || (doc.body?.textContent ?? "");
+    const slashed = rule.match(/^\/(.*?)\/([a-z]*)$/);
+    if (slashed) {
+      try {
+        const hit = new RegExp(slashed[1], slashed[2]).exec(source);
+        return hit ? (hit[1] ?? hit[0]) : "";
+      } catch {
+        return "";
+      }
+    }
     const m = rule.match(/{{(.*?)}}/);
     if (m) {
-      const re = new RegExp(m[1]);
-      const hit = re.exec(doc.body?.textContent ?? "");
-      return hit ? (hit[1] ?? hit[0]) : "";
+      try {
+        const re = new RegExp(m[1]);
+        const hit = re.exec(source);
+        return hit ? (hit[1] ?? hit[0]) : "";
+      } catch {
+        return "";
+      }
     }
     return "";
   }
