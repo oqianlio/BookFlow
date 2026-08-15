@@ -123,7 +123,7 @@ describe("LibraryPage", () => {
     vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
     vi.spyOn(api, "getBookSourceProgress").mockResolvedValue({
       source_id: 3, book_url: "https://ex.com/b/1.html", title: "球状闪电",
-      chapter_index: 2, chapter_url: "u3", chapter_name: "第三章", percent: 0, updated_at: 0,
+      chapter_index: 2, chapter_url: "u3", chapter_name: "第三章", percent: 0.42, updated_at: 0,
     });
     vi.mocked(fetchToc).mockResolvedValue({
       info: { title: "", author: "", intro: "", coverUrl: "" },
@@ -131,9 +131,12 @@ describe("LibraryPage", () => {
     });
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("球状闪电");
+    // 网格：在线书进度百分比
+    expect(await screen.findByText("42%")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
     expect(await screen.findByText(/读到 第三章/)).toBeInTheDocument();
     expect(screen.getByText(/最新 第一百章/)).toBeInTheDocument();
+    expect(screen.getAllByText("42%").length).toBeGreaterThanOrEqual(1);
   });
 
   it("switches between grid and list layouts and persists the choice", async () => {

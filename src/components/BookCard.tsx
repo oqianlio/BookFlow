@@ -62,7 +62,7 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
     return () => { cancelled = true; };
   }, [item.kind, item.kind === "local" ? item.book.id : -1]);
 
-  // 书源书：当前阅读章节（进度表）+ 最新章节（目录最后一项）
+  // 书源书：阅读进度（进度表）+ 当前章节 + 最新章节（目录最后一项）
   const [currentChapter, setCurrentChapter] = useState("");
   const [latestChapter, setLatestChapter] = useState("");
   useEffect(() => {
@@ -70,7 +70,11 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
     let cancelled = false;
     const { source_id: sourceId, book_url: bookUrl, title } = item.sb;
     void getBookSourceProgress(sourceId, bookUrl)
-      .then((p) => { if (!cancelled && p?.chapter_name) setCurrentChapter(p.chapter_name); })
+      .then((p) => {
+        if (cancelled || !p) return;
+        if (p.chapter_name) setCurrentChapter(p.chapter_name);
+        if (p.percent > 0) setPercent(Math.round(p.percent * 100));
+      })
       .catch(() => {});
     void fetchToc({ sourceId, bookUrl, initialTitle: title })
       .then((r) => {
