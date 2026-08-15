@@ -8,10 +8,11 @@ import MangaViewer from "../readers/MangaViewer";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
-import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon } from "../components/icons";
+import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
+import { fetchToc, type TocItem } from "../services/sourceToc";
 import { useError } from "../components/ErrorDialog";
 import { type ReaderSource } from "../services/reading";
 import "./ReaderPage.css";
@@ -29,7 +30,7 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
   const initialChapterName = isLocal ? "" : source.chapterName;
 
   // ==== 通用 ====
-  const [panel, setPanel] = useState<"annotations" | "bookmarks" | "settings" | null>(null);
+  const [panel, setPanel] = useState<"annotations" | "bookmarks" | "settings" | "toc" | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
   const [menuVisible, setMenuVisible] = useState(true);
   const { showError } = useError();
@@ -67,6 +68,39 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
     let cancelled = false;
     void loadReadingSettings().then((s) => { if (!cancelled) setSettings(s); });
     return () => { cancelled = true; };
+  }, []);
+
+  // ==== 书源：目录（阅读页内跳转） ====
+  const [toc, setToc] = useState<TocItem[]>([]);
+  const [tocLoading, setTocLoading] = useState(false);
+  const [tocFailed, setTocFailed] = useState(false);
+  const tocSeqRef = useRef(0);
+
+  const loadToc = useCallback(async () => {
+    if (isLocal) return;
+    setTocLoading(true); setTocFailed(false);
+    const seq = ++tocSeqRef.current;
+    try {
+      const r = await fetchToc({ sourceId, bookUrl, initialTitle: bookTitle });
+      if (seq !== tocSeqRef.current) return;
+      setToc(r.toc);
+    } catch {
+      if (seq !== tocSeqRef.current) return;
+      setTocFailed(true);
+    } finally {
+      if (seq === tocSeqRef.current) setTocLoading(false);
+    }
+  }, [isLocal, sourceId, bookUrl, bookTitle]);
+
+  useEffect(() => {
+    if (!isLocal) void loadToc();
+  }, [isLocal, loadToc]);
+
+  const jumpToChapter = useCallback((idx: number, url: string, name: string) => {
+    prevUrlsRef.current = [];   // 从目录跳转后上一章从该章节往前
+    nextUrlRef.current = "";
+    setChapter({ index: idx, url, name });
+    setPanel(null);
   }, []);
 
   // ==== 本地书：移除损坏书籍 ====
@@ -302,6 +336,14 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
                 >登录</button>
               )}
               <button
+                className={`btn-icon${panel === "toc" ? " active" : ""}`}
+                onClick={() => setPanel((p) => (p === "toc" ? null : "toc"))}
+                aria-label="目录"
+                title="目录"
+              >
+                <TocIcon size={17} />
+              </button>
+              <button
                 className={`btn-icon${panel === "settings" ? " active" : ""}`}
                 onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
                 aria-label="阅读设置"
@@ -368,6 +410,34 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         )}
         {isLocal && panel === "bookmarks" && (
           <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
+        )}
+        {!isLocal && panel === "toc" && (
+          <div className="panel reader-toc-panel">
+            <h3>目录</h3>
+            {tocLoading && toc.length === 0 && <p className="panel-empty">加载中…</p>}
+            {tocFailed && toc.length === 0 && (
+              <div className="panel-empty">
+                <p>目录加载失败</p>
+                <button className="btn btn-primary" onClick={() => void loadToc()}>重试</button>
+              </div>
+            )}
+            {!tocLoading && !tocFailed && toc.length === 0 && <p className="panel-empty">暂无目录</p>}
+            {toc.length > 0 && (
+              <ol className="toc-list">
+                {toc.map((t, idx) => (
+                  <li key={`${t.url}-${idx}`}>
+                    <button
+                      type="button"
+                      className={`toc-item${chapter.index === idx || chapter.url === t.url ? " active" : ""}`}
+                      onClick={() => jumpToChapter(idx, t.url, t.name)}
+                    >
+                      {t.name}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         )}
         {!isLocal && panel === "settings" && (
           <div className="panel reader-settings-panel">

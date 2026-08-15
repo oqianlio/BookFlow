@@ -35,6 +35,15 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
+export function TocIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+      <path d="M8 6h.01M8 12h.01M8 18h.01" />
+    </svg>
+  );
+}
+
 export function HighlightIcon(props: IconProps) {
   return (
     <svg {...base(props)}>

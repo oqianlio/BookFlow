@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ReaderPage from "./ReaderPage";
 import { ErrorProvider } from "../components/ErrorDialog";
 import * as api from "../services/api";
+import { clearTocCache } from "../services/sourceToc";
 
 vi.mock("../readers/EpubReader", () => ({ default: () => null }));
 vi.mock("../readers/PdfReader", () => ({ default: () => null }));
@@ -32,6 +33,8 @@ const sourceJson = JSON.stringify({
 const ch1 = `<html><body><div id="content"><p>第一章正文内容。</p></div><a id="next" href="/c/2.html">下一章</a></body></html>`;
 const ch2 = `<html><body><div id="content"><p>第二章正文内容。</p></div><a id="next" href="/c/3.html">下一章</a></body></html>`;
 const ch3 = `<html><body><div id="content"><p>第三章正文内容。</p></div><a id="next" href="/c/4.html">下一章</a></body></html>`;
+
+beforeEach(() => clearTocCache());
 
 function renderReader() {
   return render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} />);
@@ -107,9 +110,16 @@ describe("ReaderPage (source)", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet)
-      .mockRejectedValueOnce(new Error("网络错误"))
-      .mockResolvedValueOnce(ch1);
+    // 目录预取（bookUrl）成功；章节第一次失败、重试成功
+    let chapterCalls = 0;
+    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+      if (url === "https://ex.com/book/1.html") {
+        return `<html><body><h1>三体</h1></body></html>`;
+      }
+      chapterCalls += 1;
+      if (chapterCalls === 1) throw new Error("网络错误");
+      return ch1;
+    });
     render(<ErrorProvider><ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} /></ErrorProvider>);
     expect(await screen.findByText("出错了")).toBeInTheDocument();
     expect(screen.getByText(/网络错误/)).toBeInTheDocument();
@@ -295,5 +305,77 @@ describe("ReaderPage (source) reading settings", () => {
     expect(main.getAttribute("data-bg-theme")).toBe("beige");
     const slice = container.querySelector(".reader-page-slice") as HTMLElement;
     expect(slice.getAttribute("style")).toContain("2");
+  });
+});
+
+describe("ReaderPage (source) toc panel", () => {
+  const tocSourceJson = JSON.stringify({
+    bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+    ruleBookInfo: { name: "h1@text", author: ".author@text" },
+    ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href" },
+    ruleContent: { content: "#content", nextContentUrl: "a#next@href" },
+  });
+  const tocHtml = `<html><body><h1>三体</h1><ol>
+    <li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
+
+  async function renderWithToc() {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+      if (url === "https://ex.com/book/1.html") return tocHtml;
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const utils = renderReader();
+    await screen.findByText("第一章正文内容。");
+    return utils;
+  }
+
+  it("opens the toc panel and lists chapters with current highlighted", async () => {
+    const { container } = await renderWithToc();
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    expect(container.querySelector(".reader-toc-panel")).not.toBeNull();
+    const items = container.querySelectorAll(".toc-item");
+    expect(items.length).toBe(2);
+    expect(items[0].className).toContain("active");
+    expect(items[0].textContent).toBe("第一章");
+    // 关闭面板
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    expect(container.querySelector(".reader-toc-panel")).toBeNull();
+  });
+
+  it("jumps to a chapter from the toc", async () => {
+    const { container } = await renderWithToc();
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    const items = container.querySelectorAll(".toc-item");
+    await userEvent.click(items[1] as HTMLElement);
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    expect(container.querySelector(".reader-toc-panel")).toBeNull(); // 面板已关闭
+    expect(screen.getByText("第二章")).toBeInTheDocument();
+  });
+
+  it("shows retry on toc failure and recovers", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+      if (url === "https://ex.com/c/1.html") return ch1;
+      throw new Error("目录网络错误");
+    });
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    expect(await screen.findByText("目录加载失败")).toBeInTheDocument();
+    // 恢复后重试成功
+    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+      if (url === "https://ex.com/book/1.html") return tocHtml;
+      if (url === "https://ex.com/c/1.html") return ch1;
+      return ch2;
+    });
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(await screen.findByText("第一章")).toBeInTheDocument();
+    expect(screen.getByText("第二章")).toBeInTheDocument();
   });
 });
