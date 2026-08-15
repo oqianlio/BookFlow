@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
-import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
+import { useEffect, useRef, useState } from "react";
+import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources } from "../services/api";
+import { parseBookSourceJson } from "../services/bookSourceEngine";
 import { fetchToc, type TocItem } from "../services/sourceToc";
+import { downloadBook } from "../services/chapterCache";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
@@ -16,7 +18,11 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
   const [showSwitch, setShowSwitch] = useState(false);
+  const [dl, setDl] = useState<{ busy: boolean; done: number; total: number; failed: number }>({ busy: false, done: 0, total: 0, failed: 0 });
+  const dlSignalRef = useRef({ cancelled: false });
   const { showError } = useError();
+
+  useEffect(() => () => { dlSignalRef.current.cancelled = true; }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,6 +69,27 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     }
   };
 
+  const handleDownload = async () => {
+    if (dl.busy || toc.length === 0) return;
+    dlSignalRef.current = { cancelled: false };
+    setDl({ busy: true, done: 0, total: toc.length, failed: 0 });
+    try {
+      const row = (await listBookSources()).find((x) => x.id === sourceId);
+      if (!row) { showError("书源不存在"); setDl((p) => ({ ...p, busy: false })); return; }
+      const src = parseBookSourceJson(row.json);
+      await downloadBook({
+        sourceId, bookUrl, toc,
+        getSrc: async () => src,
+        onProgress: (p) => setDl({ busy: true, done: p.done, total: p.total, failed: p.failed }),
+        signal: dlSignalRef.current,
+      });
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setDl((p) => ({ ...p, busy: false }));
+    }
+  };
+
   const handleLogin = () => {
     if (!loginUrl) return;
     let host = "";
@@ -102,6 +129,9 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             {onSwitchSource && (
               <button className="btn btn-ghost" onClick={() => setShowSwitch(true)}>换源</button>
             )}
+            <button className="btn btn-ghost" onClick={handleDownload} disabled={dl.busy || toc.length === 0}>
+              {dl.busy ? `缓存中 ${dl.done}/${dl.total}` : dl.done === dl.total && dl.total > 0 ? `已缓存 ${dl.total} 章` : "缓存全书"}
+            </button>
           </div>
         </div>
       </div>
