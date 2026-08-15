@@ -25,6 +25,7 @@ vi.mock("../services/api", () => ({
   removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   saveCachedChapter: vi.fn().mockResolvedValue(undefined),
   listCachedChapters: vi.fn().mockResolvedValue([]),
+  getReadingStats: vi.fn().mockResolvedValue(null),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -210,5 +211,35 @@ describe("SourceBookPage", () => {
     fireEvent.click(btn);
     expect(await screen.findByRole("button", { name: /已缓存 2 章/ })).toBeInTheDocument();
     expect(api.saveCachedChapter).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows reading stats when available", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.getReadingStats).mockResolvedValue({
+      source_id: 1, book_url: "https://ex.com/book/1.html", title: "三体",
+      read_seconds: 3660, read_count: 5, last_read_at: 1784200000,
+    });
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    expect(await screen.findByText(/1 小时 1 分钟/)).toBeInTheDocument();
+    expect(screen.getByText(/阅读 5 次/)).toBeInTheDocument();
+    expect(screen.getByText(/最近/)).toBeInTheDocument();
+  });
+
+  it("hides stats when none recorded", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.getReadingStats).mockResolvedValue(null);
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    await screen.findByText("三体");
+    expect(screen.queryByText(/阅读次数/)).not.toBeInTheDocument();
   });
 });

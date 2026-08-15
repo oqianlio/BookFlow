@@ -1,11 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources } from "../services/api";
+import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources, getReadingStats, type ReadingStats } from "../services/api";
 import { parseBookSourceJson } from "../services/bookSourceEngine";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import { downloadBook } from "../services/chapterCache";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
+
+function formatReadTime(sec: number): string {
+  const min = Math.floor(sec / 60);
+  if (min < 1) return `${sec} 秒`;
+  const h = Math.floor(min / 60);
+  return h > 0 ? `${h} 小时 ${min % 60} 分钟` : `${min} 分钟`;
+}
+
+function formatDate(ts: number): string {
+  const d = new Date(ts * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead, onSwitchSource }: {
   sourceId: number; sourceName: string; bookUrl: string; initialTitle: string;
@@ -20,9 +32,16 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const [showSwitch, setShowSwitch] = useState(false);
   const [dl, setDl] = useState<{ busy: boolean; done: number; total: number; failed: number }>({ busy: false, done: 0, total: 0, failed: 0 });
   const dlSignalRef = useRef({ cancelled: false });
+  const [stats, setStats] = useState<ReadingStats | null>(null);
   const { showError } = useError();
 
   useEffect(() => () => { dlSignalRef.current.cancelled = true; }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getReadingStats(sourceId, bookUrl).then((s) => { if (!cancelled) setStats(s); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [sourceId, bookUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +139,12 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         <div className="source-book-meta">
           <h2 className="source-book-title">{info.title || sourceName}</h2>
           {info.author && <span className="hit-author">{info.author}</span>}
+          {stats && stats.read_seconds > 0 && (
+            <span className="hit-author">
+              {formatReadTime(stats.read_seconds)} · 阅读 {stats.read_count} 次
+              {stats.last_read_at ? ` · 最近 ${formatDate(stats.last_read_at)}` : ""}
+            </span>
+          )}
           {info.intro && <p className="source-intro">{info.intro}</p>}
           <div className="source-book-actions">
             <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
