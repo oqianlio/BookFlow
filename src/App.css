@@ -607,20 +607,6 @@ button {
   position: relative;
 }
 
-.book-progress-bar {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: rgba(10, 8, 5, 0.28);
-}
-.book-progress-bar span {
-  display: block;
-  height: 100%;
-  background: var(--primary);
-}
-
 .book-cover-placeholder {
   display: flex;
   flex-direction: column;

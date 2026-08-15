@@ -105,11 +105,6 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
       >
         <div className="book-cover-wrap book-list-cover">
           {cover}
-          {percent != null && percent > 0 && (
-            <div className="book-progress-bar" aria-hidden>
-              <span style={{ width: `${percent}%` }} />
-            </div>
-          )}
         </div>
         <div className="book-list-meta">
           <h3>{title}</h3>
@@ -140,11 +135,6 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
     >
       <div className="book-cover-wrap">
         {cover}
-        {percent != null && percent > 0 && (
-          <div className="book-progress-bar" aria-hidden>
-            <span style={{ width: `${percent}%` }} />
-          </div>
-        )}
       </div>
       <div className="book-meta">
         <h3>{title}</h3>

@@ -29,13 +29,13 @@ describe("LibraryPage", () => {
     expect(screen.getByText("算法导论")).toBeInTheDocument();
   });
 
-  it("shows read progress on local book cards", async () => {
+  it("shows read progress in list mode only", async () => {
     vi.spyOn(api, "listBooks").mockResolvedValue(books);
     vi.spyOn(api, "getProgress").mockImplementation(async (id: number) => (id === 1 ? ["3", 0.42] : null));
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("三体");
-    // 网格模式：封面进度条（不显示百分比文字）
-    await waitFor(() => expect(document.querySelector(".book-progress-bar")).not.toBeNull());
+    // 无进度条；网格不显示百分比
+    expect(document.querySelector(".book-progress-bar")).toBeNull();
     expect(screen.queryByText("42%")).not.toBeInTheDocument();
     // 列表模式：副行显示阅读百分比
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
