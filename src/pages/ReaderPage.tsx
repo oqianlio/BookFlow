@@ -356,7 +356,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     return () => window.removeEventListener("search-jump", onSearchJump);
   }, [isLocal, jump]);
 
-  const activeTheme = BG_THEMES.find((t) => t.id === settings.bgTheme) ?? BG_THEMES[0];
+  const activeTheme = settings.bgTheme === "custom" && settings.customBg
+    ? { bg: settings.customBg, fg: settings.customFg || "#1c1b1b" }
+    : (BG_THEMES.find((t) => t.id === settings.bgTheme) ?? BG_THEMES[0]);
 
   return (
     <div className="reader-page">
@@ -629,6 +631,12 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                     style={{ background: t.bg }} aria-label={t.name} title={t.name}
                     onClick={() => updateSetting({ bgTheme: t.id })} />
                 ))}
+                {settings.customBg && (
+                  <button type="button"
+                    className={`bg-theme-swatch bg-theme-swatch-custom${settings.bgTheme === "custom" ? " active" : ""}`}
+                    style={{ background: settings.customBg }} aria-label="自定义" title="自定义"
+                    onClick={() => updateSetting({ bgTheme: "custom" })} />
+                )}
               </div>
             </div>
             <div className="settings-group">

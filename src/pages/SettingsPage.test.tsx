@@ -20,6 +20,13 @@ vi.mock("../services/eyeCare", () => ({
   loadEyeCare: vi.fn().mockResolvedValue({ enabled: false, start: "22:00", end: "06:00" }),
   saveEyeCare: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("../services/readingSettings", () => ({
+  loadReadingSettings: vi.fn().mockResolvedValue({ customBg: "#f5e9d0", customFg: "#2b2b2b" }),
+  saveReadingSettings: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../services/api", () => ({
+  setSetting: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("SettingsPage", () => {
   it("renders scheme selector and switches scheme", async () => {
@@ -46,5 +53,15 @@ describe("SettingsPage", () => {
     // 开启后显示时间输入
     expect(screen.getByLabelText("护眼开始时间")).toBeInTheDocument();
     expect(screen.getByLabelText("护眼结束时间")).toBeInTheDocument();
+  });
+
+  it("applies custom theme colors", async () => {
+    const readingSettings = await import("../services/readingSettings");
+    render(<SettingsPage />);
+    await screen.findByText(/自定义主题/);
+    await userEvent.click(screen.getByRole("button", { name: "应用" }));
+    expect(readingSettings.saveReadingSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ bgTheme: "custom", customBg: "#f5e9d0", customFg: "#2b2b2b" }),
+    );
   });
 });

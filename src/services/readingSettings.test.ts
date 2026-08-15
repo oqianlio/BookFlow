@@ -139,4 +139,24 @@ describe("readingSettings", () => {
     await saveReadingSettings({ ...DEFAULT_READING_SETTINGS, conversion: "simp" });
     expect(api.setSetting).toHaveBeenCalledWith("reading.conversion", "simp");
   });
+
+  it("loads custom theme colors and allows custom bgTheme", async () => {
+    vi.mocked(api.getSetting).mockImplementation(async (k) => {
+      if (k === "reading.bgTheme") return "custom";
+      if (k === "reading.customBg") return "#123456";
+      if (k === "reading.customFg") return "#abcdef";
+      return null;
+    });
+    const s = await loadReadingSettings();
+    expect(s.bgTheme).toBe("custom");
+    expect(s.customBg).toBe("#123456");
+    expect(s.customFg).toBe("#abcdef");
+  });
+
+  it("saveReadingSettings persists custom theme colors", async () => {
+    await saveReadingSettings({ ...DEFAULT_READING_SETTINGS, bgTheme: "custom", customBg: "#111111", customFg: "#eeeeee" });
+    expect(api.setSetting).toHaveBeenCalledWith("reading.customBg", "#111111");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.customFg", "#eeeeee");
+    expect(api.setSetting).toHaveBeenCalledWith("reading.bgTheme", "custom");
+  });
 });

@@ -356,6 +356,18 @@ describe("ReaderPage (source) reading settings", () => {
     expect(await screen.findByText("開門見山說時間")).toBeInTheDocument();
     await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.conversion", "trad"));
   });
+
+  it("applies custom theme background when bgTheme is custom", async () => {
+    const { container } = await renderWithSettings({
+      "reading.bgTheme": "custom",
+      "reading.customBg": "#123456",
+      "reading.customFg": "#abcdef",
+    });
+    const main = container.querySelector(".reader-main") as HTMLElement;
+    expect(main.style.background).toBe("rgb(18, 52, 86)");
+    expect(main.getAttribute("data-bg-theme")).toBe("custom");
+    expect(main.style.getPropertyValue("--read-fg")).toBe("#abcdef");
+  });
 });
 
 describe("ReaderPage (source) toc panel", () => {

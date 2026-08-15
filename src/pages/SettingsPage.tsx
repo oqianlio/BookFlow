@@ -3,6 +3,7 @@ import { SCHEMES, SCHEME_NAMES, Theme, initTheme, setTheme, getTheme } from "../
 import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
+import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
 
 export default function SettingsPage({ onOpenSourceManager }: {
   onOpenSourceManager?: () => void;
@@ -11,12 +12,18 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [fontSize, setFontSizeState] = useState(18);
   const [rate, setRateState] = useState(1);
   const [eyeCare, setEyeCareState] = useState<EyeCareSettings>({ enabled: false, start: "22:00", end: "06:00" });
+  const [customBg, setCustomBg] = useState("#f5e9d0");
+  const [customFg, setCustomFg] = useState("#2b2b2b");
 
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
     setFontSizeState(getFontSize());
     void getTtsRate().then(setRateState);
     void loadEyeCare().then(setEyeCareState);
+    void loadReadingSettings().then((s) => {
+      if (s.customBg) setCustomBg(s.customBg);
+      if (s.customFg) setCustomFg(s.customFg);
+    });
   }, []);
 
   const selectScheme = (scheme: Theme["scheme"]) => {
@@ -37,6 +44,13 @@ export default function SettingsPage({ onOpenSourceManager }: {
       void saveEyeCare(next);
       return next;
     });
+  };
+
+  const applyCustomTheme = async () => {
+    try {
+      const s = await loadReadingSettings();
+      await saveReadingSettings({ ...s, bgTheme: "custom", customBg, customFg });
+    } catch { /* 静默 */ }
   };
 
   return (
@@ -82,6 +96,23 @@ export default function SettingsPage({ onOpenSourceManager }: {
               <input type="time" aria-label="护眼结束时间" value={eyeCare.end} onChange={(e) => updateEyeCare({ end: e.target.value })} />
             </div>
           )}
+        </div>
+        <div className="settings-group">
+          <div>
+            <div className="label">自定义主题</div>
+            <div className="hint">设置阅读背景与文字颜色，应用到阅读区</div>
+          </div>
+          <div className="custom-theme-row">
+            <label className="custom-theme-item">
+              <span>背景</span>
+              <input type="color" aria-label="自定义背景色" value={customBg} onChange={(e) => setCustomBg(e.target.value)} />
+            </label>
+            <label className="custom-theme-item">
+              <span>文字</span>
+              <input type="color" aria-label="自定义文字色" value={customFg} onChange={(e) => setCustomFg(e.target.value)} />
+            </label>
+            <button className="btn btn-soft" onClick={() => void applyCustomTheme()}>应用</button>
+          </div>
         </div>
         <div className="settings-group">
           <div>

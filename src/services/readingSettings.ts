@@ -14,6 +14,8 @@ export interface ReadingSettings {
   bold: boolean;
   fontFamily: string;
   conversion: Conversion;
+  customBg: string;
+  customFg: string;
 }
 
 export const BG_THEMES: Array<{ id: string; name: string; bg: string; fg: string }> = [
@@ -47,6 +49,8 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   bold: false,
   fontFamily: "serif",
   conversion: "none",
+  customBg: "",
+  customFg: "",
 };
 
 const PAGE_MODES: PageMode[] = ["scroll", "cover", "slide"];
@@ -70,7 +74,7 @@ function numInRange(raw: string | null, min: number, max: number, fallback: numb
 
 export async function loadReadingSettings(): Promise<ReadingSettings> {
   try {
-    const [mode, size, line, bg, ls, ps, ind, bld, fam, conv] = await Promise.all([
+    const [mode, size, line, bg, ls, ps, ind, bld, fam, conv, cb, cf] = await Promise.all([
       getSetting("reading.pageMode"),
       getSetting("reading.fontSizePx"),
       getSetting("reading.lineHeight"),
@@ -81,11 +85,14 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       getSetting("reading.bold"),
       getSetting("reading.fontFamily"),
       getSetting("reading.conversion"),
+      getSetting("reading.customBg"),
+      getSetting("reading.customFg"),
     ]);
     const pageMode = PAGE_MODES.includes(mode as PageMode)
       ? (mode as PageMode)
       : DEFAULT_READING_SETTINGS.pageMode;
-    const bgTheme = BG_THEMES.some((t) => t.id === bg) ? bg! : DEFAULT_READING_SETTINGS.bgTheme;
+    const isKnown = BG_THEMES.some((t) => t.id === bg) || bg === "custom";
+    const bgTheme = isKnown && bg ? bg : DEFAULT_READING_SETTINGS.bgTheme;
     return {
       pageMode,
       fontSizePx: numInRange(size, FONT_MIN, FONT_MAX, DEFAULT_READING_SETTINGS.fontSizePx),
@@ -97,6 +104,8 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       bold: bld === "1",
       fontFamily: fam && fam.trim() ? fam : DEFAULT_READING_SETTINGS.fontFamily,
       conversion: CONVERSIONS.includes(conv as Conversion) ? conv as Conversion : DEFAULT_READING_SETTINGS.conversion,
+      customBg: cb && cb.trim() ? cb : DEFAULT_READING_SETTINGS.customBg,
+      customFg: cf && cf.trim() ? cf : DEFAULT_READING_SETTINGS.customFg,
     };
   } catch {
     return { ...DEFAULT_READING_SETTINGS };
@@ -115,5 +124,7 @@ export async function saveReadingSettings(s: ReadingSettings): Promise<void> {
     setSetting("reading.bold", s.bold ? "1" : "0"),
     setSetting("reading.fontFamily", s.fontFamily),
     setSetting("reading.conversion", s.conversion),
+    setSetting("reading.customBg", s.customBg),
+    setSetting("reading.customFg", s.customFg),
   ]);
 }
