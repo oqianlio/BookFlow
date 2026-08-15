@@ -6,14 +6,38 @@ import { useError } from "../components/ErrorDialog";
 
 export type { SearchHit } from "../services/searchService";
 
-export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
+export interface ExploreSource { id: number; name: string }
+export interface ExploreGroup { group: string; sources: ExploreSource[] }
+
+export function groupExploreSources(sources: Array<{ id: number; name: string; json: string }>): ExploreGroup[] {
+  const map = new Map<string, ExploreSource[]>();
+  const add = (g: string, s: ExploreSource) => {
+    if (!map.has(g)) map.set(g, []);
+    map.get(g)!.push(s);
+  };
+  for (const s of sources) {
+    let groups: string[] = [];
+    try {
+      const parsed = JSON.parse(s.json);
+      groups = String(parsed?.bookSourceGroup ?? "").split(",").map((g) => g.trim()).filter(Boolean);
+    } catch { /* 归未分组 */ }
+    if (groups.length === 0) add("未分组", { id: s.id, name: s.name });
+    else for (const g of groups) add(g, { id: s.id, name: s.name });
+  }
+  return [...map.entries()]
+    .map(([group, items]) => ({ group, sources: items }))
+    .sort((a, b) => b.sources.length - a.sources.length);
+}
+
+export default function DiscoverPage({ onOpenBook, onOpenExplore, onOpenGroupExplore }: {
   onOpenBook: (h: SearchHit) => void;
   onOpenExplore?: (sourceId: number, sourceName: string) => void;
+  onOpenGroupExplore?: (groupName: string, sources: ExploreSource[]) => void;
 }) {
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
-  const [exploreSources, setExploreSources] = useState<Array<{ id: number; name: string }>>([]);
+  const [exploreSources, setExploreSources] = useState<Array<{ id: number; name: string; json: string }>>([]);
   const { showError } = useError();
 
   useEffect(() => {
@@ -21,11 +45,11 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
     (async () => {
       try {
         const sources = (await listBookSources()).filter((s) => s.enabled);
-        const withExplore: Array<{ id: number; name: string }> = [];
+        const withExplore: Array<{ id: number; name: string; json: string }> = [];
         for (const s of sources) {
           try {
             const src = parseBookSourceJson(s.json);
-            if (src.exploreUrl) withExplore.push({ id: s.id, name: s.name });
+            if (src.exploreUrl) withExplore.push({ id: s.id, name: s.name, json: s.json });
           } catch {
             // 单个书源 JSON 解析失败，跳过该书源
           }
@@ -37,6 +61,8 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const groups = groupExploreSources(exploreSources);
 
   const run = async () => {
     if (!query.trim()) return;
@@ -58,11 +84,17 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
           onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void run()} />
         <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
       </div>
-      {exploreSources.length > 0 && onOpenExplore && (
-        <div className="explore-entry">
-          {exploreSources.map((s) => (
-            <button key={s.id} className="btn btn-ghost" onClick={() => onOpenExplore(s.id, s.name)}>浏览 {s.name}</button>
-          ))}
+      {groups.length > 0 && onOpenExplore && (
+        <div className="explore-groups">
+          <h2 className="home-section">书源频道</h2>
+          <div className="explore-channels">
+            {groups.map((g) => (
+              <button key={g.group} className="group-channel" onClick={() => onOpenGroupExplore?.(g.group, g.sources)}>
+                <span className="group-name">{g.group}</span>
+                <span className="count">{g.sources.length}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <div className="discover-results">

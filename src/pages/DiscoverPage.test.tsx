@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import DiscoverPage from "./DiscoverPage";
+import DiscoverPage, { groupExploreSources } from "./DiscoverPage";
 import * as api from "../services/api";
 
 vi.mock("../services/api", () => ({
@@ -40,9 +40,32 @@ describe("DiscoverPage", () => {
     const onOpenExplore = vi.fn();
     render(<DiscoverPage onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
     await screen.findByPlaceholderText("输入书名搜索所有已启用书源");
-    expect(await screen.findByText(/浏览 有浏览/)).toBeInTheDocument();
-    expect(screen.queryByText(/浏览 无浏览/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByText(/浏览 有浏览/));
-    expect(onOpenExplore).toHaveBeenCalledWith(1, "有浏览");
+    expect(await screen.findByText(/书源频道/)).toBeInTheDocument();
+    expect(screen.getByText(/未分组/)).toBeInTheDocument();
+  });
+
+  it("opens a group channel via onOpenGroupExplore", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "有浏览", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "有浏览", exploreUrl: "分类::/x.html", bookSourceGroup: "小说" }), enabled: true, last_used_at: null },
+    ]);
+    const onOpenGroupExplore = vi.fn();
+    render(<DiscoverPage onOpenBook={() => {}} onOpenExplore={() => {}} onOpenGroupExplore={onOpenGroupExplore} />);
+    await screen.findByText(/书源频道/);
+    await userEvent.click(screen.getByText("小说"));
+    expect(onOpenGroupExplore).toHaveBeenCalledWith("小说", [{ id: 1, name: "有浏览" }]);
+  });
+});
+
+describe("groupExploreSources", () => {
+  it("groups explore sources by bookSourceGroup splitting multi groups", () => {
+    const sources = [
+      { id: 1, name: "源A", json: JSON.stringify({ bookSourceGroup: "小说" }) },
+      { id: 2, name: "源B", json: JSON.stringify({ bookSourceGroup: "小说, 玄幻" }) },
+      { id: 3, name: "源C", json: JSON.stringify({}) },
+    ];
+    const groups = groupExploreSources(sources as any);
+    expect(groups.find((g) => g.group === "小说")?.sources.length).toBe(2);
+    expect(groups.find((g) => g.group === "玄幻")?.sources.length).toBe(1);
+    expect(groups.find((g) => g.group === "未分组")?.sources.length).toBe(1);
   });
 });
