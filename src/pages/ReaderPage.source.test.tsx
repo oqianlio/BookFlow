@@ -33,6 +33,8 @@ vi.mock("../services/api", () => ({
   listShelfSourceBooks: vi.fn().mockResolvedValue([]),
   addShelfSourceBook: vi.fn().mockResolvedValue(1),
   removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
+  getCachedChapter: vi.fn().mockResolvedValue(null),
+  saveCachedChapter: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -48,7 +50,7 @@ const ch1 = `<html><body><div id="content"><p>第一章正文内容。</p></div>
 const ch2 = `<html><body><div id="content"><p>第二章正文内容。</p></div><a id="next" href="/c/3.html">下一章</a></body></html>`;
 const ch3 = `<html><body><div id="content"><p>第三章正文内容。</p></div><a id="next" href="/c/4.html">下一章</a></body></html>`;
 
-beforeEach(() => clearTocCache());
+beforeEach(() => { vi.clearAllMocks(); clearTocCache(); });
 
 function renderReader() {
   return render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第一章" }} onBack={() => {}} />);
@@ -446,5 +448,37 @@ describe("ReaderPage (source) switch source", () => {
     expect(container.querySelector('[data-testid="switch-panel"]')).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "pick-c" }));
     expect(onSwitchSource).toHaveBeenCalledWith(expect.objectContaining({ sourceId: 3, sourceName: "源C" }));
+  });
+});
+
+describe("ReaderPage (source) chapter cache", () => {
+  it("renders from cache without fetching the chapter online", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.getCachedChapter).mockResolvedValue("<p>缓存正文内容。</p>");
+    renderReader();
+    expect(await screen.findByText("缓存正文内容。")).toBeInTheDocument();
+    // 章节 URL 未被请求（目录预取的 bookUrl 请求允许存在）
+    const chapterCalls = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html"));
+    expect(chapterCalls.length).toBe(0);
+  });
+
+  it("caches fetched content for offline reuse", async () => {
+    vi.mocked(api.getCachedChapter).mockResolvedValue(null);
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    await waitFor(() =>
+      expect(api.saveCachedChapter).toHaveBeenCalledWith(expect.objectContaining({
+        sourceId: 1,
+        bookUrl: "https://ex.com/book/1.html",
+        chapterUrl: "https://ex.com/c/1.html",
+        content: expect.stringContaining("第一章正文内容。"),
+      })),
+    );
   });
 });

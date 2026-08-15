@@ -9,7 +9,7 @@ import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
-import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook } from "../services/api";
+import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { fetchToc, type TocItem } from "../services/sourceToc";
@@ -158,12 +158,20 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     w.dispatchEvent(new CustomEvent("reader-jump", { detail: loc }));
   }, []);
 
-  // ==== 书源：加载章节（现有 loadChapter 逻辑原样迁入）====
+  // ==== 书源：加载章节（缓存优先）====
   const loadChapter = useCallback(async (c: ChapterState) => {
     if (!isLocal && c.url) {
       setFailed(false);
       setLoading(true); setContent(""); setImages([]); setIsManga(false);
       try {
+        // 1. 缓存优先：命中直接渲染（离线可读）
+        const cached = await getCachedChapter(sourceId, bookUrl, c.url);
+        if (cached) {
+          setContent(cached);
+          setLoading(false);
+          return;
+        }
+        // 2. 在线抓取
         const bs = (await listBookSources()).find((x) => x.id === sourceId);
         if (!bs) { setFailed(true); showError("书源不存在"); setLoading(false); return; }
         const src: Src = parseBookSourceJson(bs.json);
@@ -183,7 +191,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
           setImages(urls);
           setIsManga(true);
         } else {
-          setContent(purifyContent(text, (src as any).purify));
+          const purified = purifyContent(text, (src as any).purify);
+          setContent(purified);
+          // 3. 写缓存（阅读即缓存，供后续离线）
+          void saveCachedChapter({
+            sourceId, bookUrl, chapterIndex: c.index, chapterUrl: c.url, chapterName: c.name,
+            content: purified,
+          }).catch(() => {});
         }
         setLoading(false);
       } catch (e) {
@@ -192,7 +206,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
         setLoading(false);
       }
     }
-  }, [isLocal, sourceId]);
+  }, [isLocal, sourceId, bookUrl]);
 
   useEffect(() => {
     if (chapter.url) void loadChapter(chapter);
