@@ -2,13 +2,15 @@ import { md5 } from "./md5";
 import { SymmetricCrypto } from "./aes";
 import { getSourceVars } from "./sourceVars";
 import { getJsLib } from "./jsLib";
+import { httpGet, mergeUserAgent } from "./api";
 
 export type EngineResult = string;
 
 export type ParsedRule = {
-  type: "css" | "regex" | "regexReplace" | "js" | "xpath" | "json" | "plain";
+  type: "css" | "regex" | "regexReplace" | "js" | "xpath" | "json" | "plain" | "jsBlock";
   value: string;
   attr?: string;
+  after?: string;
 };
 
 export interface BookSource {
@@ -92,6 +94,12 @@ export function parseRule(rule: string): ParsedRule {
   }
   if (s.startsWith("@js:")) {
     return { type: "js", value: s.slice(4) };
+  }
+  if (s.startsWith("<js>")) {
+    const end = s.indexOf("</js>");
+    if (end !== -1) {
+      return { type: "jsBlock", value: s.slice(4, end), after: s.slice(end + 5).trim() };
+    }
   }
   if (s.startsWith("@Json:")) {
     return { type: "json", value: s.slice(6).trim() };
@@ -193,11 +201,20 @@ export function resolveTagIndex(selector: string, scope: Document | Element): El
   return nodes[index] ?? null;
 }
 
-export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: string; result?: unknown; sourceKey?: string }): string {
+export interface ExtractContext {
+  doc?: Document;
+  baseUrl?: string;
+  result?: unknown;
+  sourceKey?: string;
+  source?: any;
+  cookieHost?: string;
+}
+
+export async function extractSingle(doc: Document, rule: string, ctx?: ExtractContext): Promise<string> {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
-      const v = extractSingle(doc, alt, ctx);
+      const v = await extractSingle(doc, alt, ctx);
       if (v) return v;
     }
     return "";
@@ -239,6 +256,21 @@ export function extractSingle(doc: Document, rule: string, ctx?: { baseUrl?: str
     if (str && isUrlField(pathPart) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
     return str;
   }
+  if (parsed.type === "jsBlock") {
+    const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
+    evalJs(parsed.value, jsCtx);
+    const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
+    let doc = ctx?.doc ?? emptyDoc();
+    let newCtx = ctx;
+    if (ajaxUrl) {
+      const headers = mergeUserAgent(ctx?.source?.httpHeaders, ctx?.source?.httpUserAgent);
+      const host = ctx?.cookieHost ?? "";
+      const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, host);
+      doc = parseHtml(html);
+      newCtx = { ...ctx, result: html };
+    }
+    return extractSingle(doc, parsed.after ?? "", newCtx);
+  }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
     const node = resolveTagIndex(parsed.value, doc);
@@ -254,12 +286,12 @@ function finalize(v: string, attr?: string, baseUrl?: string): string {
   return v;
 }
 
-export function extractList(
+export async function extractList(
   doc: Document,
   listRule: string,
   itemRules: Record<string, string>,
-  ctx?: { baseUrl?: string; result?: unknown; sourceKey?: string },
-): Array<Record<string, string>> {
+  ctx?: ExtractContext,
+): Promise<Array<Record<string, string>>> {
   const parsed = parseRule(listRule);
   if (parsed.type === "xpath") {
     const nodes = doc.evaluate(parsed.value, doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -306,6 +338,20 @@ export function extractList(
       }
       return out;
     });
+  }
+  if (parsed.type === "jsBlock") {
+    const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
+    evalJs(parsed.value, jsCtx);
+    const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
+    let doc = ctx?.doc ?? emptyDoc();
+    let newCtx = ctx;
+    if (ajaxUrl) {
+      const headers = mergeUserAgent(ctx?.source?.httpHeaders, ctx?.source?.httpUserAgent);
+      const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, ctx?.cookieHost ?? "");
+      doc = parseHtml(html);
+      newCtx = { ...ctx, result: html };
+    }
+    return extractList(doc, parsed.after ?? "", itemRules, newCtx);
   }
   if (parsed.type !== "css") return [];
   const nodes = selectNodes(doc, parsed.value);
@@ -384,6 +430,7 @@ export interface JsContext {
   page?: number;
   source?: any;
   sourceKey?: string;
+  cookieHost?: string;
 }
 
 export function evalJs(expr: string, ctx: JsContext): any {
@@ -410,6 +457,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
       new SymmetricCrypto(transformation, key, iv),
     put: (k: string, v: any) => { const s = v == null ? "" : String(v); vars.set(String(k), s); return s; },
     get: (k: string) => vars.get(String(k)) ?? "",
+    ajax: (url: any) => { (ctx as any)._ajaxUrl = String(url ?? ""); return ""; },
   };
   const source = ctx.source ?? {};
   // 自定义 source 方法优先；未提供时才注入会话变量兜底（get/put/set 三者对称）
@@ -550,16 +598,16 @@ export function parseExploreUrl(
     });
 }
 
-export function extractBookList(
+export async function extractBookList(
   doc: Document,
   rules: Record<string, string>,
-  ctx: { baseUrl?: string; result?: string; sourceKey?: string },
-): Array<Record<string, string>> {
+  ctx: ExtractContext,
+): Promise<Array<Record<string, string>>> {
   const itemRules: Record<string, string> = {};
   for (const k of ["name", "author", "coverUrl", "bookUrl"] as const) {
     if (rules[k]) itemRules[k] = rules[k];
   }
-  return extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result, sourceKey: ctx.sourceKey });
+  return await extractList(doc, rules.bookList ?? "", itemRules, { baseUrl: ctx.baseUrl, result: ctx.result, sourceKey: ctx.sourceKey, source: ctx.source, cookieHost: ctx.cookieHost });
 }
 
 export function isImageChapter(html: string): boolean {
