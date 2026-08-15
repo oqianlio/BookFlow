@@ -21,7 +21,8 @@
 - [x] Task 2: MangaViewer 新增 onReachEnd（IntersectionObserver 监听末图）
 - [x] Task 3: ReaderPage 接入（文字章节 + 漫画 → goChapter(1)）
 - [x] Task 3b: goChapter(1) 下一章来源兜底：nextContentUrl 优先，目录 toc 兜底
-- [x] Task 4: 测试（PaginatedReader/MangaViewer/ReaderPage.source，含无 nextContentUrl 时目录兜底用例）
+- [x] Task 3c: 下一章后台预加载（fetchChapterData 抽取 + 内存缓存 + prefetchChapter + 无缝切换）
+- [x] Task 4: 测试（PaginatedReader/MangaViewer/ReaderPage.source，含目录兜底与无缝预加载用例）
 - [x] Task 5: 全量 `npm test`、`npm run build`、提交
 
 ## 终审清单
@@ -29,5 +30,6 @@
 - [x] 翻到文字章节末页自动进入下一章 ✓
 - [x] 漫画最后一张图进入视口自动进入下一话 ✓
 - [x] 无 nextContentUrl 规则时从目录取下一章 ✓
+- [x] 下一章后台预加载，翻到末页无缝显示（无「加载中…」）✓
 - [x] 无 nextContentUrl 且目录不可用时静默不跳 ✓
 - [x] 测试全绿、构建通过、工作树干净 ✓

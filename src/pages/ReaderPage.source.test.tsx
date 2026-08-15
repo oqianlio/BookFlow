@@ -624,6 +624,29 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第二章");
   });
 
+  it("prefetches the next chapter so flipping to the page end shows it seamlessly", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const { container } = renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    // 后台已预取下一章并完成（写入持久缓存）
+    await waitFor(() =>
+      expect(api.saveCachedChapter).toHaveBeenCalledWith(expect.objectContaining({ chapterUrl: "https://ex.com/c/2.html" })),
+    );
+    // 翻到章节末页 → 无缝显示下一章，无「加载中…」
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    fireEvent.click(wrap, { clientX: 900 });
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    expect(screen.queryByText("加载中…")).not.toBeInTheDocument();
+  });
+
   it("auto-loads the next chapter when the last manga image enters the viewport", async () => {
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
     const src = JSON.parse(sourceJson);

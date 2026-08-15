@@ -77,6 +77,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
 
   // ==== 书源：目录（阅读页内跳转） ====
   const [toc, setToc] = useState<TocItem[]>([]);
+  const tocRef = useRef<TocItem[]>([]);
+  tocRef.current = toc;
   const [tocLoading, setTocLoading] = useState(false);
   const [tocFailed, setTocFailed] = useState(false);
   const tocSeqRef = useRef(0);
@@ -177,55 +179,97 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     w.dispatchEvent(new CustomEvent("reader-jump", { detail: loc }));
   }, []);
 
-  // ==== 书源：加载章节（缓存优先）====
+  // ==== 书源：章节数据抓取（持久缓存优先 → 网络）====
+  const fetchChapterData = useCallback(async (c: ChapterState): Promise<{ content: string; images: string[]; isManga: boolean; nextUrl: string }> => {
+    // 1. 持久缓存优先：命中直接渲染（离线可读）
+    const cached = await getCachedChapter(sourceId, bookUrl, c.url);
+    if (cached) return { content: cached, images: [], isManga: false, nextUrl: "" };
+    // 2. 在线抓取
+    const bs = (await listBookSources()).find((x) => x.id === sourceId);
+    if (!bs) throw new Error("书源不存在");
+    const src: Src = parseBookSourceJson(bs.json);
+    setSrc(src);
+    let cookieJarHost = "";
+    try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
+    const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+    console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
+    const doc = parseHtml(html);
+    const rules = src.ruleContent ?? {};
+    const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+    console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
+    const next = rules.nextContentUrl ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
+    const urls = extractImageUrls(text, c.url);
+    if (isImageChapter(text) && urls.length !== 1) {
+      return { content: "", images: urls, isManga: true, nextUrl: next };
+    }
+    const purified = purifyContent(text, (src as any).purify);
+    // 写缓存（阅读即缓存，供后续离线）
+    void saveCachedChapter({
+      sourceId, bookUrl, chapterIndex: c.index, chapterUrl: c.url, chapterName: c.name,
+      content: purified,
+    }).catch(() => {});
+    return { content: purified, images: [], isManga: false, nextUrl: next };
+  }, [sourceId, bookUrl]);
+
+  // ==== 书源：内存章节缓存（预加载结果 + 已读章节），上限 12 条 ====
+  const chapterCacheRef = useRef<Map<string, { content: string; images: string[]; isManga: boolean; nextUrl: string }>>(new Map());
+  const rememberChapter = useCallback((url: string, data: { content: string; images: string[]; isManga: boolean; nextUrl: string }) => {
+    const map = chapterCacheRef.current;
+    map.set(url, data);
+    if (map.size > 12) {
+      const oldest = map.keys().next().value;
+      if (oldest !== undefined) map.delete(oldest);
+    }
+  }, []);
+
+  // ==== 书源：后台预取下一章（翻到末页时无缝衔接，无加载闪烁）====
+  const prefetchingRef = useRef<Set<string>>(new Set());
+  const prefetchChapter = useCallback(async (c: ChapterState) => {
+    if (chapterCacheRef.current.has(c.url) || prefetchingRef.current.has(c.url)) return;
+    prefetchingRef.current.add(c.url);
+    try {
+      const data = await fetchChapterData(c);
+      rememberChapter(c.url, data);
+    } catch {
+      // 预取失败静默：翻页时走正常加载
+    } finally {
+      prefetchingRef.current.delete(c.url);
+    }
+  }, [fetchChapterData, rememberChapter]);
+
+  // ==== 书源：加载章节（内存缓存 → 持久缓存 → 网络）====
   const loadChapter = useCallback(async (c: ChapterState) => {
     if (!isLocal && c.url) {
+      // 0. 内存预加载命中：无缝渲染，无 loading
+      const mem = chapterCacheRef.current.get(c.url);
+      if (mem) {
+        nextUrlRef.current = mem.nextUrl;
+        if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
+        else { setContent(mem.content); setIsManga(false); setImages([]); }
+        return;
+      }
       setFailed(false);
       setLoading(true); setContent(""); setImages([]); setIsManga(false);
       try {
-        // 1. 缓存优先：命中直接渲染（离线可读）
-        const cached = await getCachedChapter(sourceId, bookUrl, c.url);
-        if (cached) {
-          setContent(cached);
-          setLoading(false);
-          return;
-        }
-        // 2. 在线抓取
-        const bs = (await listBookSources()).find((x) => x.id === sourceId);
-        if (!bs) { setFailed(true); showError("书源不存在"); setLoading(false); return; }
-        const src: Src = parseBookSourceJson(bs.json);
-        setSrc(src);
-        let cookieJarHost = "";
-        try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
-        const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
-        console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
-        const doc = parseHtml(html);
-        const rules = src.ruleContent ?? {};
-        const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
-        console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
-        const next = rules.nextContentUrl ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
-        nextUrlRef.current = next;
-        const urls = extractImageUrls(text, c.url);
-        if (isImageChapter(text) && urls.length !== 1) {
-          setImages(urls);
-          setIsManga(true);
-        } else {
-          const purified = purifyContent(text, (src as any).purify);
-          setContent(purified);
-          // 3. 写缓存（阅读即缓存，供后续离线）
-          void saveCachedChapter({
-            sourceId, bookUrl, chapterIndex: c.index, chapterUrl: c.url, chapterName: c.name,
-            content: purified,
-          }).catch(() => {});
-        }
+        const data = await fetchChapterData(c);
+        nextUrlRef.current = data.nextUrl;
+        rememberChapter(c.url, data);
+        if (data.isManga) { setImages(data.images); setIsManga(true); }
+        else { setContent(data.content); }
         setLoading(false);
+        // 预取下一章：nextContentUrl 优先，目录兜底
+        const nextUrl = data.nextUrl || tocRef.current[c.index + 1]?.url;
+        if (nextUrl) {
+          const nextName = tocRef.current[c.index + 1]?.name ?? `第 ${c.index + 2} 章`;
+          void prefetchChapter({ index: c.index + 1, url: nextUrl, name: nextName });
+        }
       } catch (e) {
         setFailed(true);
         showError(String(e));
         setLoading(false);
       }
     }
-  }, [isLocal, sourceId, bookUrl]);
+  }, [isLocal, sourceId, bookUrl, fetchChapterData, rememberChapter, prefetchChapter]);
 
   useEffect(() => {
     if (chapter.url) void loadChapter(chapter);
@@ -279,6 +323,15 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     };
   }, [isLocal, content, loading, persist]);
 
+  // ==== 书源：内存缓存命中时同步渲染，实现无缝章节切换（无 loading 闪烁）====
+  const applyCachedChapter = useCallback((url: string) => {
+    const mem = chapterCacheRef.current.get(url);
+    if (!mem) return;
+    nextUrlRef.current = mem.nextUrl;
+    if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
+    else { setContent(mem.content); setIsManga(false); setImages([]); }
+  }, []);
+
   // ==== 书源：上一章/下一章 ====
   const goChapter = (delta: number) => {
     const idx = chapter.index + delta;
@@ -287,11 +340,15 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       const next = nextUrlRef.current;
       const fallback = toc[idx];
       if (!next && !fallback) return;
+      const targetUrl = next || fallback!.url;
+      const name = fallback?.name ?? `第 ${idx + 1} 章`;
       prevUrlsRef.current.push(chapter.url);
-      setChapter({ index: idx, url: next || fallback!.url, name: fallback?.name ?? `第 ${idx + 1} 章` });
+      applyCachedChapter(targetUrl);
+      setChapter({ index: idx, url: targetUrl, name });
     } else {
       const prev = prevUrlsRef.current.pop();
       if (!prev) return;
+      applyCachedChapter(prev);
       setChapter({ index: idx, url: prev, name: `第 ${idx + 1} 章` });
     }
   };
