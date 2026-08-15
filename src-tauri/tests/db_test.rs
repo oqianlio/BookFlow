@@ -119,3 +119,40 @@ fn shelf_source_book_remove() {
     drop(conn);
     fs::remove_dir_all(dir.path()).unwrap();
 }
+
+#[test]
+fn chapter_cache_roundtrip_and_upsert() {
+    let dir = tempdir().unwrap();
+    let conn = init_db(dir.path().join("test.db")).unwrap();
+    let sid = add_source(&conn, "示例", "https://ex.com", "{}").unwrap();
+    let book = "https://ex.com/b/1.html";
+    save_cached_chapter(&conn, &NewCachedChapter {
+        source_id: sid, book_url: book.into(), chapter_index: 0,
+        chapter_url: "https://ex.com/c/1.html".into(), chapter_name: "第一章".into(),
+        content: "<p>正文一</p>".into(),
+    }).unwrap();
+    save_cached_chapter(&conn, &NewCachedChapter {
+        source_id: sid, book_url: book.into(), chapter_index: 1,
+        chapter_url: "https://ex.com/c/2.html".into(), chapter_name: "第二章".into(),
+        content: "<p>正文二</p>".into(),
+    }).unwrap();
+    // UPSERT：同章节重复保存更新内容
+    save_cached_chapter(&conn, &NewCachedChapter {
+        source_id: sid, book_url: book.into(), chapter_index: 0,
+        chapter_url: "https://ex.com/c/1.html".into(), chapter_name: "第一章".into(),
+        content: "<p>正文一 v2</p>".into(),
+    }).unwrap();
+    let list = list_cached_chapters(&conn, sid, book).unwrap();
+    assert_eq!(list.len(), 2);
+    assert_eq!(
+        get_cached_chapter(&conn, sid, book, "https://ex.com/c/1.html").unwrap().unwrap(),
+        "<p>正文一 v2</p>"
+    );
+    // 跨书隔离
+    assert!(get_cached_chapter(&conn, sid, "https://ex.com/b/2.html", "https://ex.com/c/1.html").unwrap().is_none());
+    // 删除整本
+    delete_book_cache(&conn, sid, book).unwrap();
+    assert!(list_cached_chapters(&conn, sid, book).unwrap().is_empty());
+    drop(conn);
+    fs::remove_dir_all(dir.path()).unwrap();
+}

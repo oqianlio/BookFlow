@@ -51,6 +51,7 @@ pub fn run() {
             open_login_window,
             log_frontend,
             add_shelf_source_book, list_shelf_source_books, remove_shelf_source_book,
+            save_cached_chapter, list_cached_chapters, get_cached_chapter, delete_book_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

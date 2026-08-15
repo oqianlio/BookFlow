@@ -138,6 +138,16 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             last_opened_at INTEGER,
             UNIQUE(source_id, book_url)
         );
+        CREATE TABLE IF NOT EXISTS chapter_cache (
+            source_id INTEGER NOT NULL,
+            book_url TEXT NOT NULL,
+            chapter_index INTEGER NOT NULL,
+            chapter_url TEXT NOT NULL,
+            chapter_name TEXT NOT NULL,
+            content TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (source_id, book_url, chapter_url)
+        );
         "#,
     )?;
     Ok(conn)
@@ -461,5 +471,72 @@ pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>
 
 pub fn remove_shelf_source_book(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM shelf_source_books WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CachedChapter {
+    pub chapter_index: i64,
+    pub chapter_url: String,
+    pub chapter_name: String,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewCachedChapter {
+    pub source_id: i64,
+    pub book_url: String,
+    pub chapter_index: i64,
+    pub chapter_url: String,
+    pub chapter_name: String,
+    pub content: String,
+}
+
+pub fn save_cached_chapter(conn: &Connection, c: &NewCachedChapter) -> Result<()> {
+    let t = now();
+    conn.execute(
+        "INSERT INTO chapter_cache (source_id, book_url, chapter_index, chapter_url, chapter_name, content, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(source_id, book_url, chapter_url) DO UPDATE SET
+           chapter_index = excluded.chapter_index,
+           chapter_name = excluded.chapter_name,
+           content = excluded.content,
+           updated_at = excluded.updated_at",
+        params![c.source_id, c.book_url, c.chapter_index, c.chapter_url, c.chapter_name, c.content, t],
+    )?;
+    Ok(())
+}
+
+pub fn list_cached_chapters(conn: &Connection, source_id: i64, book_url: &str) -> Result<Vec<CachedChapter>> {
+    let mut stmt = conn.prepare(
+        "SELECT chapter_index, chapter_url, chapter_name, updated_at FROM chapter_cache
+         WHERE source_id = ?1 AND book_url = ?2 ORDER BY chapter_index",
+    )?;
+    let rows = stmt.query_map(params![source_id, book_url], |r| {
+        Ok(CachedChapter {
+            chapter_index: r.get(0)?, chapter_url: r.get(1)?,
+            chapter_name: r.get(2)?, updated_at: r.get(3)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn get_cached_chapter(conn: &Connection, source_id: i64, book_url: &str, chapter_url: &str) -> Result<Option<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT content FROM chapter_cache WHERE source_id = ?1 AND book_url = ?2 AND chapter_url = ?3",
+    )?;
+    let mut rows = stmt.query(params![source_id, book_url, chapter_url])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(r.get(0)?))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn delete_book_cache(conn: &Connection, source_id: i64, book_url: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM chapter_cache WHERE source_id = ?1 AND book_url = ?2",
+        params![source_id, book_url],
+    )?;
     Ok(())
 }

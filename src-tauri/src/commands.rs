@@ -345,3 +345,37 @@ pub fn list_shelf_source_books(state: State<'_, AppState>) -> Result<Vec<crate::
 pub fn remove_shelf_source_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
     crate::db::remove_shelf_source_book(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
 }
+
+#[derive(serde::Deserialize)]
+pub struct CachedChapterInput {
+    pub source_id: i64,
+    pub book_url: String,
+    pub chapter_index: i64,
+    pub chapter_url: String,
+    pub chapter_name: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub fn save_cached_chapter(input: CachedChapterInput, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::save_cached_chapter(&state.db.lock().unwrap(), &crate::db::NewCachedChapter {
+        source_id: input.source_id, book_url: input.book_url,
+        chapter_index: input.chapter_index, chapter_url: input.chapter_url,
+        chapter_name: input.chapter_name, content: input.content,
+    }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_cached_chapters(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Vec<crate::db::CachedChapter>, String> {
+    crate::db::list_cached_chapters(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_cached_chapter(source_id: i64, book_url: String, chapter_url: String, state: State<'_, AppState>) -> Result<Option<String>, String> {
+    crate::db::get_cached_chapter(&state.db.lock().unwrap(), source_id, &book_url, &chapter_url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_book_cache(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::delete_book_cache(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+}

@@ -168,3 +168,21 @@ export async function listShelfSourceBooks(): Promise<ShelfSourceBook[]> {
 export async function removeShelfSourceBook(id: number): Promise<void> {
   await invoke("remove_shelf_source_book", { id });
 }
+
+export async function saveCachedChapter(c: { sourceId: number; bookUrl: string; chapterIndex: number; chapterUrl: string; chapterName: string; content: string }): Promise<void> {
+  await invoke("save_cached_chapter", {
+    input: {
+      sourceId: c.sourceId, bookUrl: c.bookUrl, chapterIndex: c.chapterIndex,
+      chapterUrl: c.chapterUrl, chapterName: c.chapterName, content: c.content,
+    },
+  });
+}
+export async function listCachedChapters(sourceId: number, bookUrl: string): Promise<Array<{ chapter_index: number; chapter_url: string; chapter_name: string; updated_at: number }>> {
+  return invoke("list_cached_chapters", { sourceId, bookUrl });
+}
+export async function getCachedChapter(sourceId: number, bookUrl: string, chapterUrl: string): Promise<string | null> {
+  return invoke<string | null>("get_cached_chapter", { sourceId, bookUrl, chapterUrl });
+}
+export async function deleteBookCache(sourceId: number, bookUrl: string): Promise<void> {
+  await invoke("delete_book_cache", { sourceId, bookUrl });
+}
