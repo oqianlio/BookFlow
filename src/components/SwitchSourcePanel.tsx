@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listBookSources } from "../services/api";
 import { searchBookSources, type SearchHit } from "../services/searchService";
 
@@ -32,6 +32,16 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
 
   useEffect(() => { void run(); }, [excludeSourceId, title, author]);
 
+  // 同一书源只保留一个候选（源搜索可能返回同名多个版本），避免列表出现同源多行
+  const candidates = useMemo(() => {
+    const seen = new Set<number>();
+    return hits.filter((h) => {
+      if (seen.has(h.sourceId)) return false;
+      seen.add(h.sourceId);
+      return true;
+    });
+  }, [hits]);
+
   return (
     <div className="panel switch-source-panel">
       <h3>换源：{title}</h3>
@@ -43,9 +53,9 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
         </div>
       )}
       {!busy && !failed && hits.length === 0 && <p className="panel-empty">未在其它书源找到该书</p>}
-      {hits.length > 0 && (
+      {candidates.length > 0 && (
         <div className="switch-source-list">
-          {hits.map((h, i) => (
+          {candidates.map((h, i) => (
             <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onPick(h)}>
               <div className="hit-info">
                 {/* 书名统一显示用户确认的书名，避免各源解析出杂质书名（如「三体_笔趣阁」） */}

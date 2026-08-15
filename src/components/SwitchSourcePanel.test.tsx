@@ -52,6 +52,21 @@ describe("SwitchSourcePanel", () => {
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ title: "三体_笔趣阁", sourceId: 2 }));
   });
 
+  it("shows a single candidate per source (dedupes by sourceId)", async () => {
+    vi.mocked(searchService.searchBookSources).mockResolvedValue([
+      { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/1.html", sourceId: 2, sourceName: "源B" },
+      { title: "三体（全集）", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/2.html", sourceId: 2, sourceName: "源B" },
+      { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://c.com/1.html", sourceId: 3, sourceName: "源C" },
+    ]);
+    const onPick = vi.fn();
+    render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={onPick} onClose={() => {}} />);
+    await screen.findByText("源C");
+    // 同一源（源B）只保留一个候选
+    expect(screen.getAllByText("源B").length).toBe(1);
+    expect(screen.getAllByText("源C").length).toBe(1);
+    expect(screen.getAllByText("三体", { selector: ".hit-title" }).length).toBe(2);
+  });
+
   it("shows empty state when no candidates found", async () => {
     vi.mocked(searchService.searchBookSources).mockResolvedValue([]);
     render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={() => {}} onClose={() => {}} />);
