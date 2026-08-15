@@ -87,11 +87,15 @@ export function jsonGet(obj: any, path: string): any {
 
 export function parseRule(rule: string): ParsedRule {
   const s = rule.trim();
+  if (s.toLowerCase().startsWith("@xpath:")) {
+    return { type: "xpath", value: s.slice(7) };
+  }
+  // 裸 XPath（legado 常直接写 // 开头，无前缀）
+  if (s.startsWith("//") || s.startsWith("(//")) {
+    return { type: "xpath", value: s };
+  }
   if (s.startsWith("@css:")) {
     return parseAttrRule(s.slice(5));
-  }
-  if (s.startsWith("@xpath:")) {
-    return { type: "xpath", value: s.slice(7) };
   }
   if (s.startsWith("@js:")) {
     return { type: "js", value: s.slice(4) };
@@ -138,6 +142,10 @@ function parseAttrRule(s: string): ParsedRule {
     // 纯属性后缀（如 "@text"/"@href"）：表示对当前节点自身取值
     return { type: "css", value: "", attr: body.slice(1), replace };
   }
+  // legado 纯属性名（text/href/src/html 等）：对当前节点自身取值
+  if (["text", "ownText", "all", "textNodes", "html", "href", "src"].includes(body)) {
+    return { type: "css", value: "", attr: body, replace };
+  }
   const m = body.match(/^(.+?)@([a-zA-Z]+)$/);
   if (m) {
     return { type: "css", value: m[1], attr: m[2], replace };
@@ -148,6 +156,16 @@ function parseAttrRule(s: string): ParsedRule {
 export function selectNodes(doc: Document, selector: string): Element[] {
   if (!selector.trim()) return [];
   return Array.from(doc.querySelectorAll(selector));
+}
+
+/** 安全选择：常规 querySelectorAll，失败（非法选择器）则回退 queryIndexed 单节点 */
+function selectNodesSafe(selector: string, scope: Document | Element): Element[] {
+  try {
+    return Array.from(scope.querySelectorAll(selector));
+  } catch {
+    const hit = queryIndexed(selector, scope);
+    return hit ? [hit] : [];
+  }
 }
 
 const ABS_URL_RE = /^[a-z][a-z0-9+.-]*:/i;
@@ -312,6 +330,43 @@ export async function extractList(
   itemRules: Record<string, string>,
   ctx?: ExtractContext,
 ): Promise<Array<Record<string, string>>> {
+  // 链式元素规则（legado A@B@C）：含 @ 且非已知前缀（@xpath/@js/json/纯属性）
+  const trimmedList = listRule.trim();
+  const looksChain = trimmedList.includes("@")
+    && !trimmedList.startsWith("@")
+    && !trimmedList.startsWith("//")
+    && !trimmedList.startsWith("$");
+  if (looksChain) {
+    const chain = trimmedList.split("@").map((s) => s.trim()).filter(Boolean);
+    if (chain.length > 1) {
+      // 链式 A@B@C：A 选根节点（支持 .class.N 索引取单个），B/C 在节点内取全部匹配
+      let nodes: Element[] = selectNodesSafe(chain[0], doc);
+      for (let i = 1; i < chain.length && nodes.length > 0; i++) {
+        const next: Element[] = [];
+        for (const n of nodes) {
+          // 段含类索引（如 .clearfix.1）→ 取指定第 N 个；否则取全部匹配
+          if (/\.\d+$/.test(chain[i])) {
+            const hit = queryIndexed(chain[i], n);
+            if (hit) next.push(hit);
+          } else {
+            try {
+              next.push(...Array.from(n.querySelectorAll(chain[i])));
+            } catch {
+              // 非法选择器回退
+              const hit = queryIndexed(chain[i], n);
+              if (hit) next.push(hit);
+            }
+          }
+        }
+        nodes = next;
+      }
+      return nodes.map((node) => {
+        const out: Record<string, string> = {};
+        for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule, ctx?.baseUrl);
+        return out;
+      });
+    }
+  }
   const parsed = parseRule(listRule);
   if (parsed.type === "xpath") {
     const nodes = doc.evaluate(parsed.value, doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -322,7 +377,7 @@ export async function extractList(
     }
     return arr.map((node) => {
       const out: Record<string, string> = {};
-      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule);
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule, ctx?.baseUrl);
       return out;
     });
   }
@@ -424,6 +479,24 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
     return "";
   }
   const parsed = parseRule(rule);
+  if (parsed.type === "xpath") {
+    // item 规则内 XPath（如 @XPath:.//a/text() 或 .//a/@href）：相对当前节点求值
+    try {
+      const sv = el.ownerDocument!.evaluate(parsed.value, el, null, XPathResult.STRING_TYPE, null);
+      const str = (sv.stringValue ?? "").trim();
+      if (str) {
+        // @href/@src 结尾 → 解析相对 URL
+        const isUrl = parsed.value.endsWith("/@href") || parsed.value.endsWith("/@src");
+        return finalize(applyReplacements(str, parsed.replace), isUrl ? "href" : "text", baseUrl);
+      }
+      const result = el.ownerDocument!.evaluate(parsed.value, el, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      const node = result.singleNodeValue as Element | null;
+      if (node) return finalize(applyReplacements(nodeValue(node, "text"), parsed.replace), "text", baseUrl);
+      return "";
+    } catch {
+      return "";
+    }
+  }
   if (parsed.type !== "css") return "";
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取当前节点自身

@@ -485,6 +485,35 @@ describe("legado ## replace rules", () => {
     expect(v).toBe("内容");
   });
 });
+
+describe("legado xpath and chain element rules", () => {
+  it("parseRule recognizes bare XPath and uppercase @XPath:", () => {
+    const r = parseRule("//*[@id='allchapter']//dd[a]");
+    expect(r.type).toBe("xpath");
+    expect(parseRule("@XPath:.//a/text()").type).toBe("xpath");
+  });
+
+  it("extractList handles bare XPath chapterList", async () => {
+    const html = `<html><body><div id="allchapter"><dd><a href="/c/1.html">第一章</a></dd><dd><a href="/c/2.html">第二章</a></dd></div></body></html>`;
+    const doc = parseHtml(html);
+    const items = await extractList(doc, "//*[@id='allchapter']//dd[a]", {
+      name: "@XPath:.//a/text()", url: "@XPath:.//a/@href",
+    }, { baseUrl: "https://ex.com" });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("第一章");
+    expect(items[0].url).toBe("https://ex.com/c/1.html");
+  });
+
+  it("extractList handles chained @ element rules with class index", async () => {
+    const html = `<div class="clearfix"><ul><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ul></div><div class="clearfix"><ul><li><a href="/x/9.html">X章</a></li></ul></div>`;
+    const doc = parseHtml(html);
+    // .clearfix.0 = 第 1 个 clearfix（0 基索引，与 tag.x 语义一致）
+    const items = await extractList(doc, ".clearfix.0@li@a", { name: "text", url: "href" }, { baseUrl: "https://ex.com" });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("第一章");
+    expect(items[0].url).toBe("https://ex.com/c/1.html");
+  });
+});
 });
 
 describe("extractBookList", () => {
