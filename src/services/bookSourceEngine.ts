@@ -452,7 +452,7 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
   }
   if (parsed.type === "jsBlock") {
     const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
-    evalJs(parsed.value, jsCtx);
+    const raw = evalJs(parsed.value, jsCtx);
     const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
     let jsDoc = ctx?.doc ?? doc;
     let newCtx = ctx;
@@ -462,6 +462,12 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
       const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, host);
       jsDoc = parseHtml(html);
       newCtx = { ...ctx, result: html };
+    }
+    // legado 行为：jsBlock 的返回值改写成后续规则的 result（如 result=解码后的 JSON 再走 $.book_list.*）
+    const rawStr = raw == null ? "" : typeof raw === "string" ? raw : JSON.stringify(raw);
+    if (rawStr && rawStr !== String(ctx?.result ?? "")) {
+      newCtx = { ...(newCtx ?? {}), result: rawStr, sourceKey: ctx?.sourceKey, source: ctx?.source, baseUrl: ctx?.baseUrl, cookieHost: ctx?.cookieHost };
+      jsDoc = parseHtml(rawStr);
     }
     return extractSingle(jsDoc, parsed.after ?? "", newCtx);
   }
@@ -576,7 +582,7 @@ export async function extractList(
   }
   if (parsed.type === "jsBlock") {
     const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
-    evalJs(parsed.value, jsCtx);
+    const raw = evalJs(parsed.value, jsCtx);
     const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
     let jsDoc = ctx?.doc ?? doc;
     let newCtx = ctx;
@@ -585,6 +591,12 @@ export async function extractList(
       const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, ctx?.cookieHost ?? "");
       jsDoc = parseHtml(html);
       newCtx = { ...ctx, result: html };
+    }
+    // legado 行为：jsBlock 的返回值改写成后续规则的 result（如 result=解码后的 JSON 再走 $.book_list.*）
+    const rawStr = raw == null ? "" : typeof raw === "string" ? raw : JSON.stringify(raw);
+    if (rawStr && rawStr !== String(ctx?.result ?? "")) {
+      newCtx = { ...(newCtx ?? {}), result: rawStr, sourceKey: ctx?.sourceKey, source: ctx?.source, baseUrl: ctx?.baseUrl, cookieHost: ctx?.cookieHost };
+      jsDoc = parseHtml(rawStr);
     }
     return extractList(jsDoc, parsed.after ?? "", itemRules, newCtx);
   }

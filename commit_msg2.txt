@@ -1,0 +1,6 @@
+feat: jsBlock 返回值作为后续规则数据源（找书神器等 JSON 解码源）
+
+- extractList/extractSingle 的 <js>...</js> 分支现在保留 evalJs 返回值，
+  改写后续规则的 result（如 result=解码后 JSON 再走 $.book_list.*）
+- 修复前 jsBlock 结果被丢弃，解码类书源全部无结果
+- 健康检查脚本支持 SOURCE_NAME 过滤便于单源调试

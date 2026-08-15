@@ -9,6 +9,7 @@ import { mergeUserAgent } from "./api";
 
 const ENABLED = !!process.env.SOURCE_HEALTH;
 const KEYWORD = process.env.SOURCE_KEYWORD ?? "斗破苍穹";
+const NAME_FILTER = process.env.SOURCE_NAME ?? "";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -70,8 +71,9 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
 describe.skipIf(!ENABLED)("source health check", () => {
   it("checks all enabled sources with a real search", async () => {
     const file = path.resolve(__dirname, "../../tmp_sources.json");
-    const sources = JSON.parse(fs.readFileSync(file, "utf-8")) as Array<{ id: number; name: string; url: string; json: string }>;
-    console.log(`\n检查 ${sources.length} 个书源，关键词：${KEYWORD}\n`);
+    let sources = JSON.parse(fs.readFileSync(file, "utf-8")) as Array<{ id: number; name: string; url: string; json: string }>;
+    if (NAME_FILTER) sources = sources.filter((s) => s.name.includes(NAME_FILTER));
+    console.log(`\n检查 ${sources.length} 个书源，关键词：${KEYWORD}${NAME_FILTER ? `，过滤：${NAME_FILTER}` : ""}\n`);
     const results: any[] = [];
     const CHUNK = 30;
     for (let i = 0; i < sources.length; i += CHUNK) {

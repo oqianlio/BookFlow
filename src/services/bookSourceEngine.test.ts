@@ -313,6 +313,39 @@ describe("extractList @js: branch", () => {
     expect(items[0].a).toBe("x");
   });
 
+  it("jsBlock result feeds the continuation rule (找书神器 pattern)", async () => {
+    // 页面里 search_book_str 是 base64(URI 编码 JSON)，jsBlock 解码后赋值 result，后续走 $.book_list.*
+    const json = { domain: "mianfei22.com", book_list: [
+      { book_name: "斗破苍穹", author: "天蚕土豆", book_id: 2652896 },
+      { book_name: "武动乾坤", author: "天蚕土豆", book_id: 7 },
+    ] };
+    const uriEncoded = encodeURIComponent(JSON.stringify(json));
+    const b64 = btoa(new TextEncoder().encode(uriEncoded).reduce((s, b) => s + String.fromCharCode(b), ""));
+    const html = `window['search_book_str']="${b64}"`;
+    const rule = `<js>
+pi=src.match(/search_book_str']="(.+)"/)[1];
+var je=java.base64Decode(pi,"utf-8")
+var st=decodeURIComponent(je)
+result=st;
+result;
+</js>
+$.book_list.*`;
+    const items = await extractList(emptyDoc(), rule, {
+      name: "$.book_name", author: "$.author", bookUrl: "$.book_id",
+    }, { result: html });
+    expect(items.length).toBe(2);
+    expect(items[0].name).toBe("斗破苍穹");
+    expect(items[0].author).toBe("天蚕土豆");
+    expect(items[1].bookUrl).toBe("7");
+  });
+
+  it("jsBlock returning array feeds $[*] continuation", async () => {
+    const rule = `<js>JSON.stringify([{n:'a'},{n:'b'}])</js>
+$[*]`;
+    const items = await extractList(emptyDoc(), rule, { name: "$.n" }, { result: "<html></html>" });
+    expect(items.map((i) => i.name)).toEqual(["a", "b"]);
+  });
+
   it("extractFromJsObject supports $.field and plain field", () => {
     expect(extractFromJsObject({ name: "N", id: 7 }, "$.name")).toBe("N");
     expect(extractFromJsObject({ name: "N", id: 7 }, "id")).toBe("7");
