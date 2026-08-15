@@ -505,6 +505,14 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
       return "";
     }
   }
+  if (parsed.type === "js") {
+    // item 规则 @js:：node = 当前列表项元素（jsoup 风格包装），支持 node.select/selectFirst/attr/text 等
+    try {
+      return String(evalJs(parsed.value, { doc: el.ownerDocument ?? emptyDoc(), node: el, result: "", baseUrl }) ?? "");
+    } catch {
+      return "";
+    }
+  }
   if (parsed.type !== "css") return "";
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取当前节点自身
@@ -556,6 +564,75 @@ export function emptyDoc(): Document {
   return new DOMParser().parseFromString("", "text/html");
 }
 
+// ============ legado/jsoup 风格节点 API ============
+// 大量 legado 书源在 @js: 规则里使用 jsoup 方法（node.select/selectFirst/attr/text/children 等），
+// 裸 Element 不具备这些方法导致规则失败。这里给节点附加 jsoup 风格方法（实例级，不污染原型）。
+type JNode = Element & Record<string, any>;
+
+/** 实例属性遮蔽：children/body 等只读访问器需 defineProperty 才能覆盖 */
+function def(o: any, k: string, v: any): void {
+  Object.defineProperty(o, k, { value: v, writable: true, configurable: true });
+}
+
+function jArr(arr: Element[]): any[] {
+  const a: any = arr;
+  def(a, "first", () => (arr[0] ? jsoupNode(arr[0]) : null));
+  def(a, "last", () => (arr[arr.length - 1] ? jsoupNode(arr[arr.length - 1]) : null));
+  def(a, "size", () => arr.length);
+  def(a, "get", (i: number) => (arr[i] ? jsoupNode(arr[i]) : null));
+  def(a, "text", () => arr.map((n) => (n.textContent ?? "")).join("").trim());
+  def(a, "attr", (k: string) => arr[0]?.getAttribute(k) ?? "");
+  def(a, "html", () => arr.map((n) => n.innerHTML).join(""));
+  return a;
+}
+
+function jsoupNode(n: Element): JNode {
+  const o = n as JNode;
+  if (o.__jsoup) return o;
+  def(o, "__jsoup", true);
+  const origChildren = n.children; // 缓存：children 属性会被下方方法覆盖
+  def(o, "select", (sel: string) => jArr(Array.from(n.querySelectorAll(sel))));
+  def(o, "selectFirst", (sel: string) => { const e = n.querySelector(sel); return e ? jsoupNode(e) : null; });
+  def(o, "attr", (k: string) => n.getAttribute(k) ?? "");
+  def(o, "text", () => (n.textContent ?? "").trim());
+  def(o, "ownText", () => {
+    let s = "";
+    for (const c of n.childNodes) if (c.nodeType === 3) s += c.textContent;
+    return s.trim();
+  });
+  def(o, "html", () => n.innerHTML);
+  def(o, "outerHtml", () => n.outerHTML);
+  def(o, "children", () => jArr(Array.from(origChildren)));
+  def(o, "parent", () => (n.parentElement ? jsoupNode(n.parentElement) : null));
+  def(o, "parents", () => {
+    const out: Element[] = [];
+    let p = n.parentElement;
+    while (p) { out.push(p); p = p.parentElement; }
+    return jArr(out);
+  });
+  def(o, "first", () => o);
+  def(o, "last", () => o);
+  def(o, "indexOf", () => {
+    let i = 0;
+    let sib = n.previousElementSibling;
+    while (sib) { i++; sib = sib.previousElementSibling; }
+    return i;
+  });
+  return o;
+}
+
+function jsoupDoc(doc: Document): Document & Record<string, any> {
+  const o = doc as Document & Record<string, any>;
+  if (o.__jsoup) return o;
+  def(o, "__jsoup", true);
+  def(o, "select", (sel: string) => jArr(Array.from(doc.querySelectorAll(sel))));
+  def(o, "selectFirst", (sel: string) => { const e = doc.querySelector(sel); return e ? jsoupNode(e) : null; });
+  def(o, "text", () => doc.body?.textContent?.trim() ?? "");
+  def(o, "html", () => doc.body?.innerHTML ?? "");
+  def(o, "body", () => (doc.body ? jsoupNode(doc.body) : null));
+  return o;
+}
+
 export interface JsContext {
   node?: Element;
   doc: Document;
@@ -587,12 +664,29 @@ export function evalJs(expr: string, ctx: JsContext): any {
     },
     md5: (s: string) => md5(String(s)),
     md5Encode: (s: string) => md5(String(s)),
+    md5Encode16: (s: string) => md5(String(s)).slice(8, 24),
     random: (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min,
     createSymmetricCrypto: (transformation: string, key: any, iv?: any) =>
       new SymmetricCrypto(transformation, key, iv),
     put: (k: string, v: any) => { const s = v == null ? "" : String(v); vars.set(String(k), s); return s; },
     get: (k: string) => vars.get(String(k)) ?? "",
     ajax: (url: any) => { (ctx as any)._ajaxUrl = String(url ?? ""); return ""; },
+    toString: (x: any) => String(x ?? ""),
+    toJSONString: (x: any) => {
+      try { return JSON.stringify(x); } catch { return String(x ?? ""); }
+    },
+    stringToBase64: (s: string) => {
+      const bytes = new TextEncoder().encode(String(s));
+      let bin = "";
+      for (const b of bytes) bin += String.fromCharCode(b);
+      return btoa(bin);
+    },
+    base64ToString: (b64: string) =>
+      new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
+    guid: () => {
+      const c = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+      return `${c()}${c()}-${c()}-${c()}-${c()}-${c()}${c()}${c()}`;
+    },
   };
   const source = ctx.source ?? {};
   // 自定义 source 方法优先；未提供时才注入会话变量兜底（get/put/set 三者对称）
@@ -641,7 +735,14 @@ export function evalJs(expr: string, ctx: JsContext): any {
     const prevThisSource = (g as Record<string, unknown>).source;
     (g as Record<string, unknown>).source = source;
     try {
-      return fn.call({ source }, ctx.node ?? null, ctx.doc, ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1, source, java, ctx.baseUrl ?? "", TYPE);
+      // node/doc 传入 jsoup 风格包装（附加 select/selectFirst/attr/text 等方法），兼容 legado @js: 书源
+      return fn.call(
+        { source },
+        ctx.node ? jsoupNode(ctx.node) : null,
+        jsoupDoc(ctx.doc),
+        ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
+        source, java, ctx.baseUrl ?? "", TYPE,
+      );
     } finally {
       (g as Record<string, unknown>).source = prevThisSource;
       g.__ydSource = prevSource;

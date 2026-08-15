@@ -711,3 +711,46 @@ describe("jsBlock <js>...</js>", () => {
     expect(out).toBe("原始正文");
   });
 });
+
+describe("legado jsoup-style node API in @js:", () => {
+  const html = `<div class="list"><div class="item"><a href="/b/1.html" class="t">第一章</a><span class="tag">连载</span></div></div>`;
+  const doc = parseHtml(html);
+
+  it("node.select returns jsoup-style array with first/text", () => {
+    const r = evalJs("node.select('.item a').first().text()", { doc, node: doc.querySelector(".list")!, baseUrl: "https://ex.com" });
+    expect(r).toBe("第一章");
+  });
+
+  it("node.selectFirst + attr/text/html", () => {
+    const r1 = evalJs("node.selectFirst('.tag').text()", { doc, node: doc.querySelector(".list")!, baseUrl: "https://ex.com" });
+    expect(r1).toBe("连载");
+    const r2 = evalJs("node.selectFirst('a').attr('href')", { doc, node: doc.querySelector(".list")!, baseUrl: "https://ex.com" });
+    expect(r2).toBe("/b/1.html");
+    const r3 = evalJs("node.selectFirst('a').html()", { doc, node: doc.querySelector(".list")!, baseUrl: "https://ex.com" });
+    expect(r3).toBe("第一章");
+  });
+
+  it("node.children/parents/first/size work", () => {
+    const r = evalJs("node.children().size() + ':' + node.children().first().text()", { doc, node: doc.querySelector(".list")!, baseUrl: "https://ex.com" });
+    expect(r).toBe("1:第一章连载");
+  });
+
+  it("doc.select works on the document", () => {
+    expect(evalJs("doc.select('.item a').size()", { doc, baseUrl: "https://ex.com" })).toBe(1);
+    expect(evalJs("doc.selectFirst('.tag').text()", { doc, baseUrl: "https://ex.com" })).toBe("连载");
+  });
+
+  it("java.toString / toJSONString / md5Encode16", () => {
+    expect(evalJs("java.toString(123)", { doc: emptyDoc() })).toBe("123");
+    expect(evalJs("java.toJSONString({a:1})", { doc: emptyDoc() })).toBe('{"a":1}');
+    expect(evalJs("java.md5Encode16('abc')", { doc: emptyDoc() })).toBe(md5("abc").slice(8, 24));
+  });
+
+  it("extractList item rule @js: uses the current node", async () => {
+    const items = await extractList(doc, ".item", {
+      name: "@js:node.select('a').first().text()",
+      url: "@js:'https://ex.com' + node.selectFirst('a').attr('href')",
+    }, { baseUrl: "https://ex.com" });
+    expect(items[0]).toEqual({ name: "第一章", url: "https://ex.com/b/1.html" });
+  });
+});
