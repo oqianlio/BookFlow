@@ -122,6 +122,10 @@ export function parseRule(rule: string): ParsedRule {
   if (s.startsWith("//") || s.startsWith("(//")) {
     return { type: "xpath", value: s };
   }
+  // XPath 字符串函数开头（string(...)/normalize-space(...) 等）：css 选择器不会以这些开头
+  if (/^(?:string|normalize-space|substring|substring-before|substring-after|concat|translate|replace|lower-case|upper-case|number|contains|count|sum)\(/.test(s)) {
+    return { type: "xpath", value: s };
+  }
   if (s.startsWith("@css:")) {
     return parseAttrRule(s.slice(5));
   }
