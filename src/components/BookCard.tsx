@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { Book, ShelfSourceBook } from "../services/api";
-import { coverUrl, getProgress } from "../services/api";
+import { coverUrl, getProgress, getBookSourceProgress } from "../services/api";
+import { fetchToc } from "../services/sourceToc";
 
 export type ShelfItem =
   | { kind: "local"; book: Book }
@@ -61,6 +62,25 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
     return () => { cancelled = true; };
   }, [item.kind, item.kind === "local" ? item.book.id : -1]);
 
+  // 书源书：当前阅读章节（进度表）+ 最新章节（目录最后一项）
+  const [currentChapter, setCurrentChapter] = useState("");
+  const [latestChapter, setLatestChapter] = useState("");
+  useEffect(() => {
+    if (item.kind !== "source") return;
+    let cancelled = false;
+    const { sourceId, bookUrl, title } = item.sb;
+    void getBookSourceProgress(sourceId, bookUrl)
+      .then((p) => { if (!cancelled && p?.chapter_name) setCurrentChapter(p.chapter_name); })
+      .catch(() => {});
+    void fetchToc({ sourceId, bookUrl, initialTitle: title })
+      .then((r) => {
+        const last = r.toc[r.toc.length - 1];
+        if (!cancelled && last) setLatestChapter(last.name);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [item.kind, item.kind === "source" ? item.sb.id : -1]);
+
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -108,6 +128,13 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
         </div>
         <div className="book-list-meta">
           <h3>{title}</h3>
+          {(currentChapter || latestChapter) && (
+            <div className="book-chapter">
+              {currentChapter && <span>读到 {currentChapter}</span>}
+              {currentChapter && latestChapter && <span className="chapter-sep">·</span>}
+              {latestChapter && <span>最新 {latestChapter}</span>}
+            </div>
+          )}
           <div className="book-sub">
             <span className="fmt">{subLabel}</span>
             {extra && <span className="progress">{extra}</span>}

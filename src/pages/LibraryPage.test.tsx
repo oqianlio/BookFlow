@@ -3,6 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import LibraryPage from "./LibraryPage";
 import * as api from "../services/api";
+import { fetchToc } from "../services/sourceToc";
+
+vi.mock("../services/sourceToc", () => ({ fetchToc: vi.fn() }));
 
 const books = [
   { id: 1, title: "三体", format: "epub", path: "b1.epub", cover_path: null, added_at: 1, last_opened_at: null },
@@ -19,6 +22,11 @@ beforeEach(() => {
   localStorage.clear();
   vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([]);
   vi.spyOn(api, "getProgress").mockResolvedValue(null);
+  vi.spyOn(api, "getBookSourceProgress").mockResolvedValue(null);
+  vi.mocked(fetchToc).mockResolvedValue({
+    info: { title: "", author: "", intro: "", coverUrl: "" },
+    toc: [],
+  });
 });
 
 describe("LibraryPage", () => {
@@ -109,6 +117,24 @@ describe("LibraryPage", () => {
     // 自定义确认框：确定后执行删除
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(spy).toHaveBeenCalledWith(9);
+  });
+
+  it("shows current and latest chapter for source books in list mode", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
+    vi.spyOn(api, "getBookSourceProgress").mockResolvedValue({
+      source_id: 3, book_url: "https://ex.com/b/1.html", title: "球状闪电",
+      chapter_index: 2, chapter_url: "u3", chapter_name: "第三章", percent: 0, updated_at: 0,
+    });
+    vi.mocked(fetchToc).mockResolvedValue({
+      info: { title: "", author: "", intro: "", coverUrl: "" },
+      toc: [{ name: "第一百章", url: "u100" }],
+    });
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    expect(await screen.findByText(/读到 第三章/)).toBeInTheDocument();
+    expect(screen.getByText(/最新 第一百章/)).toBeInTheDocument();
   });
 
   it("switches between grid and list layouts and persists the choice", async () => {

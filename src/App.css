@@ -579,6 +579,19 @@ button {
   color: var(--on-surface-variant);
   letter-spacing: 0.03em;
 }
+
+.book-card-list .book-chapter {
+  font-size: 11.5px;
+  color: var(--on-surface-variant);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.book-card-list .book-chapter .chapter-sep {
+  margin: 0 6px;
+  opacity: 0.6;
+}
 .book-card-list .book-remove {
   position: static;
   opacity: 1;
