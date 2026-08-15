@@ -283,10 +283,12 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
   const goChapter = (delta: number) => {
     const idx = chapter.index + delta;
     if (delta > 0) {
+      // nextContentUrl 优先；无则从目录取下一章（部分源没有 nextContentUrl 规则）
       const next = nextUrlRef.current;
-      if (!next) return;
+      const fallback = toc[idx];
+      if (!next && !fallback) return;
       prevUrlsRef.current.push(chapter.url);
-      setChapter({ index: idx, url: next, name: `第 ${idx + 1} 章` });
+      setChapter({ index: idx, url: next || fallback!.url, name: fallback?.name ?? `第 ${idx + 1} 章` });
     } else {
       const prev = prevUrlsRef.current.pop();
       if (!prev) return;

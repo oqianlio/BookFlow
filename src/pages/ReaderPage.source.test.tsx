@@ -51,6 +51,15 @@ const ch1 = `<html><body><div id="content"><p>第一章正文内容。</p></div>
 const ch2 = `<html><body><div id="content"><p>第二章正文内容。</p></div><a id="next" href="/c/3.html">下一章</a></body></html>`;
 const ch3 = `<html><body><div id="content"><p>第三章正文内容。</p></div><a id="next" href="/c/4.html">下一章</a></body></html>`;
 
+const tocSourceJson = JSON.stringify({
+  bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+  ruleBookInfo: { name: "h1@text", author: ".author@text" },
+  ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href" },
+  ruleContent: { content: "#content", nextContentUrl: "a#next@href" },
+});
+const tocHtml = `<html><body><h1>三体</h1><ol>
+  <li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
+
 beforeEach(() => { vi.clearAllMocks(); clearTocCache(); });
 
 function renderReader() {
@@ -371,15 +380,6 @@ describe("ReaderPage (source) reading settings", () => {
 });
 
 describe("ReaderPage (source) toc panel", () => {
-  const tocSourceJson = JSON.stringify({
-    bookSourceUrl: "https://ex.com", bookSourceName: "示例",
-    ruleBookInfo: { name: "h1@text", author: ".author@text" },
-    ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href" },
-    ruleContent: { content: "#content", nextContentUrl: "a#next@href" },
-  });
-  const tocHtml = `<html><body><h1>三体</h1><ol>
-    <li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
-
   async function renderWithToc() {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
@@ -596,6 +596,32 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     fireEvent.click(wrap, { clientX: 900 });
     expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第 2 章");
+  });
+
+  it("falls back to the toc for the next chapter when the source has no nextContentUrl", async () => {
+    const src = JSON.parse(tocSourceJson);
+    delete src.ruleContent.nextContentUrl;
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/book/1.html") return tocHtml;
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const { container } = renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    // 等目录加载完成（自动进入下一章依赖 toc 兜底）
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    await waitFor(() => expect(container.querySelectorAll(".toc-item").length).toBe(2));
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    // 翻到章节末页（单页章节）→ 无 nextContentUrl，从目录取下一章
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    fireEvent.click(wrap, { clientX: 900 });
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第二章");
   });
 
   it("auto-loads the next chapter when the last manga image enters the viewport", async () => {

@@ -35,6 +35,10 @@
 - 漫画：`<MangaViewer images={images} onReachEnd={() => goChapter(1)} />`
 - `goChapter(1)` 内部对 `nextUrlRef.current` 为空直接 return，安全无副作用；加载下一章后 `loadChapter` 重置阅读器到第 0 页，进度自动保存。
 
+### 3b. 下一章来源：nextContentUrl 优先，目录（toc）兜底
+
+部分书源没有 `nextContentUrl` 规则（提取不到下一页链接），此时翻到末页无法自动进入下一章。补齐：`goChapter(1)` 优先使用 `nextUrlRef.current`（`nextContentUrl` 规则提取）；为空时回退到已加载的目录 `toc[chapter.index + 1]`（`ruleToc` 提取的章节列表，顺序即阅读顺序），章节名取目录项真实名称。两者都为空时保持静默（底部「下一章」按钮同样 disabled），由用户手动从目录选择。
+
 ### 4. 本地书
 
 - 本地 EPUB 由 epubjs 分页引擎天然支持跨章翻页，无需改动。
