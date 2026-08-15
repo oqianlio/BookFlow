@@ -5,7 +5,8 @@ import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
 import BookSourceManager from "./components/BookSourceManager";
-import DiscoverPage, { type SearchHit } from "./pages/DiscoverPage";
+import DiscoverPage, { type SearchHit, type ExploreSource } from "./pages/DiscoverPage";
+import GroupExplorePage from "./pages/GroupExplorePage";
 import SourceBookPage from "./pages/SourceBookPage";
 import ExplorePage from "./pages/ExplorePage";
 import DebugSourcePage from "./pages/DebugSourcePage";
@@ -22,7 +23,8 @@ type DetailState =
   | { area: "detail"; page: "sourceManager"; back: AppArea }
   | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppArea }
   | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppArea }
-  | { area: "detail"; page: "rssArticle"; articleId: number; back: AppArea };
+  | { area: "detail"; page: "rssArticle"; articleId: number; back: AppArea }
+  | { area: "detail"; page: "groupExplore"; groupName: string; sources: ExploreSource[]; back: AppArea };
 
 type AppState = { area: AppArea } | DetailState;
 
@@ -107,6 +109,15 @@ function AppInner() {
         return (
           <RssArticlePage articleId={state.articleId} onBack={() => go(state.back)} />
         );
+      case "groupExplore":
+        return (
+          <GroupExplorePage
+            groupName={state.groupName}
+            sources={state.sources}
+            onBack={() => go(state.back)}
+            onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state.back })}
+          />
+        );
     }
   }
 
@@ -137,6 +148,7 @@ function AppInner() {
             key="discover"
             onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: "discover" })}
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: "discover" })}
+            onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: "discover" })}
           />
         )}
         {state.area === "rss" && (
