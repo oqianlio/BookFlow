@@ -186,3 +186,18 @@ export async function getCachedChapter(sourceId: number, bookUrl: string, chapte
 export async function deleteBookCache(sourceId: number, bookUrl: string): Promise<void> {
   await invoke("delete_book_cache", { sourceId, bookUrl });
 }
+
+export interface ReadingStats {
+  source_id: number; book_url: string; title: string;
+  read_seconds: number; read_count: number; last_read_at: number | null;
+}
+
+export async function recordRead(a: { sourceId: number; bookUrl: string; title: string; seconds: number; incrementCount: boolean }): Promise<void> {
+  await invoke("record_read", {
+    sourceId: a.sourceId, bookUrl: a.bookUrl, title: a.title,
+    seconds: a.seconds, incrementCount: a.incrementCount,
+  });
+}
+export async function getReadingStats(sourceId: number, bookUrl: string): Promise<ReadingStats | null> {
+  return invoke<ReadingStats | null>("get_reading_stats", { sourceId, bookUrl });
+}

@@ -156,3 +156,30 @@ fn chapter_cache_roundtrip_and_upsert() {
     drop(conn);
     fs::remove_dir_all(dir.path()).unwrap();
 }
+
+#[test]
+fn reading_stats_record_and_get() {
+    let dir = tempdir().unwrap();
+    let conn = init_db(dir.path().join("test.db")).unwrap();
+    let book = "https://ex.com/b/1.html";
+    // 首次：会话 +1，时长 0
+    record_read(&conn, 1, book, "三体", 0, true).unwrap();
+    let s = get_reading_stats(&conn, 1, book).unwrap().unwrap();
+    assert_eq!(s.read_count, 1);
+    assert_eq!(s.read_seconds, 0);
+    assert!(s.last_read_at.is_some());
+    // 心跳：时长 +30
+    record_read(&conn, 1, book, "三体", 30, false).unwrap();
+    let s = get_reading_stats(&conn, 1, book).unwrap().unwrap();
+    assert_eq!(s.read_seconds, 30);
+    assert_eq!(s.read_count, 1);
+    // 再次会话：count +1，时长累计
+    record_read(&conn, 1, book, "三体", 0, true).unwrap();
+    let s = get_reading_stats(&conn, 1, book).unwrap().unwrap();
+    assert_eq!(s.read_count, 2);
+    assert_eq!(s.read_seconds, 30);
+    // 跨书隔离
+    assert!(get_reading_stats(&conn, 1, "https://ex.com/b/2.html").unwrap().is_none());
+    drop(conn);
+    fs::remove_dir_all(dir.path()).unwrap();
+}

@@ -9,7 +9,7 @@ import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
-import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter } from "../services/api";
+import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
@@ -139,6 +139,24 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       setShelfBusy(false);
     }
   };
+
+  // ==== 书源：阅读统计计时 ====
+  useEffect(() => {
+    if (isLocal) return;
+    const t = { start: Date.now(), pending: 0 };
+    void recordRead({ sourceId, bookUrl, title: bookTitle, seconds: 0, incrementCount: true }).catch(() => {});
+    const hb = window.setInterval(() => {
+      const now = Date.now();
+      const sec = Math.floor((now - t.start) / 1000) + t.pending;
+      t.start = now; t.pending = 0;
+      if (sec > 0) void recordRead({ sourceId, bookUrl, title: bookTitle, seconds: sec, incrementCount: false }).catch(() => {});
+    }, 30000);
+    return () => {
+      window.clearInterval(hb);
+      const sec = Math.floor((Date.now() - t.start) / 1000) + t.pending;
+      if (sec > 0) void recordRead({ sourceId, bookUrl, title: bookTitle, seconds: sec, incrementCount: false }).catch(() => {});
+    };
+  }, [isLocal, sourceId, bookUrl, bookTitle]);
 
   // ==== 本地书：移除损坏书籍 ====
   const handleRemoveBroken = async () => {

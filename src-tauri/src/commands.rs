@@ -379,3 +379,13 @@ pub fn get_cached_chapter(source_id: i64, book_url: String, chapter_url: String,
 pub fn delete_book_cache(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<(), String> {
     crate::db::delete_book_cache(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn record_read(source_id: i64, book_url: String, title: String, seconds: i64, increment_count: bool, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::record_read(&state.db.lock().unwrap(), source_id, &book_url, &title, seconds, increment_count).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_reading_stats(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Option<crate::db::ReadingStats>, String> {
+    crate::db::get_reading_stats(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
+}

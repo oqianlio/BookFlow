@@ -35,6 +35,7 @@ vi.mock("../services/api", () => ({
   removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   getCachedChapter: vi.fn().mockResolvedValue(null),
   saveCachedChapter: vi.fn().mockResolvedValue(undefined),
+  recordRead: vi.fn().mockResolvedValue(undefined),
   mergeUserAgent: (h: Record<string, string> | undefined, ua: string | undefined) =>
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
@@ -511,6 +512,22 @@ describe("ReaderPage (source) chapter cache", () => {
         bookUrl: "https://ex.com/book/1.html",
         chapterUrl: "https://ex.com/c/1.html",
         content: expect.stringContaining("第一章正文内容。"),
+      })),
+    );
+  });
+});
+
+describe("ReaderPage (source) reading stats", () => {
+  it("reports a read session on mount", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    renderReader();
+    await screen.findByText("第一章正文内容。");
+    await waitFor(() =>
+      expect(api.recordRead).toHaveBeenCalledWith(expect.objectContaining({
+        sourceId: 1, bookUrl: "https://ex.com/book/1.html", seconds: 0, incrementCount: true,
       })),
     );
   });

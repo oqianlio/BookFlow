@@ -148,6 +148,15 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             updated_at INTEGER NOT NULL,
             PRIMARY KEY (source_id, book_url, chapter_url)
         );
+        CREATE TABLE IF NOT EXISTS reading_stats (
+            source_id INTEGER NOT NULL,
+            book_url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            read_seconds INTEGER NOT NULL DEFAULT 0,
+            read_count INTEGER NOT NULL DEFAULT 0,
+            last_read_at INTEGER,
+            PRIMARY KEY (source_id, book_url)
+        );
         "#,
     )?;
     Ok(conn)
@@ -539,4 +548,52 @@ pub fn delete_book_cache(conn: &Connection, source_id: i64, book_url: &str) -> R
         params![source_id, book_url],
     )?;
     Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReadingStats {
+    pub source_id: i64,
+    pub book_url: String,
+    pub title: String,
+    pub read_seconds: i64,
+    pub read_count: i64,
+    pub last_read_at: Option<i64>,
+}
+
+pub fn record_read(
+    conn: &Connection,
+    source_id: i64,
+    book_url: &str,
+    title: &str,
+    seconds: i64,
+    increment_count: bool,
+) -> Result<()> {
+    let t = now();
+    let add = if increment_count { 1 } else { 0 };
+    conn.execute(
+        "INSERT INTO reading_stats (source_id, book_url, title, read_seconds, read_count, last_read_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(source_id, book_url) DO UPDATE SET
+           read_seconds = read_seconds + excluded.read_seconds,
+           title = excluded.title,
+           read_count = read_count + ?7,
+           last_read_at = excluded.last_read_at",
+        params![source_id, book_url, title, seconds, add, t, add],
+    )?;
+    Ok(())
+}
+
+pub fn get_reading_stats(conn: &Connection, source_id: i64, book_url: &str) -> Result<Option<ReadingStats>> {
+    let mut stmt = conn.prepare(
+        "SELECT source_id, book_url, title, read_seconds, read_count, last_read_at FROM reading_stats WHERE source_id=?1 AND book_url=?2",
+    )?;
+    let mut rows = stmt.query(params![source_id, book_url])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(ReadingStats {
+            source_id: r.get(0)?, book_url: r.get(1)?, title: r.get(2)?,
+            read_seconds: r.get(3)?, read_count: r.get(4)?, last_read_at: r.get(5)?,
+        }))
+    } else {
+        Ok(None)
+    }
 }
