@@ -435,6 +435,56 @@ describe("parseExploreUrl", () => {
     const r = parseExploreUrl('[{"title":"标题占位","url":""},{"title":"分类","url":"/x/1.html"}]');
     expect(r).toEqual([{ title: "分类", url: "/x/1.html" }]);
   });
+
+describe("legado ## replace rules", () => {
+  it("parseAttrRule splits ## replacement suffix", () => {
+    const r = parseRule(".author.0@text##作者：##");
+    expect(r.type).toBe("css");
+    expect(r.value).toBe(".author.0");
+    expect(r.attr).toBe("text");
+    expect(r.replace).toEqual([["作者：", ""]]);
+  });
+
+  it("extractList applies ## replacement via item rules", async () => {
+    const html = `<div class="bookbox">
+      <div class="bookname"><a href="/book/1.html">书一</a></div>
+      <div class="author"><p>作者：刘慈欣</p></div>
+    </div>`;
+    const doc = parseHtml(html);
+    const items = await extractList(doc, ".bookbox", {
+      name: ".bookname a@text",
+      author: ".author.0@text##作者：##",
+      bookUrl: ".bookname a@href||.del_but@href",
+    }, { baseUrl: "https://ex.com" });
+    expect(items.length).toBe(1);
+    expect(items[0].author).toBe("刘慈欣");
+    expect(items[0].bookUrl).toBe("https://ex.com/book/1.html");
+  });
+
+  it("supports chained replacements", async () => {
+    const html = `<div class="bookbox"><div class="bookname"><a href="/b/1.html">书一</a></div><div class="author">A|B</div></div>`;
+    const doc = parseHtml(html);
+    const items = await extractList(doc, ".bookbox", {
+      author: ".author.0@text##\\|##、",
+    }, { baseUrl: "https://ex.com" });
+    expect(items[0].author).toBe("A、B");
+  });
+
+  it("ignores invalid replacement regex without throwing", async () => {
+    const html = `<div class="bookbox"><div class="bookname"><a href="/b/1.html">书一</a></div><div class="author">作者：X</div></div>`;
+    const doc = parseHtml(html);
+    const items = await extractList(doc, ".bookbox", {
+      author: ".author.0@text##[##",
+    }, { baseUrl: "https://ex.com" });
+    expect(items[0].author).toBe("作者：X");
+  });
+
+  it("extractSingle css path applies replacement", async () => {
+    const doc = parseHtml(`<html><body><div class="t">前缀内容</div></body></html>`);
+    const v = await extractSingle(doc, ".t@text##前缀##");
+    expect(v).toBe("内容");
+  });
+});
 });
 
 describe("extractBookList", () => {

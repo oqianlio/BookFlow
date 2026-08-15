@@ -11,6 +11,7 @@ export type ParsedRule = {
   value: string;
   attr?: string;
   after?: string;
+  replace?: Array<[string, string]>;
 };
 
 export interface BookSource {
@@ -116,16 +117,32 @@ export function parseRule(rule: string): ParsedRule {
   return parseAttrRule(s);
 }
 
+/** 拆分 legado `##正则##替换` 链式替换后缀（返回提取规则体 + 替换对列表） */
+function splitReplaceSuffix(s: string): { body: string; replaces: Array<[string, string]> } {
+  const trimmed = s.trim();
+  if (!trimmed.includes("##")) return { body: trimmed, replaces: [] };
+  const parts = trimmed.split("##");
+  if (parts.length < 3) return { body: trimmed, replaces: [] };
+  const body = parts[0].trim();
+  const replaces: Array<[string, string]> = [];
+  for (let i = 1; i + 1 < parts.length; i += 2) {
+    replaces.push([parts[i], parts[i + 1]]);
+  }
+  return { body, replaces };
+}
+
 function parseAttrRule(s: string): ParsedRule {
-  if (s.startsWith("@")) {
+  const { body, replaces } = splitReplaceSuffix(s);
+  const replace = replaces.length ? replaces : undefined;
+  if (body.startsWith("@")) {
     // 纯属性后缀（如 "@text"/"@href"）：表示对当前节点自身取值
-    return { type: "css", value: "", attr: s.slice(1) };
+    return { type: "css", value: "", attr: body.slice(1), replace };
   }
-  const m = s.match(/^(.+?)@([a-zA-Z]+)$/);
+  const m = body.match(/^(.+?)@([a-zA-Z]+)$/);
   if (m) {
-    return { type: "css", value: m[1], attr: m[2] };
+    return { type: "css", value: m[1], attr: m[2], replace };
   }
-  return { type: "css", value: s, attr: "text" };
+  return { type: "css", value: body, attr: "text", replace };
 }
 
 export function selectNodes(doc: Document, selector: string): Element[] {
@@ -271,13 +288,16 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     }
     return extractSingle(jsDoc, parsed.after ?? "", newCtx);
   }
-  if (!parsed.value) return "";
+  if (!parsed.value) {
+    // 纯属性规则（如 "@text"）：取文档自身（extractSingle 场景少见，返回空）
+    return "";
+  }
   if (parsed.value.startsWith("tag.")) {
     const node = resolveTagIndex(parsed.value, doc);
-    return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
+    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
   }
-  const node = doc.querySelector(parsed.value);
-  return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
+  const node = queryIndexed(parsed.value, doc);
+  return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
 }
 
 function finalize(v: string, attr?: string, baseUrl?: string): string {
@@ -407,14 +427,48 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
   if (parsed.type !== "css") return "";
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取当前节点自身
-    return finalize(nodeValue(el, parsed.attr), parsed.attr, baseUrl);
+    return finalize(applyReplacements(nodeValue(el, parsed.attr), parsed.replace), parsed.attr, baseUrl);
   }
   if (parsed.value.startsWith("tag.")) {
     const node = resolveTagIndex(parsed.value, el);
-    return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, baseUrl) : "";
+    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
   }
-  const node = el.matches(parsed.value) ? el : el.querySelector(parsed.value);
-  return node ? finalize(nodeValue(node as Element, parsed.attr), parsed.attr, baseUrl) : "";
+  const node = queryIndexed(parsed.value, el);
+  return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
+}
+
+/** 应用 legado `##正则##替换` 链式替换；非法正则跳过（保留原值） */
+function applyReplacements(v: string, replaces?: Array<[string, string]>): string {
+  if (!replaces || !v) return v;
+  let out = v;
+  for (const [re, rep] of replaces) {
+    if (!re) continue;
+    try { out = out.replace(new RegExp(re, "g"), rep ?? ""); } catch { /* 非法正则保留原值 */ }
+  }
+  return out;
+}
+
+/**
+ * 在 scope 内查找选择器命中节点；支持 legado `.class.N` 语法（取第 N 个匹配）。
+ * 先尝试常规 querySelector；失败（非法选择器）或带数字后缀时，按 base 选择器 + index 取。
+ */
+function queryIndexed(selector: string, scope: Document | Element): Element | null {
+  try {
+    return scope.querySelector(selector);
+  } catch {
+    // 非法选择器（如 .author.0）→ 尝试拆分 .数字 后缀
+  }
+  const m = selector.match(/^(.+?)\.(\d+)$/);
+  if (!m) return null;
+  const base = m[1];
+  const index = parseInt(m[2], 10);
+  let nodes: NodeListOf<Element>;
+  try {
+    nodes = scope.querySelectorAll(base);
+  } catch {
+    return null;
+  }
+  return nodes[index] ?? null;
 }
 
 export function emptyDoc(): Document {
