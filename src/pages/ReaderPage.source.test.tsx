@@ -618,6 +618,32 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第 2 章");
   });
 
+  it("auto-loads the previous chapter when flipping back past the first page", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/book/1.html") return tocHtml;
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    const { container } = render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: 1, chapterUrl: "https://ex.com/c/2.html", chapterName: "第二章" }} onBack={() => {}} />);
+    expect(await screen.findByText("第二章正文内容。")).toBeInTheDocument();
+    // 直接进入章节（无历史栈）：上一章按钮在目录有上一章时应可用
+    expect(screen.getByRole("button", { name: "上一章" })).toBeEnabled();
+    // 等目录加载完成（上一章兜底依赖 toc）
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    await waitFor(() => expect(container.querySelectorAll(".toc-item").length).toBe(2));
+    await userEvent.click(screen.getByRole("button", { name: "目录" }));
+    // 首页（单页章节）点击左侧 → 越过首页 → 经目录进入上一章
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第一章");
+  });
+
   it("falls back to the toc for the next chapter when the source has no nextContentUrl", async () => {
     const src = JSON.parse(tocSourceJson);
     delete src.ruleContent.nextContentUrl;

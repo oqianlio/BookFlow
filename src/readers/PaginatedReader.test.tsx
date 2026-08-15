@@ -130,4 +130,38 @@ describe("PaginatedReader", () => {
     fireEvent.click(wrap, { clientX: 900 });
     expect(onReachEnd).toHaveBeenCalledTimes(1);
   });
+
+  it("calls onReachStart when flipping back past the first page", () => {
+    const onReachStart = vi.fn();
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachStart={onReachStart} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    // 初始在首页，点击左侧（继续向前）→ 越过首页 → 触发上一章衔接
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(onReachStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onReachStart on initial render or when flipping back to the first page", () => {
+    const onReachStart = vi.fn();
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachStart={onReachStart} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    expect(onReachStart).not.toHaveBeenCalled();
+    // 翻到第 2 页，再翻回首页（非越过首页）→ 不触发
+    fireEvent.click(wrap, { clientX: 900 });
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(onReachStart).not.toHaveBeenCalled();
+  });
+
+  it("treats a single-page chapter back-flip as reaching the start", () => {
+    const onReachStart = vi.fn();
+    const onReachEnd = vi.fn();
+    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="scroll" measure={mockMeasure} onReachStart={onReachStart} onReachEnd={onReachEnd} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    // 单页章节点击左侧 → 上一章衔接；不误触发下一章
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(onReachStart).toHaveBeenCalledTimes(1);
+    expect(onReachEnd).not.toHaveBeenCalled();
+  });
 });

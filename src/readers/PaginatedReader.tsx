@@ -13,7 +13,7 @@ export interface TypographyStyle {
 const DEFAULT_TYPO: TypographyStyle = { letterSpacingPx: 0, paragraphSpacingPx: 11, indentEm: 0, bold: false, fontFamily: "serif" };
 
 export default function PaginatedReader({
-  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd,
+  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd, onReachStart,
 }: {
   html: string; mode?: PageMode; fontSizePx?: number; lineHeight?: number;
   typography?: TypographyStyle;
@@ -21,6 +21,7 @@ export default function PaginatedReader({
   measure?: (h: string) => number;
   onMenuToggle?: () => void;
   onReachEnd?: () => void;
+  onReachStart?: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<string[]>([]);
@@ -55,8 +56,10 @@ export default function PaginatedReader({
     const c = Math.min(Math.max(0, p), total - 1);
     setPage(c);
     onPageChange?.(c, total);
-    // 用户翻页触达末页（含单页章节点击翻页区域）→ 通知上层衔接下一章
-    if (total > 0 && c === total - 1) onReachEnd?.();
+    // 向前翻触达末页（含单页章节点击翻页区域）→ 通知上层衔接下一章
+    if (total > 0 && c === total - 1 && p > page) onReachEnd?.();
+    // 从首页继续向前翻（越过首页）→ 通知上层衔接上一章
+    if (total > 0 && page === 0 && p < 0) onReachStart?.();
   };
 
   useEffect(() => { onPageChange?.(0, total); }, [total]); // 初始上报

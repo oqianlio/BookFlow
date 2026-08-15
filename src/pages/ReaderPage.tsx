@@ -348,10 +348,14 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       applyCachedChapter(targetUrl);
       setChapter({ index: idx, url: targetUrl, name });
     } else {
+      // 阅读历史栈优先；无历史时从目录取上一章（直接进入章节的场景）
       const prev = prevUrlsRef.current.pop();
-      if (!prev) return;
-      applyCachedChapter(prev);
-      setChapter({ index: idx, url: prev, name: `第 ${idx + 1} 章` });
+      const fallback = toc[idx];
+      if (!prev && !fallback) return;
+      const targetUrl = prev || fallback!.url;
+      const name = fallback?.name ?? `第 ${idx + 1} 章`;
+      applyCachedChapter(targetUrl);
+      setChapter({ index: idx, url: targetUrl, name });
     }
   };
 
@@ -561,6 +565,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                     }}
                     onMenuToggle={() => setMenuVisible((v) => !v)}
                     onReachEnd={() => goChapter(1)}
+                    onReachStart={() => goChapter(-1)}
                   />
                 ) : (
                   <p className="panel-empty">请从目录选择章节</p>
@@ -717,9 +722,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       </div>
       {!isLocal && (
         <footer className="reader-bottom-bar">
-          <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || prevUrlsRef.current.length === 0}>上一章</button>
+          <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || (prevUrlsRef.current.length === 0 && !toc[chapter.index - 1])}>上一章</button>
           <span className="reader-progress">第 {chapter.index + 1} 章</span>
-          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || failed || !nextUrlRef.current}>下一章</button>
+          <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || failed || (!nextUrlRef.current && !toc[chapter.index + 1])}>下一章</button>
         </footer>
       )}
     </div>
