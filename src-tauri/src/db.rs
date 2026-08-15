@@ -157,6 +157,24 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             last_read_at INTEGER,
             PRIMARY KEY (source_id, book_url)
         );
+        CREATE TABLE IF NOT EXISTS rss_feeds (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            url TEXT NOT NULL UNIQUE,
+            site_url TEXT,
+            added_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS rss_articles (
+            id INTEGER PRIMARY KEY,
+            feed_id INTEGER NOT NULL REFERENCES rss_feeds(id) ON DELETE CASCADE,
+            guid TEXT NOT NULL,
+            title TEXT NOT NULL,
+            link TEXT,
+            content TEXT,
+            published_at INTEGER,
+            fetched_at INTEGER NOT NULL,
+            UNIQUE(feed_id, guid)
+        );
         "#,
     )?;
     Ok(conn)
@@ -592,6 +610,122 @@ pub fn get_reading_stats(conn: &Connection, source_id: i64, book_url: &str) -> R
         Ok(Some(ReadingStats {
             source_id: r.get(0)?, book_url: r.get(1)?, title: r.get(2)?,
             read_seconds: r.get(3)?, read_count: r.get(4)?, last_read_at: r.get(5)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RssFeedRow {
+    pub id: i64,
+    pub title: String,
+    pub url: String,
+    pub site_url: Option<String>,
+    pub added_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct RssArticleRow {
+    pub id: i64,
+    pub feed_id: i64,
+    pub guid: String,
+    pub title: String,
+    pub link: Option<String>,
+    pub content: Option<String>,
+    pub published_at: Option<i64>,
+    pub fetched_at: i64,
+}
+
+pub fn add_rss_feed_db(conn: &Connection, title: &str, url: &str, site_url: Option<&str>) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO rss_feeds (title, url, site_url, added_at) VALUES (?1, ?2, ?3, ?4)",
+        params![title, url, site_url, now()],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn get_rss_feed_db(conn: &Connection, id: i64) -> Result<Option<RssFeedRow>> {
+    let mut stmt = conn.prepare("SELECT id, title, url, site_url, added_at FROM rss_feeds WHERE id=?1")?;
+    let mut rows = stmt.query([id])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(RssFeedRow {
+            id: r.get(0)?, title: r.get(1)?, url: r.get(2)?, site_url: r.get(3)?, added_at: r.get(4)?,
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn list_rss_feeds_db(conn: &Connection) -> Result<Vec<RssFeedRow>> {
+    let mut stmt = conn.prepare("SELECT id, title, url, site_url, added_at FROM rss_feeds ORDER BY added_at")?;
+    let rows = stmt.query_map([], |r| {
+        Ok(RssFeedRow {
+            id: r.get(0)?, title: r.get(1)?, url: r.get(2)?, site_url: r.get(3)?, added_at: r.get(4)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn delete_rss_feed_db(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM rss_feeds WHERE id=?1", [id])?;
+    Ok(())
+}
+
+/// 返回 1=新增, 0=已存在(更新内容)
+pub fn upsert_rss_article(
+    conn: &Connection,
+    feed_id: i64,
+    a: &crate::rss::RssArticlePreview,
+) -> Result<i64> {
+    let fetched = now();
+    let existing: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM rss_articles WHERE feed_id=?1 AND guid=?2",
+            params![feed_id, a.guid],
+            |r| r.get(0),
+        )
+        .ok();
+    match existing {
+        Some(_) => {
+            conn.execute(
+                "UPDATE rss_articles SET title=?1, link=?2, content=?3, published_at=?4, fetched_at=?5 WHERE feed_id=?6 AND guid=?7",
+                params![a.title, a.link, a.content, a.published_at, fetched, feed_id, a.guid],
+            )?;
+            Ok(0)
+        }
+        None => {
+            conn.execute(
+                "INSERT INTO rss_articles (feed_id, guid, title, link, content, published_at, fetched_at) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                params![feed_id, a.guid, a.title, a.link, a.content, a.published_at, fetched],
+            )?;
+            Ok(1)
+        }
+    }
+}
+
+pub fn list_rss_articles_db(conn: &Connection, feed_id: i64) -> Result<Vec<RssArticleRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at FROM rss_articles WHERE feed_id=?1 ORDER BY COALESCE(published_at, fetched_at) DESC",
+    )?;
+    let rows = stmt.query_map([feed_id], |r| {
+        Ok(RssArticleRow {
+            id: r.get(0)?, feed_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?,
+            link: r.get(4)?, content: r.get(5)?, published_at: r.get(6)?, fetched_at: r.get(7)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn get_rss_article_db(conn: &Connection, id: i64) -> Result<Option<RssArticleRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at FROM rss_articles WHERE id=?1",
+    )?;
+    let mut rows = stmt.query([id])?;
+    if let Some(r) = rows.next()? {
+        Ok(Some(RssArticleRow {
+            id: r.get(0)?, feed_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?,
+            link: r.get(4)?, content: r.get(5)?, published_at: r.get(6)?, fetched_at: r.get(7)?,
         }))
     } else {
         Ok(None)

@@ -389,3 +389,69 @@ pub fn record_read(source_id: i64, book_url: String, title: String, seconds: i64
 pub fn get_reading_stats(source_id: i64, book_url: String, state: State<'_, AppState>) -> Result<Option<crate::db::ReadingStats>, String> {
     crate::db::get_reading_stats(&state.db.lock().unwrap(), source_id, &book_url).map_err(|e| e.to_string())
 }
+
+#[derive(serde::Serialize)]
+pub struct RssFeedPreviewOut {
+    pub title: String,
+    pub site_url: Option<String>,
+    pub articles: Vec<crate::rss::RssArticlePreviewOut>,
+}
+
+#[tauri::command]
+pub fn fetch_rss_feed(url: String) -> Result<RssFeedPreviewOut, String> {
+    let xml = crate::rss::http_get_xml(&url)?;
+    let preview = crate::rss::parse_rss_xml(&xml)?;
+    Ok(RssFeedPreviewOut {
+        title: preview.title,
+        site_url: preview.site_url,
+        articles: preview.articles.into_iter().map(|a| a.into()).collect(),
+    })
+}
+
+#[tauri::command]
+pub fn add_rss_feed(url: String, state: State<'_, AppState>) -> Result<i64, String> {
+    let xml = crate::rss::http_get_xml(&url)?;
+    let preview = crate::rss::parse_rss_xml(&xml)?;
+    let conn = state.db.lock().unwrap();
+    let id = crate::db::add_rss_feed_db(&conn, &preview.title, &url, preview.site_url.as_deref()).map_err(|e| e.to_string())?;
+    for a in &preview.articles {
+        let _ = crate::db::upsert_rss_article(&conn, id, a);
+    }
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn refresh_rss_feed(feed_id: i64, state: State<'_, AppState>) -> Result<i64, String> {
+    let row = {
+        let conn = state.db.lock().unwrap();
+        crate::db::get_rss_feed_db(&conn, feed_id).map_err(|e| e.to_string())?.ok_or("订阅源不存在")?
+    };
+    let xml = crate::rss::http_get_xml(&row.url)?;
+    let preview = crate::rss::parse_rss_xml(&xml)?;
+    let conn = state.db.lock().unwrap();
+    let mut added = 0i64;
+    for a in &preview.articles {
+        added += crate::db::upsert_rss_article(&conn, feed_id, a).map_err(|e| e.to_string())?;
+    }
+    Ok(added)
+}
+
+#[tauri::command]
+pub fn list_rss_feeds(state: State<'_, AppState>) -> Result<Vec<crate::db::RssFeedRow>, String> {
+    crate::db::list_rss_feeds_db(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_rss_feed(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::delete_rss_feed_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_rss_articles(feed_id: i64, state: State<'_, AppState>) -> Result<Vec<crate::db::RssArticleRow>, String> {
+    crate::db::list_rss_articles_db(&state.db.lock().unwrap(), feed_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_rss_article(id: i64, state: State<'_, AppState>) -> Result<Option<crate::db::RssArticleRow>, String> {
+    crate::db::get_rss_article_db(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}
