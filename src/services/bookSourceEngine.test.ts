@@ -346,6 +346,32 @@ $[*]`;
     expect(items.map((i) => i.name)).toEqual(["a", "b"]);
   });
 
+  it("chain A@js:code filters elements via result.toArray() (随心看 pattern)", async () => {
+    const doc = parseHtml(`<ul>
+      <li class="v-list-item"><a class="v-title" href="/a/">斗破苍穹</a></li>
+      <li class="v-list-item"><a class="v-title" href="/b/">武动乾坤</a></li>
+      <li class="v-list-item"><a class="v-title" href="/c/">别的书</a></li>
+    </ul>`);
+    const key = "https://m.suixkan.com#🎃";
+    // 与真实流程一致：searchUrl 的 @js: 先用 java.put('key',key) 存入会话变量
+    evalJs("java.put('key', '斗破')", { doc: emptyDoc(), sourceKey: key });
+    const rule = `class.v-list-item
+@js:
+list=result.toArray();
+list1=[];
+for(i in list){
+if(list[i].text().indexOf(java.get('key'))>-1){
+list1.push(list[i])
+}
+}
+list1.map(x=>x)`;
+    const items = await extractList(doc, rule, { name: ".v-title@text", bookUrl: ".v-title@href" }, {
+      baseUrl: "https://m.suixkan.com", sourceKey: key,
+    });
+    expect(items.map((i) => i.name)).toEqual(["斗破苍穹"]);
+    expect(items[0].bookUrl).toBe("https://m.suixkan.com/a/");
+  });
+
   it("extractFromJsObject supports $.field and plain field", () => {
     expect(extractFromJsObject({ name: "N", id: 7 }, "$.name")).toBe("N");
     expect(extractFromJsObject({ name: "N", id: 7 }, "id")).toBe("7");

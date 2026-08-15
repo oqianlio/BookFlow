@@ -507,6 +507,21 @@ export async function extractList(
       // 链式 A@B@C：A 选根节点（支持 .class.N 索引取单个），B/C 在节点内取全部匹配
       let nodes: Element[] = selectNodesSafe(chain[0], doc);
       for (let i = 1; i < chain.length && nodes.length > 0; i++) {
+        const seg = chain[i];
+        // legado A@js:... 链：js 接收 result = 匹配到的元素列表（jsoup Elements，含 toArray()/size()/get(i)）
+        if (seg.startsWith("js:")) {
+          const jnodes = jArr(nodes.map((n) => jsoupNode(n)));
+          const raw = evalJs(seg.slice(3), {
+            doc, result: jnodes,
+            baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, source: ctx?.source,
+          });
+          const arr = Array.isArray(raw) ? raw : [];
+          // js 返回的是 jsoup 包装节点（同一 DOM 元素），或字符串/对象（后续按 json 处理时保持）
+          nodes = arr
+            .map((x: any) => (x && typeof x === "object" && x.__jsoup ? x : null))
+            .filter(Boolean);
+          continue;
+        }
         const next: Element[] = [];
         for (const n of nodes) {
           // 段含类索引（如 .clearfix.1）→ 取指定第 N 个；否则取全部匹配
@@ -756,6 +771,7 @@ function jArr(arr: Element[]): any[] {
   def(a, "last", () => (arr[arr.length - 1] ? jsoupNode(arr[arr.length - 1]) : null));
   def(a, "size", () => arr.length);
   def(a, "get", (i: number) => (arr[i] ? jsoupNode(arr[i]) : null));
+  def(a, "toArray", () => arr.map((n) => jsoupNode(n)));
   def(a, "text", () => arr.map((n) => (n.textContent ?? "")).join("").trim());
   def(a, "attr", (k: string) => arr[0]?.getAttribute(k) ?? "");
   def(a, "html", () => arr.map((n) => n.innerHTML).join(""));
