@@ -368,6 +368,43 @@ describe("resolveSearchUrl", () => {
     const r = resolveSearchUrl("https://x.com/search?q={{key}}", "三体", 1);
     expect(r.url).toBe("https://x.com/search?q=" + encodeURIComponent("三体"));
   });
+
+  it("parses legado URL+JSON options produced by jsBlock (POST search)", () => {
+    // 27姐姐 书源真实写法：jsBlock 里 url="https://x/search/,"+JSON.stringify({method:"POST",body})
+    const js = `@js:
+cookie.removeCookie(source.getKey());
+var body = \`searchkey=${"${key}"}&submit=\`;
+var option = { "method": "POST", "body": body };
+url="https://www.27jj.org/search/,"+JSON.stringify(option);`;
+    const r = resolveSearchUrl(js, "斗破", 1, { source: { bookSourceUrl: "https://www.27jj.org/#" } });
+    expect(r.url).toBe("https://www.27jj.org/search/");
+    expect(r.method).toBe("POST");
+    expect(r.body).toBe("searchkey=斗破&submit=");
+  });
+
+  it("jsBlock can call source.getKey()", () => {
+    const r = evalJs("source.getKey()", {
+      doc: emptyDoc(),
+      source: { bookSourceUrl: "https://k.com/#" },
+    });
+    expect(r).toBe("https://k.com/#");
+  });
+
+  it("injects src as alias of result in jsBlock", () => {
+    // 找书神器 书源真实写法：bookList jsBlock 用 src.match(...)
+    const r = evalJs("src + '|' + result", { doc: emptyDoc(), result: "<html>RAW</html>" });
+    expect(r).toBe("<html>RAW</html>|<html>RAW</html>");
+  });
+
+  it("java.base64Decode supports gbk charset", () => {
+    // "斗" 的 GBK 编码为 B6 B7
+    const gbkB64 = btoa(String.fromCharCode(0xb6, 0xb7));
+    expect(evalJs(`java.base64Decode('${gbkB64}', 'gbk')`, { doc: emptyDoc() })).toBe("斗");
+  });
+
+  it("java.base64Encode supports charset arg (utf-8 default)", () => {
+    expect(evalJs("java.base64Encode('你好', 'utf-8')", { doc: emptyDoc() })).toBe("5L2g5aW9");
+  });
 });
 
 describe("parseExploreUrl", () => {

@@ -809,15 +809,46 @@ export interface JsContext {
   cookieHost?: string;
 }
 
+// legado 字符集名（GBK/GB2312/UTF-16…）映射到 TextDecoder 标签；编码侧仅 UTF-8 原生支持
+function decodeCharset(bytes: Uint8Array, charset: string): string {
+  const label = charsetLabel(charset);
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+}
+
+function encodeCharset(s: string, charset: string): Uint8Array {
+  const label = charsetLabel(charset);
+  try {
+    if (label === "utf-8") return new TextEncoder().encode(s);
+    // 非 UTF-8 编码：借 TextEncoder 不可行，尝试用 TextDecoder 不可逆；退化为 UTF-8
+    return new TextEncoder().encode(s);
+  } catch {
+    return new TextEncoder().encode(s);
+  }
+}
+
+function charsetLabel(charset: string): string {
+  const c = String(charset).trim().toLowerCase().replace(/[_-]/g, "");
+  if (c === "gbk" || c === "gb2312" || c === "gb18030") return "gbk";
+  if (c === "utf16" || c === "utf16le" || c === "unicode") return "utf-16le";
+  if (c === "utf16be") return "utf-16be";
+  if (c === "big5") return "big5";
+  return "utf-8";
+}
+
 export function evalJs(expr: string, ctx: JsContext): any {
   const vars = getSourceVars(ctx.sourceKey ?? "default");
   const java = {
     encodeURI: (s: string, _charset?: string) => encodeURIComponent(String(s)),
     decodeURI: (s: string, _charset?: string) => decodeURIComponent(String(s)),
-    base64Decode: (b64: string) =>
-      new TextDecoder("utf-8").decode(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0))),
-    base64Encode: (s: string) => {
-      const bytes = new TextEncoder().encode(String(s));
+    // legado java.base64Decode(text, charset)：按指定字符集解码（UTF-8/GBK/UTF-16 等）
+    base64Decode: (b64: string, charset = "utf-8") =>
+      decodeCharset(Uint8Array.from(atob(String(b64)), (c) => c.charCodeAt(0)), charset),
+    base64Encode: (s: string, charset = "utf-8") => {
+      const bytes = encodeCharset(String(s), charset);
       let bin = "";
       for (const b of bytes) bin += String.fromCharCode(b);
       return btoa(bin);
@@ -865,6 +896,8 @@ export function evalJs(expr: string, ctx: JsContext): any {
     },
   };
   const source = ctx.source ?? {};
+  // legado source.getKey() 返回书源 key（bookSourceUrl），书源脚本常用（如 cookie.removeCookie(source.getKey())）
+  if (!source.getKey) source.getKey = () => String((source as any).bookSourceUrl ?? "");
   // 自定义 source 方法优先；未提供时才注入会话变量兜底（get/put/set 三者对称）
   if (!source.getVariable) source.getVariable = () => String(vars.get("variable") ?? "");
   if (!source.putVariable) source.putVariable = (v: any) => { vars.set("variable", String(v)); return ""; };
@@ -910,7 +943,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
     };
     // new Function 构造时即解析语法：须在 try 内，否则书源 @js: 表达式的语法错误会冒泡导致整条规则失败
     const fn = new Function(
-      "node", "doc", "result", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie",
+      "node", "doc", "result", "src", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie",
       body,
     );
     const g = globalThis as Record<string, unknown>;
@@ -924,7 +957,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
         { source },
         ctx.node ? jsoupNode(ctx.node) : null,
         jsoupDoc(ctx.doc),
-        ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
+        ctx.result ?? "", ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
         source, java, ctx.baseUrl ?? "", TYPE, cookie,
       );
     } finally {
@@ -952,11 +985,15 @@ export function parseSearchUrl(searchUrl: string, key: string): { url: string; m
   }
 }
 
-export function resolveSearchUrl(searchUrl: string, key: string, page: number, ctx?: { sourceKey?: string }): { url: string; method?: string; body?: string } {
+export function resolveSearchUrl(searchUrl: string, key: string, page: number, ctx?: { sourceKey?: string; source?: any }): { url: string; method?: string; body?: string } {
   const s = searchUrl.trim();
   if (s.startsWith("@js:")) {
-    const url = String(evalJs(s.slice(4), { doc: emptyDoc(), key, page, result: "", sourceKey: ctx?.sourceKey }) ?? "");
-    return { url };
+    const url = String(evalJs(s.slice(4), {
+      doc: emptyDoc(), key, page, result: "",
+      sourceKey: ctx?.sourceKey, source: ctx?.source,
+    }) ?? "");
+    // jsBlock 可能产出 legado 的 "URL,{json 请求选项}" 形式（如 url="https://x/search/,"+JSON.stringify({method:"POST",body})）
+    return parseSearchUrl(url, key);
   }
   return parseSearchUrl(s, key);
 }

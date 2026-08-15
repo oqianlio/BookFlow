@@ -28,8 +28,9 @@ vi.mock("./api", async (importOriginal) => {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = new Uint8Array(await res.arrayBuffer());
+        // 与 Rust 侧 decode_body 一致：UTF-8 解码失败时回退 GBK（否则 GBK 页面显示乱码）
         try {
-          return new TextDecoder("utf-8").decode(buf);
+          return new TextDecoder("utf-8", { fatal: true }).decode(buf);
         } catch {
           return new TextDecoder("gbk").decode(buf);
         }
@@ -44,7 +45,7 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
   const t0 = Date.now();
   try {
     const src = parseBookSourceJson(s.json);
-    const parsed = resolveSearchUrl(src.searchUrl ?? "", KEYWORD, 1, { sourceKey: src.bookSourceUrl });
+    const parsed = resolveSearchUrl(src.searchUrl ?? "", KEYWORD, 1, { sourceKey: src.bookSourceUrl, source: src });
     if (!parsed.url) return { name: s.name, ok: false, count: 0, reason: "无搜索URL", ms: Date.now() - t0 };
     // 相对 searchUrl 基于书源域名解析（与 searchService 一致）
     const url = resolveUrl(parsed.url, src.bookSourceUrl);

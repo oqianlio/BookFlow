@@ -8,7 +8,7 @@ export interface SearchHit {
 
 async function searchSource(key: string, bs: ApiBookSource): Promise<SearchHit[]> {
   const src: Src = parseBookSourceJson(bs.json);
-  const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl });
+  const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl, source: src });
   if (!parsed.url) return [];
   // 相对 searchUrl（如 /search/）基于书源域名解析成绝对 URL
   const url = resolveUrl(parsed.url, src.bookSourceUrl);

@@ -18,7 +18,7 @@ export async function debugSource(
 
   let html: string;
   if (stage === "search") {
-    const parsed = resolveSearchUrl(src.searchUrl ?? "", urlOrKey, 1, { sourceKey: src.bookSourceUrl });
+    const parsed = resolveSearchUrl(src.searchUrl ?? "", urlOrKey, 1, { sourceKey: src.bookSourceUrl, source: src });
     html = await httpGet(parsed.url, ua, undefined, parsed.method, parsed.body, undefined, host);
   } else {
     html = await httpGet(urlOrKey, ua, undefined, undefined, undefined, undefined, host);
