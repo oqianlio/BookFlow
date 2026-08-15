@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
 export type PageMode = "scroll" | "cover" | "slide";
 
@@ -28,28 +28,26 @@ export default function PaginatedReader({
   const [page, setPage] = useState(0);
   const ty = { ...DEFAULT_TYPO, ...typography };
 
-  // 真实测量：隐藏容器
-  const measureRef = useRef(measure);
-  measureRef.current = measure;
-  const realMeasure = useCallback((h: string): number => {
-    if (measureRef.current) return measureRef.current(h);
-    const wrap = wrapRef.current;
-    if (!wrap) return 0;
-    const el = document.createElement("div");
-    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;line-height:${lineHeight};letter-spacing:${ty.letterSpacingPx}px;text-indent:${ty.indentEm}em;font-weight:${ty.bold ? 700 : 400};font-family:${ty.fontFamily};white-space:normal;`;
-    el.innerHTML = `<style>.m-p p{margin:0 0 ${ty.paragraphSpacingPx}px}</style><div class="m-p">${h}</div>`;
-    wrap.appendChild(el);
-    const height = el.getBoundingClientRect().height;
-    wrap.removeChild(el);
-    return height;
+  // 排版样式：批量测量时应用到隐藏容器（与阅读区一致的字体/行距/缩进等）
+  const styleHtml = useMemo(() => {
+    const css = [
+      `font-size:${fontSizePx}px`,
+      `line-height:${lineHeight}`,
+      `letter-spacing:${ty.letterSpacingPx}px`,
+      `text-indent:${ty.indentEm}em`,
+      `font-weight:${ty.bold ? 700 : 400}`,
+      `font-family:${ty.fontFamily}`,
+      "white-space:normal",
+    ].join(";");
+    return `<style>.m-p{${css}} .m-p p{margin:0 0 ${ty.paragraphSpacingPx}px}</style>`;
   }, [fontSizePx, lineHeight, ty.letterSpacingPx, ty.paragraphSpacingPx, ty.indentEm, ty.bold, ty.fontFamily]);
 
   useEffect(() => {
     const h = wrapRef.current?.clientHeight || 500;
     const w = wrapRef.current?.clientWidth || 400;
-    setPages(sliceHtmlIntoPages(html, h, w, realMeasure));
+    setPages(sliceHtmlIntoPages(html, h, w, measure, styleHtml));
     setPage(0);
-  }, [html, realMeasure]);
+  }, [html, measure, styleHtml]);
 
   const total = pages.length;
   const go = (p: number) => {
@@ -103,25 +101,29 @@ export default function PaginatedReader({
 }
 
 // 纯函数：把 html 的块级元素（p/div/h1-h6/li/pre）按高度切片为页数组（每页 html 字符串）。
-// measure 可注入真实 DOM 测量（组件内用隐藏容器 getBoundingClientRect().height，见 Task 2），
-// 默认用字符数估算（每 10 字符 15px），供 jsdom 测试等无布局环境使用。
+// measure 可注入（jsdom 测试用字符估算）；未注入时用批量隐藏容器测量（一次渲染全部块，
+// 按 offsetTop 找页断点），避免逐块 append/remove 的 O(N) 重排。
 export function sliceHtmlIntoPages(
   html: string,
   pageHeightPx: number,
   measureWidthPx: number,
   measure?: (h: string) => number,
+  styleHtml = "",
 ): string[] {
-  void measureWidthPx;
   if (!html.trim()) return [];
   // 1. 拆分块级片段（p/div/h1-h6/li/pre），保留标签
   const blocks = Array.from(html.matchAll(/<(p|div|h[1-6]|li|pre)[^>]*>[\s\S]*?<\/\1>/g)).map((m) => m[0]);
   if (blocks.length === 0) return [html]; // 无块级 → 整篇一页
-  // 2. 逐块累加测量，高度超页则成页（段落在页边界保留，不截断）
-  const m = measure ?? defaultMeasure;
+  if (measure) return sliceByAccumulate(blocks, pageHeightPx, measure);
+  return sliceByBatchMeasure(blocks, pageHeightPx, measureWidthPx, styleHtml);
+}
+
+// 逐块累加测量（注入 measure 时使用，供无布局环境/测试）
+function sliceByAccumulate(blocks: string[], pageHeightPx: number, measure: (h: string) => number): string[] {
   const pages: string[] = [];
   let cur = "";
   for (const b of blocks) {
-    const h = m(cur + b);
+    const h = measure(cur + b);
     if (h > pageHeightPx && cur) {
       pages.push(cur);
       cur = "";
@@ -129,10 +131,33 @@ export function sliceHtmlIntoPages(
     cur += b;
   }
   if (cur) pages.push(cur);
-  return pages.length ? pages : [html];
+  return pages.length ? pages : [blocks.join("")];
 }
 
-function defaultMeasure(h: string): number {
-  // 兜底：按字符数估算（每 10 字符 15px）；真实测量由组件内 measurement 容器覆盖
-  return (h.length / 10) * 15;
+// 批量测量：隐藏容器一次渲染全部块，按 offsetTop 相对页首的位移找页断点（段落在页边界保留）
+function sliceByBatchMeasure(blocks: string[], pageHeightPx: number, widthPx: number, styleHtml: string): string[] {
+  const host = document.createElement("div");
+  host.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${widthPx || 400}px;`;
+  host.innerHTML = `${styleHtml}<div class="m-p">${blocks.join("")}</div>`;
+  document.body.appendChild(host);
+  try {
+    const parent = host.firstElementChild as HTMLElement | null;
+    if (!parent) return [blocks.join("")];
+    const pages: string[] = [];
+    let cur: string[] = [];
+    let pageStart = 0;
+    for (const el of Array.from(parent.children)) {
+      const top = (el as HTMLElement).offsetTop;
+      if (cur.length > 0 && top - pageStart >= pageHeightPx) {
+        pages.push(cur.join(""));
+        cur = [];
+        pageStart = top;
+      }
+      cur.push((el as HTMLElement).outerHTML);
+    }
+    if (cur.length) pages.push(cur.join(""));
+    return pages.length ? pages : [blocks.join("")];
+  } finally {
+    document.body.removeChild(host);
+  }
 }
