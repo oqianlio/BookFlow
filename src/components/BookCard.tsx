@@ -148,10 +148,6 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
       </div>
       <div className="book-meta">
         <h3>{title}</h3>
-        <div className="book-sub">
-          <span className="fmt">{subLabel}</span>
-          {extra && <span className="progress">{extra}</span>}
-        </div>
       </div>
       {onRemove && (
         <button

@@ -16,6 +16,7 @@ const shelfSource = {
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
   vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([]);
   vi.spyOn(api, "getProgress").mockResolvedValue(null);
 });
@@ -32,17 +33,24 @@ describe("LibraryPage", () => {
     vi.spyOn(api, "listBooks").mockResolvedValue(books);
     vi.spyOn(api, "getProgress").mockImplementation(async (id: number) => (id === 1 ? ["3", 0.42] : null));
     render(<LibraryPage onOpenBook={() => {}} />);
-    await waitFor(() => expect(screen.getByText("42%")).toBeInTheDocument(), { timeout: 3000 });
-    // 卡片副行显示阅读百分比，封面出现进度条
-    expect(document.querySelector(".book-progress-bar")).not.toBeNull();
+    await screen.findByText("三体");
+    // 网格模式：封面进度条（不显示百分比文字）
+    await waitFor(() => expect(document.querySelector(".book-progress-bar")).not.toBeNull());
+    expect(screen.queryByText("42%")).not.toBeInTheDocument();
+    // 列表模式：副行显示阅读百分比
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    await waitFor(() => expect(screen.getByText("42%")).toBeInTheDocument());
   });
 
-  it("shows relative last-opened time on cards without progress", async () => {
+  it("shows relative last-opened time in list mode", async () => {
     const opened = [{ ...books[0], last_opened_at: Math.floor(Date.now() / 1000) - 2 * 86400 }];
     vi.spyOn(api, "listBooks").mockResolvedValue(opened);
     render(<LibraryPage onOpenBook={() => {}} />);
-    expect(await screen.findByText("三体")).toBeInTheDocument();
-    expect(screen.getByText("2 天前")).toBeInTheDocument();
+    await screen.findByText("三体");
+    // 网格无时间信息；切到列表显示
+    expect(screen.queryByText("2 天前")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    expect(await screen.findByText("2 天前")).toBeInTheDocument();
   });
 
   it("calls importFiles on import click", async () => {
@@ -76,8 +84,10 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText("球状闪电")).toBeInTheDocument();
-    // 在线书卡片显示「在线」而非具体书源名（副行标签 + 无封面占位均可能）
-    expect(screen.getAllByText("在线").length).toBeGreaterThanOrEqual(1);
+    // 网格模式：卡片无副行标签（.fmt）；列表模式才有格式/在线标记
+    expect(document.querySelectorAll(".book-card .fmt").length).toBe(0);
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    expect(document.querySelectorAll(".book-card-list .fmt").length).toBe(3);
     expect(screen.queryByText("示例")).not.toBeInTheDocument();
   });
 
