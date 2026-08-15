@@ -112,20 +112,37 @@ export function mergeUserAgent(headers: Record<string, string> | undefined, user
   return { ...(headers ?? {}), "User-Agent": userAgent };
 }
 
+// 书源列表会话内短缓存：章节/目录/搜索/换源面板等高频调用避免重复 IPC 查库。
+// 书源增删改/启停后立即失效；TTL 10s 兜底（外部修改不会长期陈旧）。
+let sourcesCache: { at: number; data: BookSource[] } | null = null;
+const SOURCES_TTL_MS = 10_000;
+
 export async function listBookSources(): Promise<BookSource[]> {
-  return invoke<BookSource[]>("list_book_sources");
+  if (sourcesCache && Date.now() - sourcesCache.at < SOURCES_TTL_MS) return sourcesCache.data;
+  const data = await invoke<BookSource[]>("list_book_sources");
+  sourcesCache = { at: Date.now(), data };
+  return data;
+}
+
+export function invalidateBookSourcesCache(): void {
+  sourcesCache = null;
 }
 export async function addBookSource(name: string, url: string, json: string): Promise<number> {
-  return invoke<number>("add_book_source", { name, url, json });
+  const id = await invoke<number>("add_book_source", { name, url, json });
+  invalidateBookSourcesCache();
+  return id;
 }
 export async function updateBookSource(id: number, name: string, url: string, json: string): Promise<void> {
   await invoke("update_book_source", { id, name, url, json });
+  invalidateBookSourcesCache();
 }
 export async function deleteBookSource(id: number): Promise<void> {
   await invoke("delete_book_source", { id });
+  invalidateBookSourcesCache();
 }
 export async function setBookSourceEnabled(id: number, enabled: boolean): Promise<void> {
   await invoke("set_book_source_enabled", { id, enabled });
+  invalidateBookSourcesCache();
 }
 
 export interface SourceProgress {

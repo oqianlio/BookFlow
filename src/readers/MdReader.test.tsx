@@ -1,13 +1,16 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import MdReader from "./MdReader";
 import { readFileContent } from "../services/api";
+import { clearLocalTextCache } from "../services/localBookCache";
 
 vi.mock("../services/api", () => ({
   readFileContent: vi.fn().mockResolvedValue("# 标题\n\n正文 <img src=x onerror=alert(1)> 继续"),
   getProgress: vi.fn().mockResolvedValue(null),
   saveProgress: vi.fn().mockResolvedValue(undefined),
 }));
+
+beforeEach(() => { vi.clearAllMocks(); clearLocalTextCache(); });
 
 // 模拟滚动布局尺寸，使 jsdom 下的 scrollTop 可观测
 function mockScrollGeometry(el: HTMLElement) {

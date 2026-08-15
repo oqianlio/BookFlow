@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
-import { readFileContent } from "../services/api";
+import { readLocalText } from "../services/localBookCache";
 
 const LINES_PER_PAGE = 40;
 
@@ -19,7 +19,7 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
     let cancelled = false;
     (async () => {
       try {
-        const text = await readFileContent(path);
+        const text = await readLocalText(path);
         if (!cancelled) setLines(text.split(/\r?\n/));
       } catch (e) {
         if (cancelled) return;

@@ -1,13 +1,16 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import TxtReader from "./TxtReader";
 import { readFileContent } from "../services/api";
+import { clearLocalTextCache } from "../services/localBookCache";
 
 vi.mock("../services/api", () => ({
   readFileContent: vi.fn().mockResolvedValue(Array.from({ length: 80 }, (_, i) => `行${i}`).join("\n")),
   getProgress: vi.fn().mockResolvedValue(null),
   saveProgress: vi.fn().mockResolvedValue(undefined),
 }));
+
+beforeEach(() => { vi.clearAllMocks(); clearLocalTextCache(); });
 
 describe("TxtReader", () => {
   it("jumps to a page on reader-jump event", async () => {

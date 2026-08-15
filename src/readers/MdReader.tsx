@@ -3,7 +3,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
-import { readFileContent } from "../services/api";
+import { readLocalText } from "../services/localBookCache";
 
 export default function MdReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
   const [html, setHtml] = useState("");
@@ -48,7 +48,7 @@ export default function MdReader({ path, bookId, onError }: { path: string; book
     let cancelled = false;
     (async () => {
       try {
-        const text = await readFileContent(path);
+        const text = await readLocalText(path);
         if (cancelled) return;
         setTotalLines(text.split(/\r?\n/).length);
         // 用户导入的 Markdown 可能含恶意 HTML：marked 输出经 DOMPurify 清洗后再注入
