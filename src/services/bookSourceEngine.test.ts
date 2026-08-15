@@ -712,6 +712,33 @@ describe("jsBlock <js>...</js>", () => {
   });
 });
 
+describe("legado XPath string-result rules", () => {
+  const doc = parseHtml(`<html><body>
+    <div class="title"> 第一章  标题 </div>
+    <a href="/c/1.html">链接</a>
+  </body></html>`);
+
+  it("extractSingle /text() returns the text node value", async () => {
+    const out = await extractSingle(doc, "//div[@class='title']/text()");
+    expect(out).toBe("第一章  标题");
+  });
+
+  it("extractSingle string() function returns element text", async () => {
+    const out = await extractSingle(doc, "string(//div[@class='title'])");
+    expect(out).toBe("第一章  标题");
+  });
+
+  it("extractSingle normalize-space() trims inner whitespace", async () => {
+    const out = await extractSingle(doc, "normalize-space(//div[@class='title'])");
+    expect(out).toBe("第一章 标题");
+  });
+
+  it("extractSingle //a/@href resolves against baseUrl", async () => {
+    const out = await extractSingle(doc, "//a/@href", { baseUrl: "https://ex.com/book/1.html" });
+    expect(out).toBe("https://ex.com/c/1.html");
+  });
+});
+
 describe("legado JSON rules: wildcard and range", () => {
   const data = {
     list: [

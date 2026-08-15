@@ -317,9 +317,21 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     return (doc.body?.textContent ?? "").replace(re, parts[1] ?? "");
   }
   if (parsed.type === "xpath") {
-    const result = doc.evaluate(parsed.value, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+    const expr = parsed.value.trim();
+    // 表达式结果是字符串（text()/@属性结尾，或含字符串函数调用）时用 STRING_TYPE 直接取值；
+    // 以 /@href 或 /@src 结尾时按 URL 解析
+    const isStringExpr =
+      /(?:text\(\)|@[\w-]+)\s*$/.test(expr)
+      || /(?:string|normalize-space|substring|substring-before|substring-after|concat|translate|replace|lower-case|upper-case|number|contains)\(/.test(expr);
+    const isUrlExpr = /\/@(?:href|src)\s*$/.test(expr);
+    if (isStringExpr) {
+      const sv = doc.evaluate(expr, doc, null, XPathResult.STRING_TYPE, null);
+      const str = (sv.stringValue ?? "").trim();
+      return str ? finalize(applyReplacements(str, parsed.replace), isUrlExpr ? "href" : "text", ctx?.baseUrl) : "";
+    }
+    const result = doc.evaluate(expr, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
     const node = result.singleNodeValue as Element | null;
-    return node ? finalize(nodeValue(node, parsed.attr), parsed.attr, ctx?.baseUrl) : "";
+    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
   }
   if (parsed.type === "js") {
     return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
