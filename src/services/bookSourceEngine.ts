@@ -540,6 +540,29 @@ export function resolveSearchUrl(searchUrl: string, key: string, page: number, c
   return parseSearchUrl(s, key);
 }
 
+function parseJsonExplore(raw: unknown): Array<{ title: string; url: string }> | null {
+  let arr: unknown[] | null = null;
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else if (typeof raw === "string") {
+    const str = raw.trim();
+    if (!str) return null;
+    try {
+      const parsed = JSON.parse(str);
+      if (Array.isArray(parsed)) arr = parsed;
+    } catch {
+      return null;
+    }
+  }
+  if (!arr) return null;
+  return arr
+    .map((item) => ({
+      title: String((item as any)?.title ?? (item as any)?.name ?? ""),
+      url: String((item as any)?.url ?? ""),
+    }))
+    .filter((k) => k.url);
+}
+
 export function parseExploreUrl(
   exploreUrl: string,
   ctx?: { sourceKey?: string; source?: any },
@@ -554,29 +577,10 @@ export function parseExploreUrl(
       source: ctx?.source,
     });
     // 表达式直接返回对象数组（如 @js:[{...},{...}]）
-    if (Array.isArray(raw)) {
-      return raw
-        .map((item) => ({
-          title: String(item?.title ?? item?.name ?? ""),
-          url: String(item?.url ?? ""),
-        }))
-        .filter((k) => k.url);
-    }
+    const json = parseJsonExplore(raw);
+    if (json) return json;
     const str = String(raw ?? "").trim();
     if (!str) return [];
-    try {
-      const parsed = JSON.parse(str);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => ({
-            title: String(item?.title ?? item?.name ?? ""),
-            url: String(item?.url ?? ""),
-          }))
-          .filter((k) => k.url);
-      }
-    } catch {
-      // 非 JSON，走字符串解析
-    }
     return str
       .split(/(?:&&|\n)+/)
       .map((l) => l.trim())
@@ -587,6 +591,9 @@ export function parseExploreUrl(
         return { title: line.slice(0, idx).trim(), url: line.slice(idx + 2).trim() };
       });
   }
+  // legado 原版支持 exploreUrl 直接为 JSON 数组（无需 @js 前缀）
+  const json = parseJsonExplore(s);
+  if (json) return json;
   return exploreUrl
     .split("\n")
     .map((l) => l.trim())

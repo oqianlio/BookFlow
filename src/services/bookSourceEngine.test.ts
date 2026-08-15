@@ -420,6 +420,21 @@ describe("parseExploreUrl", () => {
       { title: "都市", url: "/d/" },
     ]);
   });
+
+  it("parses plain JSON array exploreUrl without @js prefix", () => {
+    const r = parseExploreUrl(
+      '[{"title":"玄幻魔法","url":"/novels/class/1_{{page}}.html","style":{}},{"title":"都市言情","url":"/novels/class/3_{{page}}.html"}]',
+    );
+    expect(r).toEqual([
+      { title: "玄幻魔法", url: "/novels/class/1_{{page}}.html" },
+      { title: "都市言情", url: "/novels/class/3_{{page}}.html" },
+    ]);
+  });
+
+  it("filters JSON array entries with empty url", () => {
+    const r = parseExploreUrl('[{"title":"标题占位","url":""},{"title":"分类","url":"/x/1.html"}]');
+    expect(r).toEqual([{ title: "分类", url: "/x/1.html" }]);
+  });
 });
 
 describe("extractBookList", () => {
