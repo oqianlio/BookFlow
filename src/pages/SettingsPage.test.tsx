@@ -16,6 +16,10 @@ vi.mock("../components/theme", () => ({
   setTtsRate: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../components/TtsBar", () => ({ getTtsRate: vi.fn().mockResolvedValue(1), setTtsRate: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("../services/eyeCare", () => ({
+  loadEyeCare: vi.fn().mockResolvedValue({ enabled: false, start: "22:00", end: "06:00" }),
+  saveEyeCare: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("SettingsPage", () => {
   it("renders scheme selector and switches scheme", async () => {
@@ -31,5 +35,16 @@ describe("SettingsPage", () => {
     expect(await screen.findByText(/书源管理/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /打开/ }));
     expect(onOpen).toHaveBeenCalled();
+  });
+
+  it("toggles 护眼定时 and shows time inputs", async () => {
+    render(<SettingsPage />);
+    await screen.findByText(/护眼定时/);
+    // 默认关：无时间输入
+    expect(screen.queryByLabelText("护眼开始时间")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "开" }));
+    // 开启后显示时间输入
+    expect(screen.getByLabelText("护眼开始时间")).toBeInTheDocument();
+    expect(screen.getByLabelText("护眼结束时间")).toBeInTheDocument();
   });
 });

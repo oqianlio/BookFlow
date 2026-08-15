@@ -1364,6 +1364,18 @@ input[type="range"] {
 /* ============ 我的页 ============ */
 .my-form { max-width: 520px; display: flex; flex-direction: column; gap: 16px; padding: 12px 0; }
 .my .settings-group { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: var(--surface-container-lowest); border: 1px solid var(--outline-variant); border-radius: var(--radius-md); transition: background-color 0.25s ease, border-color 0.25s ease; }
+.my .settings-group .segmented { flex-shrink: 0; }
+.time-range { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.time-range input[type="time"] {
+  padding: 6px 10px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+.time-range span { font-size: 12px; color: var(--on-surface-variant); }
 
 /* ============ 错误弹窗 ============ */
 .error-dialog-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }

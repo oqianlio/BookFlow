@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { SCHEMES, SCHEME_NAMES, Theme, initTheme, setTheme, getTheme } from "../components/theme";
 import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
+import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 
 export default function SettingsPage({ onOpenSourceManager }: {
   onOpenSourceManager?: () => void;
@@ -9,11 +10,13 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [theme, setThemeState] = useState<Theme>({ scheme: "sora", mode: "light" });
   const [fontSize, setFontSizeState] = useState(18);
   const [rate, setRateState] = useState(1);
+  const [eyeCare, setEyeCareState] = useState<EyeCareSettings>({ enabled: false, start: "22:00", end: "06:00" });
 
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
     setFontSizeState(getFontSize());
     void getTtsRate().then(setRateState);
+    void loadEyeCare().then(setEyeCareState);
   }, []);
 
   const selectScheme = (scheme: Theme["scheme"]) => {
@@ -24,7 +27,16 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const toggleMode = (mode: Theme["mode"]) => {
     const next = { ...getTheme(), mode };
     setThemeState(next);
+    // 记录用户手动选择的模式（护眼定时窗口外恢复用）
+    localStorage.setItem("reader.manualMode", mode);
     void setTheme(next);
+  };
+  const updateEyeCare = (patch: Partial<EyeCareSettings>) => {
+    setEyeCareState((prev) => {
+      const next = { ...prev, ...patch };
+      void saveEyeCare(next);
+      return next;
+    });
   };
 
   return (
@@ -53,6 +65,23 @@ export default function SettingsPage({ onOpenSourceManager }: {
             <button type="button" className={theme.mode === "light" ? "active" : ""} onClick={() => toggleMode("light")}>白天</button>
             <button type="button" className={theme.mode === "dark" ? "active" : ""} onClick={() => toggleMode("dark")}>夜间</button>
           </div>
+        </div>
+        <div className="settings-group">
+          <div>
+            <div className="label">护眼定时</div>
+            <div className="hint">设定时间段内自动切换到夜间模式</div>
+          </div>
+          <div className="segmented" role="group" aria-label="护眼定时">
+            <button type="button" className={!eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: false })}>关</button>
+            <button type="button" className={eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: true })}>开</button>
+          </div>
+          {eyeCare.enabled && (
+            <div className="time-range">
+              <input type="time" aria-label="护眼开始时间" value={eyeCare.start} onChange={(e) => updateEyeCare({ start: e.target.value })} />
+              <span>至</span>
+              <input type="time" aria-label="护眼结束时间" value={eyeCare.end} onChange={(e) => updateEyeCare({ end: e.target.value })} />
+            </div>
+          )}
         </div>
         <div className="settings-group">
           <div>
