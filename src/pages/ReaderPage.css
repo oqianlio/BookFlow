@@ -46,16 +46,24 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
+  max-height: 56px;
+  overflow: hidden;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 10;
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  transition: transform 0.22s ease, opacity 0.22s ease,
+    max-height 0.22s ease, padding 0.22s ease, border-bottom-width 0.22s ease;
 }
 
 .reader-toolbar-hidden {
   transform: translateY(-100%);
   opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-width: 0;
+  pointer-events: none;
 }
 
 .reader-toolbar h2 {
