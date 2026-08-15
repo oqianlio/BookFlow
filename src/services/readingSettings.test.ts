@@ -48,7 +48,7 @@ describe("readingSettings", () => {
   });
 
   it("saveReadingSettings persists all four keys", async () => {
-    await saveReadingSettings({ pageMode: "slide", fontSizePx: 21, lineHeight: 2.0, bgTheme: "night" });
+    await saveReadingSettings({ ...DEFAULT_READING_SETTINGS, pageMode: "slide", fontSizePx: 21, lineHeight: 2.0, bgTheme: "night" });
     expect(api.setSetting).toHaveBeenCalledWith("reading.pageMode", "slide");
     expect(api.setSetting).toHaveBeenCalledWith("reading.fontSizePx", "21");
     expect(api.setSetting).toHaveBeenCalledWith("reading.lineHeight", "2");
