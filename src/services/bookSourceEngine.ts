@@ -260,16 +260,16 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
     evalJs(parsed.value, jsCtx);
     const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
-    let doc = ctx?.doc ?? emptyDoc();
+    let jsDoc = ctx?.doc ?? doc;
     let newCtx = ctx;
     if (ajaxUrl) {
       const headers = mergeUserAgent(ctx?.source?.httpHeaders, ctx?.source?.httpUserAgent);
       const host = ctx?.cookieHost ?? "";
       const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, host);
-      doc = parseHtml(html);
+      jsDoc = parseHtml(html);
       newCtx = { ...ctx, result: html };
     }
-    return extractSingle(doc, parsed.after ?? "", newCtx);
+    return extractSingle(jsDoc, parsed.after ?? "", newCtx);
   }
   if (!parsed.value) return "";
   if (parsed.value.startsWith("tag.")) {
@@ -343,15 +343,15 @@ export async function extractList(
     const jsCtx: JsContext = { doc: emptyDoc(), baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, source: ctx?.source };
     evalJs(parsed.value, jsCtx);
     const ajaxUrl = (jsCtx as any)._ajaxUrl as string | undefined;
-    let doc = ctx?.doc ?? emptyDoc();
+    let jsDoc = ctx?.doc ?? doc;
     let newCtx = ctx;
     if (ajaxUrl) {
       const headers = mergeUserAgent(ctx?.source?.httpHeaders, ctx?.source?.httpUserAgent);
       const html = await httpGet(ajaxUrl, headers, undefined, undefined, undefined, undefined, ctx?.cookieHost ?? "");
-      doc = parseHtml(html);
+      jsDoc = parseHtml(html);
       newCtx = { ...ctx, result: html };
     }
-    return extractList(doc, parsed.after ?? "", itemRules, newCtx);
+    return extractList(jsDoc, parsed.after ?? "", itemRules, newCtx);
   }
   if (parsed.type !== "css") return [];
   const nodes = selectNodes(doc, parsed.value);
