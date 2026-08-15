@@ -264,13 +264,29 @@ function parseAttrRule(s: string): ParsedRule {
 
 export function selectNodes(doc: Document, selector: string): Element[] {
   if (!selector.trim()) return [];
-  return Array.from(doc.querySelectorAll(selector));
+  try {
+    return Array.from(doc.querySelectorAll(normalizeSelector(selector)));
+  } catch {
+    const hit = queryIndexed(selector, doc);
+    return hit ? [hit] : [];
+  }
 }
 
-/** 安全选择：常规 querySelectorAll，失败（非法选择器）则回退 queryIndexed 单节点 */
+/** legado 选择器简写规范化：id.x → #x；class.a b c → .a.b.c（多类）；!索引由 queryIndexed 处理 */
+export function normalizeSelector(sel: string): string {
+  let s = sel.trim();
+  if (s.startsWith("id.")) return `#${s.slice(3)}`;
+  if (s.startsWith("class.")) {
+    // class.a b c → .a.b.c（多类合并）；正常 .a b 后代选择器不受影响
+    return `.${s.slice(6).trim().split(/\s+/).join(".")}`;
+  }
+  return s;
+}
+
+/** 安全选择：常规 querySelectorAll（含 legado 简写规范化），失败则回退 queryIndexed 单节点 */
 function selectNodesSafe(selector: string, scope: Document | Element): Element[] {
   try {
-    return Array.from(scope.querySelectorAll(selector));
+    return Array.from(scope.querySelectorAll(normalizeSelector(selector)));
   } catch {
     const hit = queryIndexed(selector, scope);
     return hit ? [hit] : [];
@@ -492,8 +508,9 @@ export async function extractList(
             const hit = queryIndexed(chain[i], n);
             if (hit) next.push(hit);
           } else {
+            const norm = normalizeSelector(chain[i]);
             try {
-              next.push(...Array.from(n.querySelectorAll(chain[i])));
+              next.push(...Array.from(n.querySelectorAll(norm)));
             } catch {
               // 非法选择器回退
               const hit = queryIndexed(chain[i], n);
@@ -677,18 +694,30 @@ function applyReplacements(v: string, replaces?: Array<[string, string]>): strin
  * 先尝试常规 querySelector；失败（非法选择器）或带数字后缀时，按 base 选择器 + index 取。
  */
 function queryIndexed(selector: string, scope: Document | Element): Element | null {
+  const sel = selector.trim();
+  // legado `!` 索引：`tr!0`（第 0 个）/`tag.tr!0`（tag 前缀剥除）/`xxx!last`
+  const bang = sel.match(/^(?:(?:tag\.)?)(.+?)!(\d+|last)$/);
+  if (bang) {
+    try {
+      const nodes = scope.querySelectorAll(normalizeSelector(bang[1]));
+      const idx = bang[2] === "last" ? nodes.length - 1 : parseInt(bang[2], 10);
+      return nodes[idx] ?? null;
+    } catch {
+      return null;
+    }
+  }
   try {
-    return scope.querySelector(selector);
+    return scope.querySelector(normalizeSelector(sel));
   } catch {
     // 非法选择器（如 .author.0）→ 尝试拆分 .数字 后缀
   }
-  const m = selector.match(/^(.+?)\.(\d+)$/);
+  const m = sel.match(/^(.+?)\.(\d+)$/);
   if (!m) return null;
   const base = m[1];
   const index = parseInt(m[2], 10);
   let nodes: NodeListOf<Element>;
   try {
-    nodes = scope.querySelectorAll(base);
+    nodes = scope.querySelectorAll(normalizeSelector(base));
   } catch {
     return null;
   }

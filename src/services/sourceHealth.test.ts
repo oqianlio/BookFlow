@@ -49,13 +49,20 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
     // 相对 searchUrl 基于书源域名解析（与 searchService 一致）
     const url = resolveUrl(parsed.url, src.bookSourceUrl);
     const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000);
+    if (!html || html.length < 80) return { name: s.name, ok: false, count: 0, reason: "响应过短", ms: Date.now() - t0 };
     const doc = new DOMParser().parseFromString(html, "text/html");
     const items = await extractBookList(doc, src.ruleSearch ?? {}, {
       baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl,
     });
-    return { name: s.name, ok: items.length > 0, count: items.length, ms: Date.now() - t0 };
+    if (items.length === 0) {
+      // 无结果诊断：bookList 规则原文 + 响应文本摘要（剥离标签）
+      const bl = (src.ruleSearch as any)?.bookList ?? "";
+      const text = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 140);
+      return { name: s.name, ok: false, count: 0, reason: `无结果 | bookList="${bl}" | 响应:${text}`, ms: Date.now() - t0 };
+    }
+    return { name: s.name, ok: true, count: items.length, ms: Date.now() - t0 };
   } catch (e) {
-    return { name: s.name, ok: false, count: 0, reason: String(e).slice(0, 100), ms: Date.now() - t0 };
+    return { name: s.name, ok: false, count: 0, reason: String(e).slice(0, 160), ms: Date.now() - t0 };
   }
 }
 

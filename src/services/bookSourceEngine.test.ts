@@ -837,6 +837,39 @@ describe("legado chain css@js: rules", () => {
   });
 });
 
+describe("legado selector shorthand (id./class./! index)", () => {
+  const html = `<html><body>
+    <table><tbody><tr><td>行1</td></tr><tr><td>行2</td></tr></tbody></table>
+    <div class="grid"><div id="nr">正文内容</div><div class="item a">A</div><div class="item b">B</div></div>
+  </body></html>`;
+  const doc = parseHtml(html);
+
+  it("extractSingle supports tr!0 bang index", async () => {
+    const out = await extractSingle(doc, "tr!0@text");
+    expect(out).toBe("行1");
+  });
+
+  it("extractList supports tbody@tr!1 bang index in chain", async () => {
+    const items = await extractList(doc, "tbody@tr!1", { name: "td@text" });
+    expect(items[0].name).toBe("行2");
+  });
+
+  it("extractSingle supports id.nr shorthand", async () => {
+    const out = await extractSingle(doc, "id.nr");
+    expect(out).toBe("正文内容");
+  });
+
+  it("extractList supports class.grid@id.nr chain", async () => {
+    const items = await extractList(doc, "class.grid@id.nr", { name: "text" });
+    expect(items[0].name).toBe("正文内容");
+  });
+
+  it("extractList supports class multi-class shorthand", async () => {
+    const items = await extractList(doc, "class.item a", { name: "text" });
+    expect(items[0].name).toBe("A");
+  });
+});
+
 describe("legado regex rules (/pattern/)", () => {
   it("parseRule recognizes slashed regex rules", () => {
     expect(parseRule("/第(\\d+)章/").type).toBe("regex");
