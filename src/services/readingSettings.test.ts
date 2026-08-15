@@ -113,4 +113,30 @@ describe("readingSettings", () => {
     expect(resolveFontCss("custom-font")).toBe("custom-font");
     expect(resolveFontCss("")).toContain("Georgia");
   });
+
+  it("conversion defaults to none", async () => {
+    vi.mocked(api.getSetting).mockResolvedValue(null);
+    const s = await loadReadingSettings();
+    expect(s.conversion).toBe("none");
+  });
+
+  it("loads and sanitizes conversion", async () => {
+    vi.mocked(api.getSetting).mockImplementation(async (k) => {
+      if (k === "reading.conversion") return "trad";
+      return null;
+    });
+    const s = await loadReadingSettings();
+    expect(s.conversion).toBe("trad");
+    vi.mocked(api.getSetting).mockImplementation(async (k) => {
+      if (k === "reading.conversion") return "weird";
+      return null;
+    });
+    const s2 = await loadReadingSettings();
+    expect(s2.conversion).toBe("none");
+  });
+
+  it("saveReadingSettings persists conversion", async () => {
+    await saveReadingSettings({ ...DEFAULT_READING_SETTINGS, conversion: "simp" });
+    expect(api.setSetting).toHaveBeenCalledWith("reading.conversion", "simp");
+  });
 });

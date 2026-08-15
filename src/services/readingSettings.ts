@@ -1,4 +1,5 @@
 import { getSetting, setSetting } from "./api";
+import type { Conversion } from "./tradSimpl";
 
 export type PageMode = "scroll" | "cover" | "slide";
 
@@ -12,6 +13,7 @@ export interface ReadingSettings {
   indentEm: number;
   bold: boolean;
   fontFamily: string;
+  conversion: Conversion;
 }
 
 export const BG_THEMES: Array<{ id: string; name: string; bg: string; fg: string }> = [
@@ -44,9 +46,11 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   indentEm: 0,
   bold: false,
   fontFamily: "serif",
+  conversion: "none",
 };
 
 const PAGE_MODES: PageMode[] = ["scroll", "cover", "slide"];
+const CONVERSIONS: Conversion[] = ["none", "simp", "trad"];
 const FONT_MIN = 14;
 const FONT_MAX = 24;
 const LINE_MIN = 1.4;
@@ -66,7 +70,7 @@ function numInRange(raw: string | null, min: number, max: number, fallback: numb
 
 export async function loadReadingSettings(): Promise<ReadingSettings> {
   try {
-    const [mode, size, line, bg, ls, ps, ind, bld, fam] = await Promise.all([
+    const [mode, size, line, bg, ls, ps, ind, bld, fam, conv] = await Promise.all([
       getSetting("reading.pageMode"),
       getSetting("reading.fontSizePx"),
       getSetting("reading.lineHeight"),
@@ -76,6 +80,7 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       getSetting("reading.indentEm"),
       getSetting("reading.bold"),
       getSetting("reading.fontFamily"),
+      getSetting("reading.conversion"),
     ]);
     const pageMode = PAGE_MODES.includes(mode as PageMode)
       ? (mode as PageMode)
@@ -91,6 +96,7 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       indentEm: numInRange(ind, INDENT_MIN, INDENT_MAX, DEFAULT_READING_SETTINGS.indentEm),
       bold: bld === "1",
       fontFamily: fam && fam.trim() ? fam : DEFAULT_READING_SETTINGS.fontFamily,
+      conversion: CONVERSIONS.includes(conv as Conversion) ? conv as Conversion : DEFAULT_READING_SETTINGS.conversion,
     };
   } catch {
     return { ...DEFAULT_READING_SETTINGS };
@@ -108,5 +114,6 @@ export async function saveReadingSettings(s: ReadingSettings): Promise<void> {
     setSetting("reading.indentEm", String(s.indentEm)),
     setSetting("reading.bold", s.bold ? "1" : "0"),
     setSetting("reading.fontFamily", s.fontFamily),
+    setSetting("reading.conversion", s.conversion),
   ]);
 }
