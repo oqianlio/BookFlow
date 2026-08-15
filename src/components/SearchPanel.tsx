@@ -9,12 +9,14 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchHit[]>([]);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const seqRef = useRef(0);
 
   const run = async () => {
     if (!query.trim()) return;
     const seq = ++seqRef.current;
     setBusy(true);
+    setFailed(false);
     try {
       const r = await invoke<SearchHit[]>("search_books", { query });
       if (seq !== seqRef.current) return; // 丢弃过期搜索响应
@@ -22,6 +24,7 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
     } catch {
       if (seq !== seqRef.current) return;
       setResults([]);
+      setFailed(true);
     } finally {
       if (seq === seqRef.current) setBusy(false);
     }
@@ -33,9 +36,15 @@ export default function SearchPanel({ onJump }: { onJump: (hit: SearchHit) => vo
       <div className="panel-add">
         <input aria-label="搜索关键词" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void run()} placeholder="搜索书名与正文" />
-        <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>搜索</button>
+        <button className="btn btn-primary" onClick={run} disabled={busy || !query.trim()}>
+          {busy ? "搜索中…" : "搜索"}
+        </button>
       </div>
-      {query.trim() && !busy && results.length === 0 ? (
+      {busy ? (
+        <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>搜索中…</span></span></p>
+      ) : failed ? (
+        <p className="panel-empty">搜索失败，请重试</p>
+      ) : query.trim() && results.length === 0 ? (
         <p className="panel-empty">无搜索结果</p>
       ) : (
         <>

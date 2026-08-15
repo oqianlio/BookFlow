@@ -77,7 +77,9 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
       {candidates.length > 0 && (
         <div className="switch-source-list">
           {candidates.map((h, i) => (
-            <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onPick(h)}>
+            <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onPick(h)}
+              role="button" tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onPick(h); } }}>
               <div className="hit-info">
                 {/* 书名统一显示用户确认的书名，避免各源解析出杂质书名（如「三体_笔趣阁」） */}
                 <span className="hit-title">{title}</span>

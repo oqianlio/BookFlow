@@ -100,7 +100,9 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
             ) : (
               <>
                 {books.map((h, i) => (
-                  <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onOpenBook(h)}>
+                  <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onOpenBook(h)}
+                    role="button" tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenBook(h); } }}>
                     <div className="hit-info">
                       <span className="hit-title">{h.title}</span>
                       <span className="hit-author">{h.author}</span>

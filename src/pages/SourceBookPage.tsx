@@ -26,6 +26,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 }) {
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
+  const [tocLoading, setTocLoading] = useState(true);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
@@ -46,6 +47,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setTocLoading(true);
       try {
         const r = await fetchToc({ sourceId, bookUrl, initialTitle });
         if (!cancelled) {
@@ -56,6 +58,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         }
       } catch (e) {
         if (!cancelled) showError(String(e));
+      } finally {
+        if (!cancelled) setTocLoading(false);
       }
     })();
     return () => { cancelled = true; };
@@ -163,7 +167,9 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
       </div>
       <div className="source-toc">
         <h2 className="home-section">目录 {toc.length > 0 && <span className="toc-total">共 {toc.length} 章</span>}</h2>
-        {toc.length === 0 ? (
+        {tocLoading ? (
+          <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
+        ) : toc.length === 0 ? (
           <p className="panel-empty">暂无目录</p>
         ) : (
           <ol>

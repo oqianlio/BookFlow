@@ -157,7 +157,9 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore, onOpenGroupExp
         ) : (
           grouped.map((g, i) => (
             <div className="hit-card result-card" key={i}>
-              <div className="hit-info" onClick={() => onOpenBook(g.sources[0])}>
+              <div className="hit-info" onClick={() => onOpenBook(g.sources[0])}
+                role="button" tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenBook(g.sources[0]); } }}>
                 <span className="hit-title">{g.title}</span>
                 <span className="hit-author">
                   {g.author || (g.sources.length > 1 ? `来自 ${g.sources.length} 个书源` : g.sources[0]?.sourceName)}

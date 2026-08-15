@@ -13,6 +13,8 @@ export default function RssPage({ onOpenArticle }: {
   const [feeds, setFeeds] = useState<RssFeedRow[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [articles, setArticles] = useState<RssArticleRow[]>([]);
+  const [articlesLoading, setArticlesLoading] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const { showError } = useError();
@@ -30,10 +32,13 @@ export default function RssPage({ onOpenArticle }: {
   useEffect(() => { void refreshFeeds(); }, [refreshFeeds]);
 
   const loadArticles = useCallback(async (feedId: number) => {
+    setArticlesLoading(true);
     try {
       setArticles(await listRssArticles(feedId));
     } catch (e) {
       showError(String(e));
+    } finally {
+      setArticlesLoading(false);
     }
   }, [showError]);
 
@@ -76,7 +81,11 @@ export default function RssPage({ onOpenArticle }: {
     try {
       const added = await refreshRssFeed(feed.id);
       if (activeId === feed.id) await loadArticles(feed.id);
-      if (added > 0) showError(`新增 ${added} 篇文章`); // 复用错误弹窗提示（可接受）
+      // 正向反馈用页面内提示，不复用错误弹窗
+      if (added > 0) {
+        setNotice(`新增 ${added} 篇文章`);
+        window.setTimeout(() => setNotice(null), 3000);
+      }
     } catch (e) {
       showError(String(e));
     }
@@ -113,14 +122,19 @@ export default function RssPage({ onOpenArticle }: {
         </div>
         <div className="rss-articles">
           <h2 className="home-section">文章</h2>
+          {notice && <p className="rss-notice">{notice}</p>}
           {activeId == null ? (
             <p className="panel-empty">选择一个订阅源</p>
+          ) : articlesLoading ? (
+            <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
           ) : articles.length === 0 ? (
             <p className="panel-empty">暂无文章</p>
           ) : (
             <div className="discover-results">
               {articles.map((a) => (
-                <div className="hit-card" key={a.id} onClick={() => onOpenArticle(a)}>
+                <div className="hit-card" key={a.id} onClick={() => onOpenArticle(a)}
+                  role="button" tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenArticle(a); } }}>
                   <div className="hit-info">
                     <span className="hit-title">{a.title}</span>
                     {a.published_at && <span className="hit-author">{formatDate(a.published_at)}</span>}

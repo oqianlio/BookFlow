@@ -17,7 +17,9 @@ export default function GroupExplorePage({ groupName, sources, onBack, onOpenExp
       ) : (
         <div className="discover-results">
           {sources.map((s) => (
-            <div className="hit-card" key={s.id} onClick={() => onOpenExplore(s.id, s.name)}>
+            <div className="hit-card" key={s.id} onClick={() => onOpenExplore(s.id, s.name)}
+              role="button" tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenExplore(s.id, s.name); } }}>
               <div className="hit-info">
                 <span className="hit-title">{s.name}</span>
               </div>

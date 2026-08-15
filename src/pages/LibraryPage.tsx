@@ -11,6 +11,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
 }) {
   const [items, setItems] = useState<ShelfItem[]>([]);
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const { showError } = useError();
 
@@ -26,6 +27,8 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
       ]);
     } catch (e) {
       showError(String(e));
+    } finally {
+      setInitialLoading(false);
     }
   }, [showError]);
 
@@ -95,7 +98,11 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
         </div>
       </header>
       {showSearch && <SearchPanel onJump={handleSearchJump} />}
-      {items.length === 0 ? (
+      {initialLoading ? (
+        <div className="empty">
+          <span className="loading-state"><span className="spinner" /><span>加载中…</span></span>
+        </div>
+      ) : items.length === 0 ? (
         <div className="empty">
           <BookIcon size={56} />
           <h2>书架空空如也，点击导入书籍</h2>
