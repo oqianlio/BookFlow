@@ -1,28 +1,10 @@
 import { useEffect, useState } from "react";
-import { httpGet, listBookSources, mergeUserAgent, type BookSource } from "../services/api";
-import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, type BookSource as Src } from "../services/bookSourceEngine";
+import { listBookSources } from "../services/api";
+import { parseBookSourceJson } from "../services/bookSourceEngine";
+import { searchBookSources, type SearchHit } from "../services/searchService";
 import { useError } from "../components/ErrorDialog";
 
-export interface SearchHit {
-  title: string; author: string; coverUrl: string; bookUrl: string;
-  sourceId: number; sourceName: string;
-}
-
-async function searchSource(key: string, bs: BookSource): Promise<SearchHit[]> {
-  const src: Src = parseBookSourceJson(bs.json);
-  const parsed = resolveSearchUrl(src.searchUrl ?? "", key, 1, { sourceKey: src.bookSourceUrl });
-  if (!parsed.url) return [];
-  let cookieJarHost = "";
-  try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
-  const html = await httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, parsed.method, parsed.body, undefined, cookieJarHost);
-  const doc = parseHtml(html);
-  const rules = src.ruleSearch ?? {};
-  const items = await extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
-  return items.filter((i) => i.name).map((i) => ({
-    title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
-    bookUrl: i.bookUrl ?? "", sourceId: bs.id, sourceName: bs.name,
-  }));
-}
+export type { SearchHit } from "../services/searchService";
 
 export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
   onOpenBook: (h: SearchHit) => void;
@@ -60,9 +42,7 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore }: {
     if (!query.trim()) return;
     setBusy(true);
     try {
-      const sources = (await listBookSources()).filter((s) => s.enabled);
-      const all = await Promise.all(sources.map((s) => searchSource(query.trim(), s).catch(() => [] as SearchHit[])));
-      setHits(all.flat());
+      setHits(await searchBookSources(query));
     } catch (e) {
       showError(String(e));
     } finally {
