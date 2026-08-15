@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { httpGet, openLoginWindow, mergeUserAgent } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, extractList, type BookSource } from "../services/bookSourceEngine";
+import { openLoginWindow } from "../services/api";
+import { fetchToc, type TocItem } from "../services/sourceToc";
 import { useError } from "../components/ErrorDialog";
-
-interface TocItem { name: string; url: string }
 
 export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead }: {
   sourceId: number; sourceName: string; bookUrl: string; initialTitle: string;
@@ -11,49 +9,18 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 }) {
   const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [toc, setToc] = useState<TocItem[]>([]);
-  const [source, setSource] = useState<BookSource | null>(null);
+  const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const { showError } = useError();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const bs = await (await import("../services/api")).listBookSources().then((l) => l.find((x) => x.id === sourceId));
-        if (!bs) { showError("书源不存在"); return; }
-        const s = parseBookSourceJson(bs.json);
-        if (!cancelled) setSource(s);
-        if (!bookUrl) { showError("书籍地址无效，无法打开"); return; }
-        const base = s.bookSourceUrl || bookUrl;
-        const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
-        let cookieJarHost = "";
-        try { cookieJarHost = new URL(s.bookSourceUrl).hostname; } catch { cookieJarHost = s.bookSourceUrl; }
-        const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
-        console.warn("[sourcebook] bookUrl=", resolvedBookUrl, "len=", html.length, "head=", html.slice(0, 100));
-        const doc = parseHtml(html);
-        const bi = s.ruleBookInfo ?? {};
-        const title = bi.name ? await extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : initialTitle;
-        const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
-        const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
-        const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : "";
-        console.warn("[sourcebook] info title=", title, "author=", author, "introLen=", intro.length, "cover=", cover.slice(0, 60));
-        const tocUrl = bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
-        console.warn("[sourcebook] tocUrl=", tocUrl);
-        const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
-        console.warn("[sourcebook] tocHtml len=", tocHtml.length, "head=", tocHtml.slice(0, 100));
-        const tocDoc = parseHtml(tocHtml);
-        const rules = s.ruleToc ?? {};
-        const items = await extractList(tocDoc, rules.chapterList ?? "", {
-          name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-        }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl });
-        console.warn("[sourcebook] toc items=", items.length, "first=", JSON.stringify(items.slice(0, 2)));
-        const tocItems = items.filter((i) => i.url).map((i) => ({
-          name: i.name || "未命名章节",
-          url: i.url.startsWith("http") ? i.url : new URL(i.url, tocUrl).toString(),
-        }));
-        console.warn("[sourcebook] tocItems=", tocItems.length);
+        const r = await fetchToc({ sourceId, bookUrl, initialTitle });
         if (!cancelled) {
-          setInfo({ title: title || initialTitle, author, intro, coverUrl: cover });
-          setToc(tocItems);
+          setInfo(r.info);
+          setToc(r.toc);
+          setLoginUrl(r.loginUrl);
         }
       } catch (e) {
         if (!cancelled) showError(String(e));
@@ -63,10 +30,10 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   }, [sourceId, bookUrl, initialTitle]);
 
   const handleLogin = () => {
-    if (!source?.loginUrl) return;
+    if (!loginUrl) return;
     let host = "";
-    try { host = new URL(source.bookSourceUrl).hostname; } catch { host = source.bookSourceUrl; }
-    void openLoginWindow(source.loginUrl, host);
+    try { host = new URL(loginUrl).hostname; } catch { host = loginUrl; }
+    void openLoginWindow(loginUrl, host);
   };
 
   return (
@@ -74,7 +41,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
       <header className="library-header">
         <div className="brand"><h1>{sourceName}</h1></div>
         <div className="library-actions">
-          {source?.loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
+          {loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>

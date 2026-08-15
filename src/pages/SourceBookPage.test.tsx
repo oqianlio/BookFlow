@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SourceBookPage from "./SourceBookPage";
 import * as api from "../services/api";
+import { clearTocCache } from "../services/sourceToc";
 
 vi.mock("../services/api", () => ({
   httpGet: vi.fn(),
@@ -28,6 +29,8 @@ const coverSourceJson = JSON.stringify({
   ruleBookInfo: { name: "h1@text", author: ".author@text", coverUrl: ".cover img@src" },
   ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href", nextTocUrl: "" },
 });
+
+beforeEach(() => { vi.clearAllMocks(); clearTocCache(); });
 
 describe("SourceBookPage", () => {
   it("renders book info and chapter list", async () => {
