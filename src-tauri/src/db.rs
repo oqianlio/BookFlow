@@ -127,6 +127,17 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             updated_at INTEGER NOT NULL,
             PRIMARY KEY (source_id, book_url)
         );
+        CREATE TABLE IF NOT EXISTS shelf_source_books (
+            id INTEGER PRIMARY KEY,
+            source_id INTEGER NOT NULL REFERENCES book_sources(id) ON DELETE CASCADE,
+            book_url TEXT NOT NULL,
+            title TEXT NOT NULL,
+            author TEXT,
+            cover_url TEXT,
+            added_at INTEGER NOT NULL,
+            last_opened_at INTEGER,
+            UNIQUE(source_id, book_url)
+        );
         "#,
     )?;
     Ok(conn)
@@ -386,5 +397,69 @@ pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<
            chapter_url=excluded.chapter_url, chapter_name=excluded.chapter_name, percent=excluded.percent, updated_at=excluded.updated_at",
         params![p.source_id, p.book_url, p.title, p.chapter_index, p.chapter_url, p.chapter_name, p.percent, now],
     )?;
+    // 书架联动：书在架时更新打开时间（不在架则无操作）
+    conn.execute(
+        "UPDATE shelf_source_books SET last_opened_at = ?1 WHERE source_id = ?2 AND book_url = ?3",
+        params![now, p.source_id, p.book_url],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ShelfSourceBook {
+    pub id: i64,
+    pub source_id: i64,
+    pub source_name: String,
+    pub book_url: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub cover_url: Option<String>,
+    pub added_at: i64,
+    pub last_opened_at: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewShelfSourceBook {
+    pub source_id: i64,
+    pub book_url: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub cover_url: Option<String>,
+}
+
+pub fn add_shelf_source_book(conn: &Connection, b: &NewShelfSourceBook) -> Result<i64> {
+    let t = now();
+    conn.execute(
+        "INSERT INTO shelf_source_books (source_id, book_url, title, author, cover_url, added_at, last_opened_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)
+         ON CONFLICT(source_id, book_url) DO UPDATE SET title = excluded.title, author = excluded.author, cover_url = excluded.cover_url",
+        params![b.source_id, b.book_url, b.title, b.author, b.cover_url, t],
+    )?;
+    let id = conn.query_row(
+        "SELECT id FROM shelf_source_books WHERE source_id = ?1 AND book_url = ?2",
+        params![b.source_id, b.book_url],
+        |r| r.get(0),
+    )?;
+    Ok(id)
+}
+
+pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.id, s.source_id, bs.name, s.book_url, s.title, s.author, s.cover_url, s.added_at, s.last_opened_at
+         FROM shelf_source_books s JOIN book_sources bs ON bs.id = s.source_id
+         ORDER BY COALESCE(s.last_opened_at, s.added_at) DESC",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ShelfSourceBook {
+            id: r.get(0)?, source_id: r.get(1)?, source_name: r.get(2)?,
+            book_url: r.get(3)?, title: r.get(4)?, author: r.get(5)?,
+            cover_url: r.get(6)?, added_at: r.get(7)?, last_opened_at: r.get(8)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn remove_shelf_source_book(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM shelf_source_books WHERE id = ?1", [id])?;
     Ok(())
 }

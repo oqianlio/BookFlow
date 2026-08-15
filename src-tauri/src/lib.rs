@@ -50,6 +50,7 @@ pub fn run() {
             get_book_source_progress, save_book_source_progress,
             open_login_window,
             log_frontend,
+            add_shelf_source_book, list_shelf_source_books, remove_shelf_source_book,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -149,3 +149,22 @@ export async function getSetting(key: string): Promise<string | null> {
 export async function setSetting(key: string, value: string): Promise<void> {
   await invoke("set_setting_cmd", { key, value });
 }
+
+export interface ShelfSourceBook {
+  id: number; source_id: number; source_name: string; book_url: string;
+  title: string; author: string | null; cover_url: string | null;
+  added_at: number; last_opened_at: number | null;
+}
+
+export async function addShelfSourceBook(a: { sourceId: number; bookUrl: string; title: string; author?: string; coverUrl?: string }): Promise<number> {
+  return invoke<number>("add_shelf_source_book", {
+    sourceId: a.sourceId, bookUrl: a.bookUrl, title: a.title,
+    author: a.author ?? null, coverUrl: a.coverUrl ?? null,
+  });
+}
+export async function listShelfSourceBooks(): Promise<ShelfSourceBook[]> {
+  return invoke<ShelfSourceBook[]>("list_shelf_source_books");
+}
+export async function removeShelfSourceBook(id: number): Promise<void> {
+  await invoke("remove_shelf_source_book", { id });
+}

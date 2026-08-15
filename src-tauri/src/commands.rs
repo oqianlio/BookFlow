@@ -321,3 +321,27 @@ pub fn log_frontend(level: String, message: String) {
         _ => println!("[前端 {}] {}", level, message),
     }
 }
+
+#[tauri::command]
+pub fn add_shelf_source_book(
+    source_id: i64,
+    book_url: String,
+    title: String,
+    author: Option<String>,
+    cover_url: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<i64, String> {
+    crate::db::add_shelf_source_book(&state.db.lock().unwrap(), &crate::db::NewShelfSourceBook {
+        source_id, book_url, title, author, cover_url,
+    }).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_shelf_source_books(state: State<'_, AppState>) -> Result<Vec<crate::db::ShelfSourceBook>, String> {
+    crate::db::list_shelf_source_books(&state.db.lock().unwrap()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn remove_shelf_source_book(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::remove_shelf_source_book(&state.db.lock().unwrap(), id).map_err(|e| e.to_string())
+}

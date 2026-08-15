@@ -9,6 +9,8 @@ vi.mock("./readers/TxtReader", () => ({ default: () => null }));
 vi.mock("./services/api", () => ({
   listBookSources: vi.fn().mockResolvedValue([]),
   listBooks: vi.fn().mockResolvedValue([]),
+  listShelfSourceBooks: vi.fn().mockResolvedValue([]),
+  removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
   importFiles: vi.fn().mockResolvedValue([]),
   getSetting: vi.fn().mockResolvedValue(null),
   setSetting: vi.fn().mockResolvedValue(undefined),

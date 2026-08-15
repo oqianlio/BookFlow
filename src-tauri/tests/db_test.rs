@@ -70,3 +70,52 @@ fn settings_roundtrip() {
     drop(conn);
     fs::remove_dir_all(dir.path()).unwrap();
 }
+
+#[test]
+fn shelf_source_book_crud_and_cascade() {
+    let dir = tempdir().unwrap();
+    let conn = init_db(dir.path().join("test.db")).unwrap();
+    let sid = add_source(&conn, "示例", "https://ex.com", "{}").unwrap();
+    let id1 = add_shelf_source_book(&conn, &NewShelfSourceBook {
+        source_id: sid, book_url: "https://ex.com/b/1.html".into(),
+        title: "三体".into(), author: Some("刘慈欣".into()), cover_url: None,
+    }).unwrap();
+    // upsert 幂等：同 key 再次加入返回同一 id 且只保留一条
+    let id2 = add_shelf_source_book(&conn, &NewShelfSourceBook {
+        source_id: sid, book_url: "https://ex.com/b/1.html".into(),
+        title: "三体（新版）".into(), author: Some("刘慈欣".into()), cover_url: None,
+    }).unwrap();
+    assert_eq!(id1, id2);
+    let list = list_shelf_source_books(&conn).unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].title, "三体（新版）");
+    assert_eq!(list[0].source_name, "示例");
+    // save_source_progress 联动 last_opened_at
+    save_source_progress(&conn, &NewSourceProgress {
+        source_id: sid, book_url: "https://ex.com/b/1.html".into(),
+        title: "三体".into(), chapter_index: 2, chapter_url: "https://ex.com/c/2.html".into(),
+        chapter_name: "第二章".into(), percent: 0.5,
+    }).unwrap();
+    let list2 = list_shelf_source_books(&conn).unwrap();
+    assert!(list2[0].last_opened_at.is_some());
+    // 删除书源级联删除书架条目
+    delete_source(&conn, sid).unwrap();
+    assert!(list_shelf_source_books(&conn).unwrap().is_empty());
+    drop(conn);
+    fs::remove_dir_all(dir.path()).unwrap();
+}
+
+#[test]
+fn shelf_source_book_remove() {
+    let dir = tempdir().unwrap();
+    let conn = init_db(dir.path().join("test.db")).unwrap();
+    let sid = add_source(&conn, "示例", "https://ex.com", "{}").unwrap();
+    let id = add_shelf_source_book(&conn, &NewShelfSourceBook {
+        source_id: sid, book_url: "https://ex.com/b/1.html".into(),
+        title: "三体".into(), author: None, cover_url: None,
+    }).unwrap();
+    remove_shelf_source_book(&conn, id).unwrap();
+    assert!(list_shelf_source_books(&conn).unwrap().is_empty());
+    drop(conn);
+    fs::remove_dir_all(dir.path()).unwrap();
+}

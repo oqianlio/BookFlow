@@ -114,7 +114,15 @@ function AppInner() {
           />
         )}
         {state.area === "bookshelf" && (
-          <LibraryPage key="bookshelf" onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "bookshelf" })} />
+          <LibraryPage
+            key="bookshelf"
+            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "bookshelf" })}
+            onOpenSourceBook={(sb) => setState({
+              area: "detail", page: "sourceReader",
+              sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
+              chapterIndex: -1, chapterUrl: "", chapterName: "", back: "bookshelf",
+            })}
+          />
         )}
         {state.area === "discover" && (
           <DiscoverPage

@@ -1,25 +1,33 @@
 import { useCallback, useEffect, useState } from "react";
-import BookCard from "../components/BookCard";
+import BookCard, { type ShelfItem } from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
 import { BookIcon, SearchIcon } from "../components/icons";
-import { importFiles, listBooks, removeBook, type Book } from "../services/api";
+import { importFiles, listBooks, removeBook, listShelfSourceBooks, removeShelfSourceBook, type Book, type ShelfSourceBook } from "../services/api";
 import { useError } from "../components/ErrorDialog";
 
-export default function LibraryPage({ onOpenBook }: {
+export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   onOpenBook: (b: Book) => void;
+  onOpenSourceBook?: (sb: ShelfSourceBook) => void;
 }) {
-  const [books, setBooks] = useState<Book[]>([]);
+  const [items, setItems] = useState<ShelfItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const { showError } = useError();
 
   const refresh = useCallback(async () => {
     try {
-      setBooks(await listBooks());
+      const [local, source] = await Promise.all([
+        listBooks(),
+        listShelfSourceBooks().catch(() => [] as ShelfSourceBook[]),
+      ]);
+      setItems([
+        ...local.map((b) => ({ kind: "local" as const, book: b })),
+        ...source.map((sb) => ({ kind: "source" as const, sb })),
+      ]);
     } catch (e) {
       showError(String(e));
     }
-  }, []);
+  }, [showError]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -35,23 +43,33 @@ export default function LibraryPage({ onOpenBook }: {
     }
   };
 
-  const handleRemove = async (id: number) => {
-    if (!window.confirm("确定删除这本书吗？")) return;
+  const handleRemove = async (item: ShelfItem) => {
+    const name = item.kind === "local" ? item.book.title : item.sb.title;
+    if (!window.confirm(`确定从书架移除「${name}」吗？`)) return;
     try {
-      await removeBook(id);
+      if (item.kind === "local") {
+        await removeBook(item.book.id);
+      } else {
+        await removeShelfSourceBook(item.sb.id);
+      }
       await refresh();
     } catch (e) {
       showError(String(e));
     }
   };
 
+  const handleOpen = (item: ShelfItem) => {
+    if (item.kind === "local") onOpenBook(item.book);
+    else onOpenSourceBook?.(item.sb);
+  };
+
   const handleSearchJump = (h: SearchHit) => {
-    const book = books.find((b) => b.id === h.book_id);
+    const book = items.find((i) => i.kind === "local" && i.book.id === h.book_id) as { kind: "local"; book: Book } | undefined;
     if (!book) return;
     const w = window as any;
     // 打开书籍后按命中定位：EPUB 章节 href / PDF 页码 / MD/TXT 行号
     w.__searchJump = { location: h.location, format: h.format };
-    onOpenBook(book);
+    onOpenBook(book.book);
     w.dispatchEvent(new CustomEvent("search-jump", { detail: { location: h.location, format: h.format } }));
   };
 
@@ -77,16 +95,21 @@ export default function LibraryPage({ onOpenBook }: {
         </div>
       </header>
       {showSearch && <SearchPanel onJump={handleSearchJump} />}
-      {books.length === 0 ? (
+      {items.length === 0 ? (
         <div className="empty">
           <BookIcon size={56} />
           <h2>书架空空如也，点击导入书籍</h2>
-          <p>支持 EPUB · PDF · Markdown · TXT 四种格式，导入后即可开始阅读</p>
+          <p>支持 EPUB · PDF · Markdown · TXT 四种格式；也可在「发现」中把在线书加入书架</p>
         </div>
       ) : (
         <div className="book-grid">
-          {books.map((b) => (
-            <BookCard key={b.id} book={b} onOpen={onOpenBook} onRemove={handleRemove} />
+          {items.map((item) => (
+            <BookCard
+              key={item.kind === "local" ? `local-${item.book.id}` : `source-${item.sb.id}`}
+              item={item}
+              onOpen={handleOpen}
+              onRemove={handleRemove}
+            />
           ))}
         </div>
       )}
