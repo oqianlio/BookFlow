@@ -40,29 +40,25 @@
   position: relative; /* 供悬浮底栏定位 */
 }
 
-/* ============ 顶部工具栏 ============ */
+/* ============ 顶部工具栏（悬浮：不占布局，正文高度恒定避免切片重排） ============ */
 .reader-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  max-height: 56px;
-  overflow: hidden;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
   z-index: 10;
-  transition: transform 0.22s ease, opacity 0.22s ease,
-    max-height 0.22s ease, padding 0.22s ease, border-bottom-width 0.22s ease;
+  transition: transform 0.22s ease, opacity 0.22s ease;
 }
 
 .reader-toolbar-hidden {
   transform: translateY(-100%);
   opacity: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-bottom-width: 0;
   pointer-events: none;
 }
 
@@ -117,6 +113,8 @@
   flex: 1;
   display: flex;
   min-height: 0;
+  /* 顶部留出悬浮顶栏高度：恒定不变，顶栏显隐不触发切片重排 */
+  padding-top: 52px;
 }
 
 .reader-main {
