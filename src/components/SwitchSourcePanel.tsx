@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { listBookSources } from "../services/api";
 import { searchBookSources, type SearchHit } from "../services/searchService";
+import { fetchToc } from "../services/sourceToc";
 
 export default function SwitchSourcePanel({ title, author, excludeSourceId, onPick, onClose }: {
   title: string; author: string; excludeSourceId: number;
@@ -49,6 +50,19 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
     return [...best.values()];
   }, [hits, title]);
 
+  // 为每个候选源异步获取目录章节数（连载书/完整度参考，fetchToc 有全局缓存）
+  const [tocCounts, setTocCounts] = useState<Record<number, number>>({});
+  useEffect(() => {
+    if (candidates.length === 0) return;
+    let cancelled = false;
+    for (const h of candidates) {
+      void fetchToc({ sourceId: h.sourceId, bookUrl: h.bookUrl, initialTitle: title })
+        .then((r) => { if (!cancelled) setTocCounts((p) => ({ ...p, [h.sourceId]: r.toc.length })); })
+        .catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [candidates, title]);
+
   return (
     <div className="panel switch-source-panel">
       <h3>换源：{title}</h3>
@@ -68,6 +82,11 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
                 {/* 书名统一显示用户确认的书名，避免各源解析出杂质书名（如「三体_笔趣阁」） */}
                 <span className="hit-title">{title}</span>
                 <span className="hit-author">{h.author || author}</span>
+                <span className="hit-toc-count">
+                  {tocCounts[h.sourceId] !== undefined
+                    ? `共 ${tocCounts[h.sourceId]} 章`
+                    : "加载目录…"}
+                </span>
               </div>
               <span className="hit-source">{h.sourceName}</span>
             </div>

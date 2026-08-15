@@ -162,7 +162,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         </div>
       </div>
       <div className="source-toc">
-        <h2 className="home-section">目录</h2>
+        <h2 className="home-section">目录 {toc.length > 0 && <span className="toc-total">共 {toc.length} 章</span>}</h2>
         {toc.length === 0 ? (
           <p className="panel-empty">暂无目录</p>
         ) : (

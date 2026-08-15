@@ -142,7 +142,8 @@ describe("SourceBookPage", () => {
     const img = document.querySelector("img.source-book-cover") as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img!.getAttribute("src")).toBe("https://cdn.com/c.jpg");
-    expect(screen.getByRole("heading", { name: "目录" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /目录/ })).toBeInTheDocument();
+    expect(screen.getByText("共 1 章")).toBeInTheDocument();
   });
 
   it("resolves relative cover URLs against the book URL", async () => {

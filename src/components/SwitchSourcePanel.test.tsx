@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SwitchSourcePanel from "./SwitchSourcePanel";
 import * as searchService from "../services/searchService";
+import * as sourceToc from "../services/sourceToc";
 
 vi.mock("../services/searchService", () => ({ searchBookSources: vi.fn() }));
+vi.mock("../services/sourceToc", () => ({ fetchToc: vi.fn() }));
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn().mockResolvedValue([
     { id: 1, name: "当前源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
@@ -18,7 +20,13 @@ const hits = [
   { title: "三体", author: "刘慈欣", coverUrl: "", bookUrl: "https://c.com/1.html", sourceId: 3, sourceName: "源C" },
 ];
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(sourceToc.fetchToc).mockResolvedValue({
+    info: { title: "三体", author: "刘慈欣", intro: "", coverUrl: "" },
+    toc: [{ name: "第1章", url: "https://b.com/c/1.html" }],
+  });
+});
 
 describe("SwitchSourcePanel", () => {
   it("searches with title+author excluding the current source", async () => {
@@ -77,6 +85,20 @@ describe("SwitchSourcePanel", () => {
     render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={onPick} onClose={() => {}} />);
     fireEvent.click(await screen.findByText("源B"));
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ title: "三体", bookUrl: "https://b.com/1.html" }));
+  });
+
+  it("shows the chapter count per source candidate (toc length)", async () => {
+    vi.mocked(searchService.searchBookSources).mockResolvedValue(hits);
+    vi.mocked(sourceToc.fetchToc).mockImplementation(async ({ sourceId }) => ({
+      info: { title: "三体", author: "刘慈欣", intro: "", coverUrl: "" },
+      toc: sourceId === 2
+        ? [{ name: "第1章", url: "https://b.com/c/1.html" }, { name: "第2章", url: "https://b.com/c/2.html" }]
+        : [{ name: "第1章", url: "https://c.com/c/1.html" }],
+    }));
+    render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={() => {}} onClose={() => {}} />);
+    // 各源候选显示目录章节数（连载书/完整度参考）
+    expect(await screen.findByText("共 2 章")).toBeInTheDocument();
+    expect(screen.getByText("共 1 章")).toBeInTheDocument();
   });
 
   it("shows empty state when no candidates found", async () => {
