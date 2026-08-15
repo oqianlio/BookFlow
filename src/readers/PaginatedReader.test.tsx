@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { sliceHtmlIntoPages } from "./PaginatedReader";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import PaginatedReader, { sliceHtmlIntoPages } from "./PaginatedReader";
 
 const HEIGHT = 300;
 
@@ -33,5 +34,44 @@ describe("sliceHtmlIntoPages", () => {
 
   it("returns empty array for empty input", () => {
     expect(sliceHtmlIntoPages("", HEIGHT, 400, mockMeasure)).toEqual([]);
+  });
+});
+
+const CONTENT = Array.from({ length: 30 }, (_, i) => `<p>段落${i}${"字".repeat(9)}</p>`).join("");
+
+// jsdom 无布局：给 wrap 注入宽度，让区域点击（左/中/右 1/3）可判定
+function mockWrapRect(el: HTMLElement, width = 1200) {
+  el.getBoundingClientRect = () =>
+    ({
+      left: 0, top: 0, right: width, bottom: 100, width, height: 100, x: 0, y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+}
+
+describe("PaginatedReader", () => {
+  it("renders current page and reports progress", () => {
+    const onPageChange = vi.fn();
+    render(<PaginatedReader html={CONTENT} mode="scroll" onPageChange={onPageChange} measure={mockMeasure} />);
+    expect(onPageChange).toHaveBeenCalledWith(0, expect.any(Number));
+    // 首页内容可见
+    const wrap = screen.getByText(/段落0/);
+    expect(wrap).toBeInTheDocument();
+  });
+
+  it("next/prev navigates pages and region click flips", () => {
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    // 点击右 1/3 → next
+    fireEvent.click(wrap, { clientX: 900 });
+    expect(wrap.textContent).toContain("段落"); // 第 2 页有内容
+    // 点击左 1/3 → prev
+    fireEvent.click(wrap, { clientX: 100 });
+    expect(wrap.textContent).toContain("段落0");
+  });
+
+  it("renders empty state for empty html", () => {
+    render(<PaginatedReader html="" />);
+    expect(screen.getByText(/无内容/)).toBeInTheDocument();
   });
 });
