@@ -3,6 +3,7 @@ import EpubReader from "../readers/EpubReader";
 import PdfReader from "../readers/PdfReader";
 import MdReader from "../readers/MdReader";
 import TxtReader from "../readers/TxtReader";
+import PaginatedReader from "../readers/PaginatedReader";
 import MangaViewer from "../readers/MangaViewer";
 import AnnotationPanel from "../components/AnnotationPanel";
 import BookmarkPanel from "../components/BookmarkPanel";
@@ -282,7 +283,7 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
         </div>
       </header>
       <div className="reader-body">
-        <main className="reader-main" onClick={() => setMenuVisible((v) => !v)}>
+        <main className="reader-main">
           {isLocal ? (
             <>
               {openError && (
@@ -312,7 +313,11 @@ export default function ReaderPage({ source, onBack }: { source: ReaderSource; o
                 isManga ? (
                   <MangaViewer images={images} />
                 ) : chapter.url ? (
-                  <div className="md-reader"><div className="md-content" dangerouslySetInnerHTML={{ __html: `<p>${content.replace(/\n/g, "</p><p>")}</p>` }} /></div>
+                  <PaginatedReader
+                    html={`<p>${content.replace(/\n/g, "</p><p>")}</p>`}
+                    mode="scroll"
+                    onMenuToggle={() => setMenuVisible((v) => !v)}
+                  />
                 ) : (
                   <p className="panel-empty">请从目录选择章节</p>
                 )

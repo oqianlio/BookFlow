@@ -87,6 +87,19 @@ describe("ReaderPage (source)", () => {
     expect(screen.queryByText(/广告/)).not.toBeInTheDocument();
   });
 
+  it("renders source content inside the paginated reader (reader-slice-wrap)", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(ch1);
+    const { container } = renderReader();
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    const wrap = container.querySelector(".reader-slice-wrap");
+    expect(wrap).not.toBeNull();
+    expect(wrap?.textContent).toContain("第一章正文内容。");
+    expect(container.querySelector(".reader-slice-nav span")?.textContent).toBe("1 / 1");
+  });
+
   it("shows the error dialog and retry button when a chapter fails, and recovers on retry", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },

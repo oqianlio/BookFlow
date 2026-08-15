@@ -393,3 +393,15 @@
   color: var(--fg-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ============ 切片翻页（书源正文） ============ */
+.reader-slice-wrap { position: relative; height: 100%; overflow: hidden; }
+.reader-page-slice { position: absolute; inset: 0; overflow: hidden; padding: 0 4px; }
+.reader-page-slice > * { margin: 0; }
+.reader-page-slice.slide { transition: transform 0.3s ease; }
+.reader-slice-nav {
+  position: absolute; bottom: 8px; right: 12px; display: flex; gap: 8px; align-items: center;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 2px 8px; font-size: 12px; color: var(--fg-muted);
+}
+.reader-slice-nav button { border: none; background: transparent; color: var(--fg); font-size: 14px; cursor: pointer; }
