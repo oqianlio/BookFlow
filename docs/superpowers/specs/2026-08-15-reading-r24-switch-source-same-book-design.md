@@ -19,6 +19,7 @@
 1. **阅读页携带作者搜索**：`ReaderPage` 加载目录时从 `fetchToc` 返回的 `info.author` 记录作者，换源面板 `author={author}` 传给搜索 → 按「书名 + 作者」搜索，精确匹配同一本书。
 2. **换源后保持原书书名（跳转层）**：`App.tsx` 中阅读页的 `onSwitchSource` 跳转详情页时，用 `state.bookTitle`（用户正在读的书名）覆盖搜索结果的 `title` → 新源详情页始终显示同一书名。
 3. **换源后保持原书书名（详情页层）**：`SourceBookPage` 加载目录后 `info.title` 不再被源解析结果覆盖——书名以 `initialTitle`（用户打开/选中该书时确认的书名）为准，源解析的书名仅当 `initialTitle` 为空时兜底。修复部分书源 `ruleBookInfo.name` 解析出带杂质书名（如「三体_笔趣阁无弹窗」「三体（全文）」）导致详情页书名与用户所读书名不一致的问题。加入书架的书名同样使用确认书名。
+4. **换源候选列表书名统一（阅读页/详情页换源面板）**：`SwitchSourcePanel` 候选列表书名显示用户确认的书名（面板 `title`），不再显示各源搜索解析出的 `hit.title`（可能带杂质）；作者取 `hit.author`（空则回退面板 `author`）；来源仍由 `sourceName` 标注。点击回调仍携带完整搜索数据，换源跳转书名以原书为准。
 
 ## 不改动
 

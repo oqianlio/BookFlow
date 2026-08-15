@@ -48,8 +48,9 @@ export default function SwitchSourcePanel({ title, author, excludeSourceId, onPi
           {hits.map((h, i) => (
             <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onPick(h)}>
               <div className="hit-info">
-                <span className="hit-title">{h.title}</span>
-                <span className="hit-author">{h.author}</span>
+                {/* 书名统一显示用户确认的书名，避免各源解析出杂质书名（如「三体_笔趣阁」） */}
+                <span className="hit-title">{title}</span>
+                <span className="hit-author">{h.author || author}</span>
               </div>
               <span className="hit-source">{h.sourceName}</span>
             </div>

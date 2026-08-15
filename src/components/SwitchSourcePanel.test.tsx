@@ -37,6 +37,21 @@ describe("SwitchSourcePanel", () => {
     expect(onPick).toHaveBeenCalledWith(hits[0]);
   });
 
+  it("labels candidates with the confirmed book title, not the parsed source title", async () => {
+    vi.mocked(searchService.searchBookSources).mockResolvedValue([
+      { title: "三体_笔趣阁", author: "刘慈欣", coverUrl: "", bookUrl: "https://b.com/1.html", sourceId: 2, sourceName: "源B" },
+    ]);
+    const onPick = vi.fn();
+    render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={onPick} onClose={() => {}} />);
+    const card = await screen.findByText("源B");
+    // 列表书名显示用户确认的「三体」，而非源解析的杂质书名
+    expect(screen.getByText("三体", { selector: ".hit-title" })).toBeInTheDocument();
+    expect(screen.queryByText("三体_笔趣阁")).not.toBeInTheDocument();
+    // 点击仍以完整 hit 数据回调
+    fireEvent.click(card);
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ title: "三体_笔趣阁", sourceId: 2 }));
+  });
+
   it("shows empty state when no candidates found", async () => {
     vi.mocked(searchService.searchBookSources).mockResolvedValue([]);
     render(<SwitchSourcePanel title="三体" author="刘慈欣" excludeSourceId={1} onPick={() => {}} onClose={() => {}} />);
