@@ -395,7 +395,7 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     // 以 /@href 或 /@src 结尾时按 URL 解析
     const isStringExpr =
       /(?:text\(\)|@[\w-]+)\s*$/.test(expr)
-      || /(?:string|normalize-space|substring|substring-before|substring-after|concat|translate|replace|lower-case|upper-case|number|contains)\(/.test(expr);
+      || /(?:string|normalize-space|substring|substring-before|substring-after|concat|translate|replace|lower-case|upper-case|number|contains|count|sum)\(/.test(expr);
     const isUrlExpr = /\/@(?:href|src)\s*$/.test(expr);
     if (isStringExpr) {
       const sv = doc.evaluate(expr, doc, null, XPathResult.STRING_TYPE, null);

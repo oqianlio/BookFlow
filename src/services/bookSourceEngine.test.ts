@@ -737,6 +737,25 @@ describe("legado XPath string-result rules", () => {
     const out = await extractSingle(doc, "//a/@href", { baseUrl: "https://ex.com/book/1.html" });
     expect(out).toBe("https://ex.com/c/1.html");
   });
+
+  it("substring-before and substring functions", async () => {
+    const out = await extractSingle(doc, "@xpath:substring-before(normalize-space(//div[@class='title']), ' ')");
+    expect(out).toBe("第一章");
+    const out2 = await extractSingle(doc, "substring(normalize-space(//div[@class='title']), 1, 3)");
+    expect(out2).toBe("第一章");
+  });
+
+  it("count() returns the node count as string", async () => {
+    const multi = parseHtml(`<html><body><ul><li>一</li><li>二</li><li>三</li></ul></body></html>`);
+    const out = await extractSingle(multi, "count(//li)");
+    expect(out).toBe("3");
+  });
+
+  it("position() selects the indexed node", async () => {
+    const multi = parseHtml(`<html><body><ul><li>一</li><li>二</li><li>三</li></ul></body></html>`);
+    const out = await extractSingle(multi, "//li[position()=2]");
+    expect(out).toBe("二");
+  });
 });
 
 describe("legado JSON rules: wildcard and range", () => {
