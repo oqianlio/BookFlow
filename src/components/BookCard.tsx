@@ -68,7 +68,7 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
   useEffect(() => {
     if (item.kind !== "source") return;
     let cancelled = false;
-    const { sourceId, bookUrl, title } = item.sb;
+    const { source_id: sourceId, book_url: bookUrl, title } = item.sb;
     void getBookSourceProgress(sourceId, bookUrl)
       .then((p) => { if (!cancelled && p?.chapter_name) setCurrentChapter(p.chapter_name); })
       .catch(() => {});
