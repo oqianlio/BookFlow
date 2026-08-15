@@ -47,6 +47,12 @@ function AppInner() {
 
   if (state.area === "detail") {
     const go = (back: AppState) => setState(back);
+    // 换源统一入口：无论从阅读页还是详情页进入，换源后书名一律以当前所读书名为准（保持同一本书）
+    const switchSource = (hit: SearchHit, currentTitle: string) => setState({
+      area: "detail", page: "sourceBook",
+      hit: { ...hit, title: currentTitle },
+      back: state,
+    });
     switch (state.page) {
       case "reader":
         return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} />;
@@ -87,7 +93,7 @@ function AppInner() {
               bookUrl: state.hit.bookUrl, bookTitle: state.hit.title,
               chapterIndex: index, chapterUrl: url, chapterName: name, back: state,
             })}
-            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
+            onSwitchSource={(hit) => switchSource(hit, state.hit.title)}
           />
         );
       case "sourceReader":
@@ -103,11 +109,7 @@ function AppInner() {
               chapterName: state.chapterName,
             }}
             onBack={() => go(state.back)}
-            onSwitchSource={(hit) => setState({
-              area: "detail", page: "sourceBook",
-              hit: { ...hit, title: state.bookTitle }, // 换源保持同一本书：书名以当前所读书为准
-              back: state,
-            })}
+            onSwitchSource={(hit) => switchSource(hit, state.bookTitle)}
           />
         );
       case "rssArticle":

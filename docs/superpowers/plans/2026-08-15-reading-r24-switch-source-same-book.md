@@ -21,12 +21,14 @@
 - [x] Task 2: App.tsx 换源跳转保持原书书名（覆盖 hit.title）
 - [x] Task 3: SourceBookPage 详情页书名固定 initialTitle（不被源解析杂质书名覆盖）
 - [x] Task 4: SwitchSourcePanel 候选列表书名统一显示确认书名（阅读页换源界面）
-- [x] Task 5: 测试（换源面板 author props、详情页书名保持、候选列表书名统一）
-- [x] Task 6: 全量 `npm test`、`npm run build`、提交
+- [x] Task 5: App 层统一换源入口 switchSource（阅读页/详情页行为一致，书名均以当前所读书名为准）
+- [x] Task 6: 测试（换源面板 author props、详情页书名保持、候选列表书名统一）
+- [x] Task 7: 全量 `npm test`、`npm run build`、提交
 
 ## 终审清单
 
 - [x] 阅读页换源按「书名 + 作者」搜索 ✓
 - [x] 换源候选列表书名显示确认书名（非源解析杂质名）✓
 - [x] 换源后详情页书名与原书一致 ✓
+- [x] 阅读页与详情页两个换源入口行为统一 ✓
 - [x] 测试全绿、构建通过、工作树干净 ✓
