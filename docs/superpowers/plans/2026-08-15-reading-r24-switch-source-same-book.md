@@ -19,11 +19,12 @@
 
 - [x] Task 1: ReaderPage 记录 author（fetchToc 的 info.author）并传给换源面板
 - [x] Task 2: App.tsx 换源跳转保持原书书名（覆盖 hit.title）
-- [x] Task 3: 测试（mock 换源面板捕获 title/author props）
-- [x] Task 4: 全量 `npm test`、`npm run build`、提交
+- [x] Task 3: SourceBookPage 详情页书名固定 initialTitle（不被源解析杂质书名覆盖）
+- [x] Task 4: 测试（换源面板 author props + 详情页书名保持）
+- [x] Task 5: 全量 `npm test`、`npm run build`、提交
 
 ## 终审清单
 
 - [x] 阅读页换源按「书名 + 作者」搜索 ✓
-- [x] 换源后详情页书名与原书一致 ✓
+- [x] 换源后详情页书名与原书一致（不被源解析书名覆盖）✓
 - [x] 测试全绿、构建通过、工作树干净 ✓

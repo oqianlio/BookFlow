@@ -49,7 +49,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
       try {
         const r = await fetchToc({ sourceId, bookUrl, initialTitle });
         if (!cancelled) {
-          setInfo(r.info);
+          // 书名以用户打开/选中的书名为准（换源后保持同一本书），源解析书名仅作兜底
+          setInfo((prev) => ({ ...r.info, title: prev.title || r.info.title || initialTitle }));
           setToc(r.toc);
           setLoginUrl(r.loginUrl);
         }

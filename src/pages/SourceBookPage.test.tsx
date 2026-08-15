@@ -64,6 +64,20 @@ describe("SourceBookPage", () => {
     expect(screen.getByText("第二章")).toBeInTheDocument();
   });
 
+  it("keeps the confirmed book title even when the source parses a different one", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体_笔趣阁无弹窗</h1><span class="author">刘慈欣</span><ol>
+        <li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    // 书名以用户确认的「三体」为准，不被源解析的杂质书名覆盖（换源后保持同一本书）
+    expect(await screen.findByText("三体", { selector: ".source-book-title" })).toBeInTheDocument();
+    expect(screen.queryByText("三体_笔趣阁无弹窗")).not.toBeInTheDocument();
+  });
+
   it("开始阅读 resumes by passing chapterIndex -1", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
