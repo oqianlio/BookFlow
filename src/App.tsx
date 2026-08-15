@@ -141,6 +141,12 @@ function AppInner() {
             key="home"
             onGoBookshelf={() => setState({ area: "bookshelf" })}
             onGoDiscover={() => setState({ area: "discover" })}
+            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: state })}
+            onOpenSourceBook={(sb) => setState({
+              area: "detail", page: "sourceReader",
+              sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
+              chapterIndex: -1, chapterUrl: "", chapterName: "", back: state,
+            })}
           />
         )}
         {state.area === "bookshelf" && (
