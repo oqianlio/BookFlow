@@ -53,8 +53,7 @@ describe("ExplorePage", () => {
     await waitFor(() => expect(screen.getByText("三体")).toBeInTheDocument());
   });
 
-  it("paginates categories whose url contains {{page}}", async () => {
-    const paginatedJson = JSON.stringify({
+  it("paginates categories whose url contains {{page}}", async () => {    const paginatedJson = JSON.stringify({
       bookSourceUrl: "https://ex.com", bookSourceName: "测试",
       exploreUrl: "玄幻::/sort/1_{{page}}.html\n都市::/list/2.html",
       ruleExplore: { bookList: "ul.list li", name: ".n@text", author: ".a@text", bookUrl: ".n@href" },
@@ -86,5 +85,25 @@ describe("ExplorePage", () => {
     await waitFor(() => expect(screen.getByText("丙")).toBeInTheDocument());
     expect(get).toHaveBeenCalledWith("https://ex.com/list/2.html", undefined, undefined, undefined, undefined, undefined, "ex.com");
     expect(screen.queryByText("下一页")).not.toBeInTheDocument();
+  });
+
+  it("renders categories in the side column with active state", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li></ul>`,
+    );
+    const { container } = render(<ExplorePage sourceId={1} sourceName="示例" onBack={() => {}} onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("玄幻")).toBeInTheDocument());
+    // 分类在侧栏（.explore-side）内
+    expect(container.querySelector(".explore-side")).not.toBeNull();
+    expect(container.querySelector(".explore-main")).not.toBeNull();
+    // 点击后激活态
+    await userEvent.click(screen.getByText("玄幻"));
+    await waitFor(() => {
+      const items = container.querySelectorAll(".explore-cat-item");
+      expect(items[0].className).toContain("active");
+    });
   });
 });

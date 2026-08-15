@@ -70,36 +70,53 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         <div className="brand"><h1>{sourceName} · 浏览</h1></div>
         <button className="btn btn-ghost" onClick={onBack}>返回</button>
       </header>
-      <div className="explore-cats">
-        {categories.length === 0 ? <p className="panel-empty">此书源无分类</p> : categories.map((c) => (
-          <button key={c.url} className={`btn btn-ghost${active?.url === c.url ? " active" : ""}`} onClick={() => void loadCategory(c, 1)}>
-            {c.title}
-          </button>
-        ))}
-      </div>
-      <div className="discover-results">
-        {busy ? (
-          <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
-        ) : books.length === 0 ? (
-          active ? <p className="panel-empty">该分类暂无书籍</p> : <p className="panel-empty">选择一个分类开始浏览</p>
-        ) : (
-          <>
-            {books.map((h, i) => (
-              <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onOpenBook(h)}>
-                <div className="hit-info">
-                  <span className="hit-title">{h.title}</span>
-                  <span className="hit-author">{h.author}</span>
-                </div>
-                <span className="hit-source">{h.sourceName}</span>
-              </div>
-            ))}
-            {canPage && (
-              <button className="btn btn-ghost" onClick={() => active && void loadCategory(active, page + 1)} disabled={busy}>
-                下一页
-              </button>
+      <div className="explore-layout">
+        <aside className="explore-side">
+          <h3 className="explore-side-title">分类</h3>
+          {categories.length === 0 ? (
+            <p className="panel-empty">此书源无分类</p>
+          ) : (
+            <ul className="explore-cat-list">
+              {categories.map((c) => (
+                <li key={c.url}>
+                  <button
+                    type="button"
+                    className={`explore-cat-item${active?.url === c.url ? " active" : ""}`}
+                    onClick={() => void loadCategory(c, 1)}
+                  >
+                    {c.title}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+        <main className="explore-main">
+          <div className="discover-results">
+            {busy ? (
+              <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>加载中…</span></span></p>
+            ) : books.length === 0 ? (
+              active ? <p className="panel-empty">该分类暂无书籍</p> : <p className="panel-empty">选择一个分类开始浏览</p>
+            ) : (
+              <>
+                {books.map((h, i) => (
+                  <div className="hit-card" key={`${h.sourceId}-${h.bookUrl}-${i}`} onClick={() => onOpenBook(h)}>
+                    <div className="hit-info">
+                      <span className="hit-title">{h.title}</span>
+                      <span className="hit-author">{h.author}</span>
+                    </div>
+                    <span className="hit-source">{h.sourceName}</span>
+                  </div>
+                ))}
+                {canPage && (
+                  <button className="btn btn-ghost" onClick={() => active && void loadCategory(active, page + 1)} disabled={busy}>
+                    下一页
+                  </button>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </main>
       </div>
     </div>
   );

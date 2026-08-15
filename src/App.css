@@ -1190,9 +1190,67 @@ input[type="range"] {
 .source-toc li { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
 .source-toc li .btn { width: 100%; justify-content: flex-start; text-align: left; }
 
-/* ============ 探索浏览页 ============ */
-.explore-cats { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 0 16px; }
-.explore-cats .btn.active { background: var(--secondary-container); color: var(--primary); border-color: var(--primary); }
+/* ============ 探索浏览页（左右分栏） ============ */
+.explore-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 32px;
+}
+.explore-side {
+  flex: 0 0 200px;
+  min-width: 0;
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  position: sticky;
+  top: 16px;
+  padding: 4px;
+}
+.explore-side-title {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.explore-cat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.explore-cat-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 9px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--on-surface);
+  font-size: 13.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.explore-cat-item:hover { background: var(--surface-container-high); }
+.explore-cat-item.active {
+  background: var(--secondary-container);
+  color: var(--primary);
+  font-weight: 600;
+}
+.explore-main {
+  flex: 1;
+  min-width: 0;
+}
+.explore-main .discover-results { max-width: none; }
 
 /* ============ 书源调试页 ============ */
 .debug-source .library-header h1 { font-size: 20px; }
