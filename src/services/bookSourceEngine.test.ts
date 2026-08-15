@@ -762,6 +762,29 @@ describe("legado JSON rules: wildcard and range", () => {
     expect(jsonGet(data, "$.list[0:2].id")).toEqual([1, 2]);
   });
 
+  it("jsonGet supports [?(...)] filter with comparisons", () => {
+    const filtered = jsonGet(data, "$.list[?(@.id>=2)]");
+    expect(Array.isArray(filtered)).toBe(true);
+    expect(filtered.length).toBe(2);
+    expect(filtered[0].name).toBe("乙");
+  });
+
+  it("jsonGet supports [?(...)] with && combination and string compare", () => {
+    const filtered = jsonGet(data, "$.list[?(@.name=='乙'&&@.id==2)]");
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].id).toBe(2);
+  });
+
+  it("extractList works with @Json: filtered chapterList", async () => {
+    const items = await extractList(emptyDoc(), "@Json:list[?(@.id>=2)]", {
+      name: "$.name", url: "$.id",
+    }, { result: JSON.stringify(data), sourceKey: "x" });
+    expect(items).toEqual([
+      { name: "乙", url: "2" },
+      { name: "丙", url: "3" },
+    ]);
+  });
+
   it("extractList works with @Json: wildcard chapterList", async () => {
     const items = await extractList(emptyDoc(), "@Json:list[*]", {
       name: "$.name", url: "$.id",
