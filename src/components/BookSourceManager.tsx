@@ -4,6 +4,7 @@ import { deleteBookSource, listBookSources, setBookSourceEnabled, writeTextFile,
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 import { syncSubscription } from "../services/sourceSubscription";
 import { useError } from "./ErrorDialog";
+import ConfirmDialog from "./ConfirmDialog";
 
 export function groupSources(sources: BookSource[]): Array<{ group: string; items: BookSource[] }> {
   const map = new Map<string, BookSource[]>();
@@ -51,15 +52,9 @@ export default function BookSourceManager({ onDebug, onBack }: {
   }, []);
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const confirmJsImport = (bookSource: any): boolean => {
-    if (!sourceUsesJs(bookSource)) return true;
-    return window.confirm("此书源包含可在本机执行的 JS 脚本，仅导入你信任的书源。继续？");
-  };
+  const [confirmJs, setConfirmJs] = useState<{ msg: string; proceed: () => void } | null>(null);
 
-  const handleImportResult = async (bookSources: any[]) => {
-    if (bookSources.length === 1) {
-      const bs = bookSources[0];
-      if (!confirmJsImport(bs)) return;
+  const importSingle = async (bs: any) => {
     let existing: Set<string>;
     try {
       existing = new Set((await listBookSources()).map((s) => s.url));
@@ -74,8 +69,22 @@ export default function BookSourceManager({ onDebug, onBack }: {
     }
     await commitBookSource(bs);
     await refresh();
-    return;
-  }
+  };
+
+  const handleImportResult = async (bookSources: any[]) => {
+    if (bookSources.length === 1) {
+      const bs = bookSources[0];
+      // 含 JS 脚本的书源需确认后导入（自定义确认框）
+      if (sourceUsesJs(bs)) {
+        setConfirmJs({
+          msg: "此书源包含可在本机执行的 JS 脚本，仅导入你信任的书源。继续？",
+          proceed: () => { setConfirmJs(null); void importSingle(bs); },
+        });
+        return;
+      }
+      await importSingle(bs);
+      return;
+    }
     let existingUrls: Set<string>;
     try {
       existingUrls = new Set((await listBookSources()).map((s) => s.url));
@@ -401,6 +410,13 @@ export default function BookSourceManager({ onDebug, onBack }: {
         </ul>
       )}
       </div>
+      {confirmJs && (
+        <ConfirmDialog
+          message={confirmJs.msg}
+          onConfirm={confirmJs.proceed}
+          onCancel={() => setConfirmJs(null)}
+        />
+      )}
     </div>
   );
 }

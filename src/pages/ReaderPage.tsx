@@ -329,7 +329,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [isLocal, content, loading, persist]);
+    // 章节 URL 也触发保存：快速翻章后即使 content 引用未变（React bail-out）也保证进度落库
+  }, [isLocal, content, loading, persist, chapter.url]);
 
   // ==== 书源：会话缓存命中时同步渲染，实现无缝章节切换（无 loading 闪烁）====
   const applyCachedChapter = useCallback((url: string) => {

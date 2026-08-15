@@ -41,13 +41,14 @@ describe("RssPage", () => {
     expect(api.addRssFeed).toHaveBeenCalledWith("https://ex.com/new.xml");
   });
 
-  it("deletes a feed after confirm", async () => {
+  it("deletes a feed after confirming", async () => {
     vi.mocked(api.listRssFeeds).mockResolvedValue(feeds);
     vi.mocked(api.listRssArticles).mockResolvedValue([]);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<RssPage onOpenArticle={() => {}} />);
     await screen.findByText("科技日报");
     await userEvent.click(screen.getByRole("button", { name: "删除" }));
+    // 自定义确认框：确定后执行删除
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(api.deleteRssFeed).toHaveBeenCalledWith(1);
   });
 

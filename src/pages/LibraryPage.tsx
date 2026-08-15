@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BookCard, { type ShelfItem } from "../components/BookCard";
 import SearchPanel, { type SearchHit } from "../components/SearchPanel";
+import ConfirmDialog from "../components/ConfirmDialog";
 import { BookIcon, SearchIcon } from "../components/icons";
 import { importFiles, listBooks, removeBook, listShelfSourceBooks, removeShelfSourceBook, type Book, type ShelfSourceBook } from "../services/api";
 import { useError } from "../components/ErrorDialog";
@@ -46,9 +47,20 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
     }
   };
 
-  const handleRemove = async (item: ShelfItem) => {
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const pendingRemoveRef = useRef<ShelfItem | null>(null);
+
+  const handleRemove = (item: ShelfItem) => {
     const name = item.kind === "local" ? item.book.title : item.sb.title;
-    if (!window.confirm(`确定从书架移除「${name}」吗？`)) return;
+    pendingRemoveRef.current = item;
+    setConfirmMsg(`确定从书架移除「${name}」吗？`);
+  };
+
+  const doRemove = async () => {
+    const item = pendingRemoveRef.current;
+    setConfirmMsg(null);
+    pendingRemoveRef.current = null;
+    if (!item) return;
     try {
       if (item.kind === "local") {
         await removeBook(item.book.id);
@@ -116,6 +128,13 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
             />
           ))}
         </div>
+      )}
+      {confirmMsg && (
+        <ConfirmDialog
+          message={confirmMsg}
+          onConfirm={() => void doRemove()}
+          onCancel={() => { setConfirmMsg(null); pendingRemoveRef.current = null; }}
+        />
       )}
     </div>
   );

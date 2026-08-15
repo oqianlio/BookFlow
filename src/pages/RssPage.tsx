@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addRssFeed, deleteRssFeed, listRssArticles, listRssFeeds, refreshRssFeed, type RssArticleRow, type RssFeedRow } from "../services/api";
 import { useError } from "../components/ErrorDialog";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 function formatDate(ts: number): string {
   const d = new Date(ts * 1000);
@@ -66,8 +67,19 @@ export default function RssPage({ onOpenArticle }: {
     }
   };
 
-  const handleDelete = async (feed: RssFeedRow) => {
-    if (!window.confirm(`删除订阅源「${feed.title}」？`)) return;
+  const [confirmMsg, setConfirmMsg] = useState<string | null>(null);
+  const pendingDeleteRef = useRef<RssFeedRow | null>(null);
+
+  const handleDelete = (feed: RssFeedRow) => {
+    pendingDeleteRef.current = feed;
+    setConfirmMsg(`删除订阅源「${feed.title}」？`);
+  };
+
+  const doDelete = async () => {
+    const feed = pendingDeleteRef.current;
+    setConfirmMsg(null);
+    pendingDeleteRef.current = null;
+    if (!feed) return;
     try {
       await deleteRssFeed(feed.id);
       if (activeId === feed.id) { setActiveId(null); setArticles([]); }
@@ -146,6 +158,13 @@ export default function RssPage({ onOpenArticle }: {
           )}
         </div>
       </div>
+      {confirmMsg && (
+        <ConfirmDialog
+          message={confirmMsg}
+          onConfirm={() => void doDelete()}
+          onCancel={() => { setConfirmMsg(null); pendingDeleteRef.current = null; }}
+        />
+      )}
     </div>
   );
 }

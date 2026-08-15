@@ -124,15 +124,15 @@ describe("BookSourceManager", () => {
     });
     vi.mocked(imp.sourceUsesJs).mockReturnValue(true);
     vi.mocked(imp.commitBookSource).mockResolvedValue(11);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     render(<BookSourceManager />);
     await screen.findByText(/暂无书源/);
     await userEvent.type(screen.getByLabelText("书源网址"), "https://js.com/src.json");
     await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
     await waitFor(() => expect(imp.importBookSourceFromUrl).toHaveBeenCalledWith("https://js.com/src.json"));
-    expect(confirmSpy).toHaveBeenCalled();
+    // 自定义确认框出现，点「取消」→ 不导入
+    expect(screen.getByText(/仅导入你信任的书源/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
     expect(imp.commitBookSource).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   it("imports a @js: source after user confirms", async () => {
@@ -142,13 +142,13 @@ describe("BookSourceManager", () => {
     });
     vi.mocked(imp.sourceUsesJs).mockReturnValue(true);
     vi.mocked(imp.commitBookSource).mockResolvedValue(11);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<BookSourceManager />);
     await screen.findByText(/暂无书源/);
     await userEvent.type(screen.getByLabelText("书源网址"), "https://js.com/src.json");
     await userEvent.click(screen.getByRole("button", { name: /从网址导入/ }));
+    // 自定义确认框出现，点「确定」→ 导入
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
     await waitFor(() => expect(imp.commitBookSource).toHaveBeenCalled());
-    confirmSpy.mockRestore();
   });
 
   it("shows confirm list and imports selected collection sources", async () => {

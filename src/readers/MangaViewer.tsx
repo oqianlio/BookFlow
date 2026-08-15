@@ -36,12 +36,23 @@ export default function MangaViewer({ images, onReachEnd }: {
       return next;
     });
   };
+  const retry = (i: number) => {
+    setFailed((prev) => {
+      if (!prev.has(i)) return prev;
+      const next = new Set(prev);
+      next.delete(i);
+      return next;
+    });
+  };
   return (
     <div className="manga-viewer">
       {images.map((src, i) => {
         const isLast = i === images.length - 1;
         return failed.has(i) ? (
-          <div key={`${src}-${i}`} className="manga-viewer-failed" ref={isLast ? lastRef : undefined}>图片加载失败</div>
+          <div key={`${src}-${i}`} className="manga-viewer-failed" ref={isLast ? lastRef : undefined}>
+            图片加载失败
+            <button className="btn btn-ghost manga-viewer-retry" onClick={() => retry(i)}>重试</button>
+          </div>
         ) : (
           <img
             key={`${src}-${i}`}

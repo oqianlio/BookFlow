@@ -70,14 +70,14 @@ describe("LibraryPage", () => {
     expect(onOpenSourceBook).toHaveBeenCalledWith(shelfSource);
   });
 
-  it("removes a source book from the shelf", async () => {
+  it("removes a source book from the shelf after confirming", async () => {
     vi.spyOn(api, "listBooks").mockResolvedValue([]);
     vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
     const spy = vi.spyOn(api, "removeShelfSourceBook").mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<LibraryPage onOpenBook={() => {}} />);
     await userEvent.click(await screen.findByRole("button", { name: "删除 球状闪电" }));
+    // 自定义确认框：确定后执行删除
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(spy).toHaveBeenCalledWith(9);
-    confirmSpy.mockRestore();
   });
 });
