@@ -201,3 +201,35 @@ export async function recordRead(a: { sourceId: number; bookUrl: string; title: 
 export async function getReadingStats(sourceId: number, bookUrl: string): Promise<ReadingStats | null> {
   return invoke<ReadingStats | null>("get_reading_stats", { sourceId, bookUrl });
 }
+
+export interface RssFeedPreview {
+  title: string; site_url: string | null;
+  articles: Array<{ guid: string; title: string; link: string | null; content: string | null; published_at: number | null }>;
+}
+export interface RssFeedRow { id: number; title: string; url: string; site_url: string | null; added_at: number }
+export interface RssArticleRow {
+  id: number; feed_id: number; guid: string; title: string; link: string | null;
+  content: string | null; published_at: number | null; fetched_at: number;
+}
+
+export async function fetchRssFeed(url: string): Promise<RssFeedPreview> {
+  return invoke<RssFeedPreview>("fetch_rss_feed", { url });
+}
+export async function addRssFeed(url: string): Promise<number> {
+  return invoke<number>("add_rss_feed", { url });
+}
+export async function refreshRssFeed(feedId: number): Promise<number> {
+  return invoke<number>("refresh_rss_feed", { feedId });
+}
+export async function listRssFeeds(): Promise<RssFeedRow[]> {
+  return invoke<RssFeedRow[]>("list_rss_feeds");
+}
+export async function deleteRssFeed(id: number): Promise<void> {
+  await invoke("delete_rss_feed", { id });
+}
+export async function listRssArticles(feedId: number): Promise<RssArticleRow[]> {
+  return invoke<RssArticleRow[]>("list_rss_articles", { feedId });
+}
+export async function getRssArticle(id: number): Promise<RssArticleRow | null> {
+  return invoke<RssArticleRow | null>("get_rss_article", { id });
+}

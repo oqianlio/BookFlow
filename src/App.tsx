@@ -10,6 +10,7 @@ import SourceBookPage from "./pages/SourceBookPage";
 import ExplorePage from "./pages/ExplorePage";
 import DebugSourcePage from "./pages/DebugSourcePage";
 import RssPage from "./pages/RssPage";
+import RssArticlePage from "./pages/RssArticlePage";
 import type { Book } from "./services/api";
 import { ErrorProvider } from "./components/ErrorDialog";
 import "./App.css";
@@ -20,7 +21,8 @@ type DetailState =
   | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppArea }
   | { area: "detail"; page: "sourceManager"; back: AppArea }
   | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppArea }
-  | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppArea };
+  | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppArea }
+  | { area: "detail"; page: "rssArticle"; articleId: number; back: AppArea };
 
 type AppState = { area: AppArea } | DetailState;
 
@@ -101,6 +103,10 @@ function AppInner() {
             onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
           />
         );
+      case "rssArticle":
+        return (
+          <RssArticlePage articleId={state.articleId} onBack={() => go(state.back)} />
+        );
     }
   }
 
@@ -133,7 +139,12 @@ function AppInner() {
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: "discover" })}
           />
         )}
-        {state.area === "rss" && <RssPage key="rss" />}
+        {state.area === "rss" && (
+          <RssPage
+            key="rss"
+            onOpenArticle={(article) => setState({ area: "detail", page: "rssArticle", articleId: article.id, back: "rss" })}
+          />
+        )}
         {state.area === "my" && (
           <SettingsPage key="my" onOpenSourceManager={() => setState({ area: "detail", page: "sourceManager", back: "my" })} />
         )}

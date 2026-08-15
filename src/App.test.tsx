@@ -15,6 +15,12 @@ vi.mock("./services/api", () => ({
   getSetting: vi.fn().mockResolvedValue(null),
   setSetting: vi.fn().mockResolvedValue(undefined),
   getTtsRate: vi.fn().mockResolvedValue(1),
+  listRssFeeds: vi.fn().mockResolvedValue([]),
+  listRssArticles: vi.fn().mockResolvedValue([]),
+  addRssFeed: vi.fn().mockResolvedValue(1),
+  deleteRssFeed: vi.fn().mockResolvedValue(undefined),
+  refreshRssFeed: vi.fn().mockResolvedValue(0),
+  getRssArticle: vi.fn().mockResolvedValue(null),
 }));
 
 describe("App shell", () => {
@@ -27,6 +33,6 @@ describe("App shell", () => {
     await userEvent.click(screen.getByRole("button", { name: /我的/ }));
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /RSS/ }));
-    expect(await screen.findAllByText(/敬请期待/)).toHaveLength(2);
+    expect(await screen.findByText("RSS 订阅")).toBeInTheDocument();
   });
 });
