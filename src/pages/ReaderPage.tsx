@@ -12,6 +12,7 @@ import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIco
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
+import { convertText } from "../services/tradSimpl";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
@@ -455,7 +456,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                   <MangaViewer images={images} />
                 ) : chapter.url ? (
                   <PaginatedReader
-                    html={`<p>${content.replace(/\n/g, "</p><p>")}</p>`}
+                    html={`<p>${convertText(content, settings.conversion).replace(/\n/g, "</p><p>")}</p>`}
                     mode={settings.pageMode}
                     fontSizePx={settings.fontSizePx}
                     lineHeight={settings.lineHeight}
@@ -599,6 +600,17 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
                     style={{ background: t.bg }} aria-label={t.name} title={t.name}
                     onClick={() => updateSetting({ bgTheme: t.id })} />
                 ))}
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">简繁</label>
+              <div className="segmented" role="group" aria-label="简繁">
+                <button type="button" className={settings.conversion === "none" ? "active" : ""}
+                  onClick={() => updateSetting({ conversion: "none" })}>原样</button>
+                <button type="button" className={settings.conversion === "simp" ? "active" : ""}
+                  onClick={() => updateSetting({ conversion: "simp" })}>简体</button>
+                <button type="button" className={settings.conversion === "trad" ? "active" : ""}
+                  onClick={() => updateSetting({ conversion: "trad" })}>繁体</button>
               </div>
             </div>
           </div>

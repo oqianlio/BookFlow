@@ -340,6 +340,21 @@ describe("ReaderPage (source) reading settings", () => {
     await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.bold", "1"));
     await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.fontFamily", "kai"));
   });
+
+  it("switches to traditional and converts rendered content", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><div id="content"><p>开门见山说时间</p></div></body></html>`,
+    );
+    renderReader();
+    await screen.findByText("开门见山说时间");
+    await userEvent.click(screen.getByRole("button", { name: "阅读设置" }));
+    await userEvent.click(screen.getByRole("button", { name: "繁体" }));
+    expect(await screen.findByText("開門見山說時間")).toBeInTheDocument();
+    await waitFor(() => expect(api.setSetting).toHaveBeenCalledWith("reading.conversion", "trad"));
+  });
 });
 
 describe("ReaderPage (source) toc panel", () => {
