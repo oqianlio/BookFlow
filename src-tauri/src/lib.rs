@@ -58,6 +58,7 @@ pub fn run() {
             list_rss_feeds, delete_rss_feed, list_rss_articles, get_rss_article,
             add_subscription, list_subscriptions, delete_subscription,
             set_subscription_checked, get_source_by_url, write_text_file,
+            copy_font_file, list_font_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

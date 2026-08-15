@@ -254,3 +254,12 @@ export async function getSourceByUrl(url: string): Promise<BookSource | null> {
 export async function writeTextFile(path: string, content: string): Promise<void> {
   await invoke("write_text_file", { path, content });
 }
+
+export interface FontFileRow { name: string; file: string }
+
+export async function copyFontFile(src: string): Promise<FontFileRow> {
+  return invoke<FontFileRow>("copy_font_file", { src });
+}
+export async function listFontFiles(): Promise<FontFileRow[]> {
+  return invoke<FontFileRow[]>("list_font_files");
+}

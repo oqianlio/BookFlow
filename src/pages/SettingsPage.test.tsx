@@ -26,6 +26,14 @@ vi.mock("../services/readingSettings", () => ({
 }));
 vi.mock("../services/api", () => ({
   setSetting: vi.fn().mockResolvedValue(undefined),
+  copyFontFile: vi.fn().mockResolvedValue({ name: "MyFont", file: "MyFont_123.ttf" }),
+  listFontFiles: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("../services/fontFiles", () => ({
+  injectFontFaces: vi.fn().mockResolvedValue([]),
+}));
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn().mockResolvedValue("C:/fonts/myfont.ttf"),
 }));
 
 describe("SettingsPage", () => {
@@ -62,6 +70,18 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "应用" }));
     expect(readingSettings.saveReadingSettings).toHaveBeenCalledWith(
       expect.objectContaining({ bgTheme: "custom", customBg: "#f5e9d0", customFg: "#2b2b2b" }),
+    );
+  });
+
+  it("imports a font file and sets it as the reading font", async () => {
+    const readingSettings = await import("../services/readingSettings");
+    const api = await import("../services/api");
+    render(<SettingsPage />);
+    await screen.findByText(/字体文件/);
+    await userEvent.click(screen.getByRole("button", { name: "导入字体" }));
+    expect(api.copyFontFile).toHaveBeenCalledWith("C:/fonts/myfont.ttf");
+    expect(readingSettings.saveReadingSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ fontFamily: "MyFont" }),
     );
   });
 });

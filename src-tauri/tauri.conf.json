@@ -32,7 +32,7 @@
       },
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/books/**"]
+        "scope": ["$APPDATA/books/**", "$APPDATA/fonts/**"]
       }
     }
   },

@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { SCHEMES, SCHEME_NAMES, Theme, initTheme, setTheme, getTheme } from "../components/theme";
 import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
+import { copyFontFile, listFontFiles, type FontFileRow } from "../services/api";
+import { injectFontFaces } from "../services/fontFiles";
+import { useError } from "../components/ErrorDialog";
 
 export default function SettingsPage({ onOpenSourceManager }: {
   onOpenSourceManager?: () => void;
@@ -14,6 +18,9 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [eyeCare, setEyeCareState] = useState<EyeCareSettings>({ enabled: false, start: "22:00", end: "06:00" });
   const [customBg, setCustomBg] = useState("#f5e9d0");
   const [customFg, setCustomFg] = useState("#2b2b2b");
+  const [fonts, setFonts] = useState<FontFileRow[]>([]);
+  const [fontBusy, setFontBusy] = useState(false);
+  const { showError } = useError();
 
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
@@ -24,7 +31,33 @@ export default function SettingsPage({ onOpenSourceManager }: {
       if (s.customBg) setCustomBg(s.customBg);
       if (s.customFg) setCustomFg(s.customFg);
     });
+    void listFontFiles().then(setFonts).catch(() => {});
   }, []);
+
+  const handleImportFont = async () => {
+    if (fontBusy) return;
+    setFontBusy(true);
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "字体文件", extensions: ["ttf", "otf", "woff", "woff2"] }],
+      });
+      if (!picked) return;
+      const path = Array.isArray(picked) ? picked[0] : picked;
+      if (!path) return;
+      const row = await copyFontFile(path);
+      await injectFontFaces();
+      const list = await listFontFiles();
+      setFonts(list);
+      // 设为当前阅读字体
+      const s = await loadReadingSettings();
+      await saveReadingSettings({ ...s, fontFamily: row.name });
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setFontBusy(false);
+    }
+  };
 
   const selectScheme = (scheme: Theme["scheme"]) => {
     const next = { ...getTheme(), scheme };
@@ -113,6 +146,24 @@ export default function SettingsPage({ onOpenSourceManager }: {
             </label>
             <button className="btn btn-soft" onClick={() => void applyCustomTheme()}>应用</button>
           </div>
+        </div>
+        <div className="settings-group">
+          <div>
+            <div className="label">字体文件</div>
+            <div className="hint">导入本地字体（ttf/otf/woff2），导入后自动设为阅读字体</div>
+          </div>
+          <div className="font-files-row">
+            <button className="btn btn-soft" onClick={() => void handleImportFont()} disabled={fontBusy}>
+              {fontBusy ? "导入中…" : "导入字体"}
+            </button>
+          </div>
+          {fonts.length > 0 && (
+            <ul className="font-files-list">
+              {fonts.map((f) => (
+                <li key={f.file}><span className="font-file-name">{f.name}</span></li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="settings-group">
           <div>

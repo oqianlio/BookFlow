@@ -2,6 +2,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
+vi.mock("./services/fontFiles", () => ({ injectFontFaces: vi.fn().mockResolvedValue([]) }));
+vi.mock("./services/eyeCare", () => ({
+  loadEyeCare: vi.fn().mockResolvedValue({ enabled: false, start: "22:00", end: "06:00" }),
+  saveEyeCare: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("./readers/EpubReader", () => ({ default: () => <div data-testid="epub-reader" /> }));
 vi.mock("./readers/PdfReader", () => ({ default: () => null }));
 vi.mock("./readers/MdReader", () => ({ default: () => null }));
@@ -19,6 +24,8 @@ vi.mock("./services/api", () => ({
   setSetting: vi.fn().mockResolvedValue(undefined),
   getTtsRate: vi.fn().mockResolvedValue(1),
   listRssFeeds: vi.fn().mockResolvedValue([]),
+  listFontFiles: vi.fn().mockResolvedValue([]),
+  copyFontFile: vi.fn().mockResolvedValue({ name: "F", file: "F.ttf" }),
   listRssArticles: vi.fn().mockResolvedValue([]),
   addRssFeed: vi.fn().mockResolvedValue(1),
   deleteRssFeed: vi.fn().mockResolvedValue(undefined),

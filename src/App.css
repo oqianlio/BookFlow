@@ -1382,6 +1382,16 @@ input[type="range"] {
   width: 34px; height: 26px; padding: 0; border: 1px solid var(--outline-variant);
   border-radius: var(--radius-sm); background: transparent; cursor: pointer;
 }
+.font-files-row { flex-shrink: 0; }
+.font-files-list {
+  list-style: none; margin: 10px 0 0; padding: 0;
+  width: 100%; display: flex; flex-direction: column; gap: 4px;
+}
+.font-files-list li {
+  padding: 6px 10px; background: var(--surface-container-low);
+  border-radius: var(--radius-sm); font-size: 12.5px; color: var(--on-surface-variant);
+}
+.font-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ============ 错误弹窗 ============ */
 .error-dialog-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); }

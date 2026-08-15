@@ -487,3 +487,49 @@ pub fn get_source_by_url(url: String, state: State<'_, AppState>) -> Result<Opti
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| format!("写入文件失败: {e}"))
 }
+
+#[derive(serde::Serialize)]
+pub struct FontFileRow {
+    pub name: String,
+    pub file: String,
+}
+
+/// 复制本地字体文件到应用 fonts 目录（防冲突文件名），返回显示名与存储名
+#[tauri::command]
+pub fn copy_font_file(src: String, state: State<'_, AppState>) -> Result<FontFileRow, String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let fonts_dir = state.app_data_dir.join("fonts");
+    std::fs::create_dir_all(&fonts_dir).map_err(|e| format!("创建字体目录失败: {e}"))?;
+    let src_path = std::path::PathBuf::from(&src);
+    let stem = src_path
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "font".to_string());
+    let ext = src_path
+        .extension()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "ttf".to_string());
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let file = format!("{}_{}.{}", stem, ts, ext);
+    std::fs::copy(&src, fonts_dir.join(&file)).map_err(|e| format!("复制字体文件失败: {e}"))?;
+    Ok(FontFileRow { name: stem, file })
+}
+
+/// 列出已导入字体
+#[tauri::command]
+pub fn list_font_files(state: State<'_, AppState>) -> Result<Vec<FontFileRow>, String> {
+    let fonts_dir = state.app_data_dir.join("fonts");
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&fonts_dir) {
+        for entry in entries.flatten() {
+            let fname = entry.file_name().to_string_lossy().into_owned();
+            let name = entry
+                .path()
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| fname.clone());
+            out.push(FontFileRow { name, file: fname });
+        }
+    }
+    Ok(out)
+}
