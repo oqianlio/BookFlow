@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SwitchSourcePanel from "./SwitchSourcePanel";
 import * as searchService from "../services/searchService";
-import * as api from "../services/api";
 
 vi.mock("../services/searchService", () => ({ searchBookSources: vi.fn() }));
 vi.mock("../services/api", () => ({
