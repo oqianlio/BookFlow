@@ -23,8 +23,9 @@ import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
 
-export default function ReaderPage({ source, onBack, onSwitchSource }: {
+export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   source: ReaderSource; onBack: () => void; onSwitchSource?: (hit: SearchHit) => void;
+  jumpTo?: string;
 }) {
   const isLocal = source.kind === "local";
   const book = isLocal ? source.book : null;
@@ -405,26 +406,11 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
     return () => window.removeEventListener("request-bookmark", onRequestBookmark);
   }, [isLocal, book?.id]);
 
+  // 全文搜索跳转：定位随打开书籍的状态传入（jumpTo prop），转交给当前格式的阅读器（reader-jump 事件）
   useEffect(() => {
-    if (!isLocal) return;
-    // 全文搜索跳转：把命中的定位信息交给当前格式的阅读器（reader-jump 事件）
-    const routeSearchJump = (loc?: string) => {
-      if (!loc) return;
-      jump(loc);
-    };
-    const onSearchJump = (e: Event) => {
-      const detail = (e as CustomEvent).detail as { location?: string } | undefined;
-      routeSearchJump(detail?.location);
-    };
-    const w = window as any;
-    const pending = w.__searchJump as { location?: string } | undefined;
-    if (pending?.location) {
-      w.__searchJump = undefined;
-      routeSearchJump(pending.location);
-    }
-    window.addEventListener("search-jump", onSearchJump);
-    return () => window.removeEventListener("search-jump", onSearchJump);
-  }, [isLocal, jump]);
+    if (!isLocal || !jumpTo) return;
+    jump(jumpTo);
+  }, [isLocal, jumpTo, jump]);
 
   const activeTheme = settings.bgTheme === "custom" && settings.customBg
     ? { bg: settings.customBg, fg: settings.customFg || "#1c1b1b" }

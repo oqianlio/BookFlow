@@ -17,7 +17,7 @@ import { ErrorProvider } from "./components/ErrorDialog";
 import "./App.css";
 
 type DetailState =
-  | { area: "detail"; page: "reader"; book: Book; back: AppState }
+  | { area: "detail"; page: "reader"; book: Book; jumpTo?: string; back: AppState }
   | { area: "detail"; page: "explore"; sourceId: number; sourceName: string; back: AppState }
   | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppState }
   | { area: "detail"; page: "sourceManager"; back: AppState }
@@ -48,14 +48,18 @@ function AppInner() {
   if (state.area === "detail") {
     const go = (back: AppState) => setState(back);
     // 换源统一入口：无论从阅读页还是详情页进入，换源后书名一律以当前所读书名为准（保持同一本书）
-    const switchSource = (hit: SearchHit, currentTitle: string) => setState({
-      area: "detail", page: "sourceBook",
-      hit: { ...hit, title: currentTitle },
-      back: state,
-    });
+    // 换源链折叠：已在书籍详情/阅读页时替换 back（不无限嵌套），连续换源后一步返回
+    const switchSource = (hit: SearchHit, currentTitle: string) => {
+      const isSourceFlow = state.page === "sourceBook" || state.page === "sourceReader";
+      setState({
+        area: "detail", page: "sourceBook",
+        hit: { ...hit, title: currentTitle },
+        back: isSourceFlow ? state.back : state,
+      });
+    };
     switch (state.page) {
       case "reader":
-        return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} />;
+        return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} jumpTo={state.jumpTo} />;
       case "explore":
         return (
           <ExplorePage
@@ -142,7 +146,7 @@ function AppInner() {
         {state.area === "bookshelf" && (
           <LibraryPage
             key="bookshelf"
-            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: state })}
+            onOpenBook={(b, jumpTo) => setState({ area: "detail", page: "reader", book: b, jumpTo, back: state })}
             onOpenSourceBook={(sb) => setState({
               area: "detail", page: "sourceReader",
               sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,

@@ -79,24 +79,21 @@ describe("ReaderPage", () => {
     );
   });
 
-  it("routes a search-jump location to the reader via reader-jump", async () => {
+  it("routes a jumpTo location to the reader via reader-jump", async () => {
     const listener = vi.fn();
     window.addEventListener("reader-jump", listener);
-    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
-    window.dispatchEvent(new CustomEvent("search-jump", { detail: { location: "line:120", format: "txt" } }));
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} jumpTo="line:120" />);
     await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
     expect((window as any).__jumpTo).toBe("line:120");
     window.removeEventListener("reader-jump", listener);
   });
 
-  it("applies a pending __searchJump set before mount", async () => {
-    (window as any).__searchJump = { location: "3", format: "pdf" };
+  it("does not jump without a jumpTo prop", async () => {
     const listener = vi.fn();
     window.addEventListener("reader-jump", listener);
     render(<ReaderPage source={{ kind: "local", book: { ...book, format: "pdf" } }} onBack={() => {}} />);
-    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
-    expect((window as any).__jumpTo).toBe("3");
-    expect((window as any).__searchJump).toBeUndefined();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(listener).not.toHaveBeenCalled();
     window.removeEventListener("reader-jump", listener);
   });
 

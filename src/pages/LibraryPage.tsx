@@ -6,7 +6,7 @@ import { importFiles, listBooks, removeBook, listShelfSourceBooks, removeShelfSo
 import { useError } from "../components/ErrorDialog";
 
 export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
-  onOpenBook: (b: Book) => void;
+  onOpenBook: (b: Book, jumpTo?: string) => void;
   onOpenSourceBook?: (sb: ShelfSourceBook) => void;
 }) {
   const [items, setItems] = useState<ShelfItem[]>([]);
@@ -69,11 +69,8 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   const handleSearchJump = (h: SearchHit) => {
     const book = items.find((i) => i.kind === "local" && i.book.id === h.book_id) as { kind: "local"; book: Book } | undefined;
     if (!book) return;
-    const w = window as any;
-    // 打开书籍后按命中定位：EPUB 章节 href / PDF 页码 / MD/TXT 行号
-    w.__searchJump = { location: h.location, format: h.format };
-    onOpenBook(book.book);
-    w.dispatchEvent(new CustomEvent("search-jump", { detail: { location: h.location, format: h.format } }));
+    // 定位随打开书籍的状态一并传入阅读器（EPUB 章节 href / PDF 页码 / MD/TXT 行号）
+    onOpenBook(book.book, h.location);
   };
 
   return (
