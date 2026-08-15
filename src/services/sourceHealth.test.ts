@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import * as api from "./api";
-import { parseBookSourceJson, resolveSearchUrl, extractBookList } from "./bookSourceEngine";
+import { parseBookSourceJson, resolveSearchUrl, extractBookList, resolveUrl } from "./bookSourceEngine";
 import { mergeUserAgent } from "./api";
 
 const ENABLED = !!process.env.SOURCE_HEALTH;
@@ -46,7 +46,9 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
     const src = parseBookSourceJson(s.json);
     const parsed = resolveSearchUrl(src.searchUrl ?? "", KEYWORD, 1, { sourceKey: src.bookSourceUrl });
     if (!parsed.url) return { name: s.name, ok: false, count: 0, reason: "无搜索URL", ms: Date.now() - t0 };
-    const html = await api.httpGet(parsed.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000);
+    // 相对 searchUrl 基于书源域名解析（与 searchService 一致）
+    const url = resolveUrl(parsed.url, src.bookSourceUrl);
+    const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000);
     const doc = new DOMParser().parseFromString(html, "text/html");
     const items = await extractBookList(doc, src.ruleSearch ?? {}, {
       baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl,
