@@ -99,4 +99,15 @@ describe("ReaderPage", () => {
     expect((window as any).__searchJump).toBeUndefined();
     window.removeEventListener("reader-jump", listener);
   });
+
+  it("injects reading settings CSS variables for local books", async () => {
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
+    const main = document.querySelector(".reader-main") as HTMLElement;
+    await waitFor(() => {
+      expect(main.style.getPropertyValue("--read-font-size")).toBe("18px");
+      expect(main.style.getPropertyValue("--read-line-height")).toBe("1.8");
+    });
+    expect(main.style.background).toBeTruthy();   // activeTheme.bg（纸白）
+    expect(main.getAttribute("data-bg-theme")).toBe("paper");
+  });
 });

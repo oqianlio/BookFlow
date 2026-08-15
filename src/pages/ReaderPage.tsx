@@ -440,8 +440,19 @@ export default function ReaderPage({ source, onBack, onSwitchSource }: {
       <div className="reader-body">
         <main
           className="reader-main"
-          data-bg-theme={isLocal ? undefined : settings.bgTheme}
-          style={!isLocal ? { background: activeTheme.bg } : undefined}
+          data-bg-theme={settings.bgTheme}
+          style={{
+            background: activeTheme.bg,
+            color: activeTheme.fg,
+            ["--read-font-size" as any]: `${settings.fontSizePx}px`,
+            ["--read-line-height" as any]: settings.lineHeight,
+            ["--read-font-family" as any]: resolveFontCss(settings.fontFamily),
+            ["--read-letter-spacing" as any]: `${settings.letterSpacingPx}px`,
+            ["--read-para-gap" as any]: `${settings.paragraphSpacingPx}px`,
+            ["--read-indent" as any]: `${settings.indentEm}em`,
+            ["--read-bold" as any]: settings.bold ? 700 : 400,
+            ["--read-fg" as any]: activeTheme.fg,
+          }}
           onClick={isLocal || isManga || !chapter.url || loading || failed ? () => setMenuVisible((v) => !v) : undefined}
         >
           {isLocal ? (

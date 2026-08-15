@@ -113,10 +113,12 @@
 .md-content {
   max-width: 46em;
   margin: 0 auto;
-  font-family: var(--font-read);
-  font-size: 17px;
-  line-height: 1.95;
-  color: var(--fg);
+  font-family: var(--read-font-family, var(--font-read));
+  font-size: var(--read-font-size, 17px);
+  line-height: var(--read-line-height, 1.95);
+  color: var(--read-fg, var(--fg));
+  letter-spacing: var(--read-letter-spacing, 0);
+  font-weight: var(--read-bold, 400);
 }
 
 .md-content h1,
@@ -128,7 +130,8 @@
 }
 
 .md-content p {
-  margin: 0 0 1.1em;
+  margin: 0 0 var(--read-para-gap, 1.1em);
+  text-indent: var(--read-indent, 0);
 }
 
 .md-content code {
@@ -179,17 +182,21 @@
   flex: 1;
   overflow-y: auto;
   padding: 40px 28px 60px;
-  line-height: 1.95;
-  font-family: var(--font-read);
-  font-size: 17px;
+  line-height: var(--read-line-height, 1.95);
+  font-family: var(--read-font-family, var(--font-read));
+  font-size: var(--read-font-size, 17px);
   max-width: 46em;
   margin: 0 auto;
-  color: var(--fg);
+  color: var(--read-fg, var(--fg));
   width: 100%;
+  box-sizing: border-box;
+  letter-spacing: var(--read-letter-spacing, 0);
+  font-weight: var(--read-bold, 400);
 }
 
 .txt-page p {
-  margin: 0 0 0.9em;
+  margin: 0 0 var(--read-para-gap, 0.9em);
+  text-indent: var(--read-indent, 0);
 }
 
 .txt-nav {
