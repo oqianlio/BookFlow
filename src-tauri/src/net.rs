@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-pub const DEFAULT_TIMEOUT_MS: u64 = 15_000;
+pub const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+pub const DEFAULT_CONNECT_TIMEOUT_MS: u64 = 10_000;
 pub const DEFAULT_UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 pub fn decode_body(bytes: &[u8], _charset_hint: Option<&str>) -> Result<String, String> {
@@ -83,6 +84,8 @@ pub async fn http_get(
         let t0 = std::time::Instant::now();
         let jar = cookie_jar.map(|key| cookies.jar_for(&key));
         let mut client_builder = reqwest::blocking::Client::builder()
+            // 连接超时单独设短（死链快速失败）；总超时放宽（慢站点给足响应时间）
+            .connect_timeout(std::time::Duration::from_millis(DEFAULT_CONNECT_TIMEOUT_MS))
             .timeout(std::time::Duration::from_millis(timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS)));
         if let Some(j) = &jar {
             client_builder = client_builder.cookie_provider(j.clone());
