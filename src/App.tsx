@@ -17,16 +17,21 @@ import { ErrorProvider } from "./components/ErrorDialog";
 import "./App.css";
 
 type DetailState =
-  | { area: "detail"; page: "reader"; book: Book; back: AppArea }
-  | { area: "detail"; page: "explore"; sourceId: number; sourceName: string; back: AppArea }
-  | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppArea }
-  | { area: "detail"; page: "sourceManager"; back: AppArea }
-  | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppArea }
-  | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppArea }
-  | { area: "detail"; page: "rssArticle"; articleId: number; back: AppArea }
-  | { area: "detail"; page: "groupExplore"; groupName: string; sources: ExploreSource[]; back: AppArea };
+  | { area: "detail"; page: "reader"; book: Book; back: AppState }
+  | { area: "detail"; page: "explore"; sourceId: number; sourceName: string; back: AppState }
+  | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppState }
+  | { area: "detail"; page: "sourceManager"; back: AppState }
+  | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppState }
+  | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppState }
+  | { area: "detail"; page: "rssArticle"; articleId: number; back: AppState }
+  | { area: "detail"; page: "groupExplore"; groupName: string; sources: ExploreSource[]; back: AppState };
 
 type AppState = { area: AppArea } | DetailState;
+
+// 递归取根区域（侧边栏高亮）
+function rootArea(s: AppState): AppArea {
+  return s.area === "detail" ? rootArea(s.back) : s.area;
+}
 
 export default function App() {
   return (
@@ -38,10 +43,10 @@ export default function App() {
 
 function AppInner() {
   const [state, setState] = useState<AppState>({ area: "home" });
-  const area = state.area === "detail" ? state.back : state.area;
+  const area = rootArea(state);
 
   if (state.area === "detail") {
-    const go = (back: AppArea) => setState({ area: back });
+    const go = (back: AppState) => setState(back);
     switch (state.page) {
       case "reader":
         return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} />;
@@ -51,7 +56,7 @@ function AppInner() {
             sourceId={state.sourceId}
             sourceName={state.sourceName}
             onBack={() => go(state.back)}
-            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
+            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
           />
         );
       case "debugSource":
@@ -66,7 +71,7 @@ function AppInner() {
         return (
           <BookSourceManager
             onBack={() => go(state.back)}
-            onDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: "my" })}
+            onDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: state })}
           />
         );
       case "sourceBook":
@@ -80,9 +85,9 @@ function AppInner() {
             onRead={(index, url, name) => setState({
               area: "detail", page: "sourceReader", sourceId: state.hit.sourceId,
               bookUrl: state.hit.bookUrl, bookTitle: state.hit.title,
-              chapterIndex: index, chapterUrl: url, chapterName: name, back: state.back,
+              chapterIndex: index, chapterUrl: url, chapterName: name, back: state,
             })}
-            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
+            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
           />
         );
       case "sourceReader":
@@ -97,12 +102,8 @@ function AppInner() {
               chapterUrl: state.chapterUrl,
               chapterName: state.chapterName,
             }}
-            onBack={() => setState({
-              area: "detail", page: "sourceBook",
-              hit: { title: state.bookTitle, author: "", coverUrl: "", bookUrl: state.bookUrl, sourceId: state.sourceId, sourceName: "" },
-              back: state.back,
-            })}
-            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state.back })}
+            onBack={() => go(state.back)}
+            onSwitchSource={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
           />
         );
       case "rssArticle":
@@ -115,7 +116,7 @@ function AppInner() {
             groupName={state.groupName}
             sources={state.sources}
             onBack={() => go(state.back)}
-            onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state.back })}
+            onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
           />
         );
     }
@@ -135,30 +136,30 @@ function AppInner() {
         {state.area === "bookshelf" && (
           <LibraryPage
             key="bookshelf"
-            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: "bookshelf" })}
+            onOpenBook={(b) => setState({ area: "detail", page: "reader", book: b, back: state })}
             onOpenSourceBook={(sb) => setState({
               area: "detail", page: "sourceReader",
               sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
-              chapterIndex: -1, chapterUrl: "", chapterName: "", back: "bookshelf",
+              chapterIndex: -1, chapterUrl: "", chapterName: "", back: state,
             })}
           />
         )}
         {state.area === "discover" && (
           <DiscoverPage
             key="discover"
-            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: "discover" })}
-            onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: "discover" })}
-            onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: "discover" })}
+            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
+            onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
+            onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: state })}
           />
         )}
         {state.area === "rss" && (
           <RssPage
             key="rss"
-            onOpenArticle={(article) => setState({ area: "detail", page: "rssArticle", articleId: article.id, back: "rss" })}
+            onOpenArticle={(article) => setState({ area: "detail", page: "rssArticle", articleId: article.id, back: state })}
           />
         )}
         {state.area === "my" && (
-          <SettingsPage key="my" onOpenSourceManager={() => setState({ area: "detail", page: "sourceManager", back: "my" })} />
+          <SettingsPage key="my" onOpenSourceManager={() => setState({ area: "detail", page: "sourceManager", back: state })} />
         )}
       </main>
     </div>

@@ -7,7 +7,10 @@ vi.mock("./readers/PdfReader", () => ({ default: () => null }));
 vi.mock("./readers/MdReader", () => ({ default: () => null }));
 vi.mock("./readers/TxtReader", () => ({ default: () => null }));
 vi.mock("./services/api", () => ({
-  listBookSources: vi.fn().mockResolvedValue([]),
+  listBookSources: vi.fn().mockResolvedValue([
+    { id: 1, name: "源A", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "源A", exploreUrl: "分类::/x.html", bookSourceGroup: "小说" }), enabled: true, last_used_at: null },
+  ]),
+  httpGet: vi.fn().mockResolvedValue("<html><body></body></html>"),
   listBooks: vi.fn().mockResolvedValue([]),
   listShelfSourceBooks: vi.fn().mockResolvedValue([]),
   removeShelfSourceBook: vi.fn().mockResolvedValue(undefined),
@@ -34,5 +37,21 @@ describe("App shell", () => {
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /RSS/ }));
     expect(await screen.findByText("RSS 订阅")).toBeInTheDocument();
+  });
+
+  it("returns step by step through group explore navigation", async () => {
+    render(<App />);
+    // 发现 → 分组频道 → 书源浏览
+    await userEvent.click(screen.getByRole("button", { name: /^发现$/ }));
+    await screen.findByText("书源频道");
+    await userEvent.click(screen.getByText("小说"));
+    expect(await screen.findByText(/小说 · 书源/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText("源A"));
+    expect(await screen.findByText(/源A · 浏览/)).toBeInTheDocument();
+    // 逐级返回：浏览页 → 分组页 → 发现页
+    await userEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(await screen.findByText(/小说 · 书源/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(await screen.findByText("书源频道")).toBeInTheDocument();
   });
 });
