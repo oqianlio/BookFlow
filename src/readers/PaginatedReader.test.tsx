@@ -62,12 +62,14 @@ describe("PaginatedReader", () => {
     const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
+    // 初始页 1 / total
+    expect(wrap.querySelector(".reader-slice-nav span")!.textContent).toMatch(/^1 \/ \d+$/);
     // 点击右 1/3 → next
     fireEvent.click(wrap, { clientX: 900 });
-    expect(wrap.textContent).toContain("段落"); // 第 2 页有内容
+    expect(wrap.querySelector(".reader-slice-nav span")!.textContent).toMatch(/^2 \/ \d+$/);
     // 点击左 1/3 → prev
     fireEvent.click(wrap, { clientX: 100 });
-    expect(wrap.textContent).toContain("段落0");
+    expect(wrap.querySelector(".reader-slice-nav span")!.textContent).toMatch(/^1 \/ \d+$/);
   });
 
   it("renders empty state for empty html", () => {

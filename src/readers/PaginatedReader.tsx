@@ -19,18 +19,20 @@ export default function PaginatedReader({
   measureRef.current = measure;
   const realMeasure = useCallback((h: string): number => {
     if (measureRef.current) return measureRef.current(h);
+    const wrap = wrapRef.current;
+    if (!wrap) return 0;
     const el = document.createElement("div");
-    el.style.cssText = `position:absolute;visibility:hidden;width:${wrapRef.current?.clientWidth ?? 400}px;font-size:${fontSizePx}px;white-space:normal;`;
+    el.style.cssText = `position:absolute;visibility:hidden;width:${wrap.clientWidth || 400}px;font-size:${fontSizePx}px;white-space:normal;`;
     el.innerHTML = h;
-    document.body.appendChild(el);
+    wrap.appendChild(el);
     const height = el.getBoundingClientRect().height;
-    document.body.removeChild(el);
+    wrap.removeChild(el);
     return height;
   }, [fontSizePx]);
 
   useEffect(() => {
-    const h = wrapRef.current?.clientHeight ?? 500;
-    const w = wrapRef.current?.clientWidth ?? 400;
+    const h = wrapRef.current?.clientHeight || 500;
+    const w = wrapRef.current?.clientWidth || 400;
     setPages(sliceHtmlIntoPages(html, h, w, realMeasure));
     setPage(0);
   }, [html, realMeasure]);
