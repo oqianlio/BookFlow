@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { deleteBookSource, listBookSources, setBookSourceEnabled, type BookSource } from "../services/api";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { deleteBookSource, listBookSources, setBookSourceEnabled, writeTextFile, listSubscriptions, addSubscription, deleteSubscription, setSubscriptionChecked, type BookSource, type SubscriptionRow } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
+import { syncSubscription } from "../services/sourceSubscription";
 import { useError } from "./ErrorDialog";
 
 export function groupSources(sources: BookSource[]): Array<{ group: string; items: BookSource[] }> {
@@ -165,6 +166,84 @@ export default function BookSourceManager({ onDebug, onBack }: {
     setCollapsed(next);
   };
 
+  // ==== 复制 / 导出 ====
+  const handleCopy = async (s: BookSource) => {
+    try {
+      const text = JSON.stringify(JSON.parse(s.json), null, 2);
+      await navigator.clipboard.writeText(text);
+      setImportMsg(`已复制书源 JSON：${s.name}`);
+    } catch (e) {
+      showError(`复制失败：${String(e)}`);
+    }
+  };
+
+  const handleExport = async (s: BookSource) => {
+    try {
+      const picked = await save({
+        defaultPath: `${s.name}.json`,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!picked) return;
+      await writeTextFile(picked, JSON.stringify(JSON.parse(s.json), null, 2));
+      setImportMsg(`已导出：${s.name}`);
+    } catch (e) {
+      showError(`导出失败：${String(e)}`);
+    }
+  };
+
+  const handleExportAll = async () => {
+    try {
+      const picked = await save({
+        defaultPath: "书源合集.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!picked) return;
+      const all = sources.map((s) => JSON.parse(s.json));
+      await writeTextFile(picked, JSON.stringify(all, null, 2));
+      setImportMsg(`已导出 ${all.length} 个书源`);
+    } catch (e) {
+      showError(`导出失败：${String(e)}`);
+    }
+  };
+
+  // ==== 订阅源 ====
+  const [subs, setSubs] = useState<SubscriptionRow[]>([]);
+  const [subUrl, setSubUrl] = useState("");
+  const [syncBusy, setSyncBusy] = useState<number | null>(null);
+
+  const refreshSubs = useCallback(async () => {
+    try { setSubs(await listSubscriptions()); } catch (e) { showError(String(e)); }
+  }, [showError]);
+  useEffect(() => { void refreshSubs(); }, [refreshSubs]);
+
+  const handleAddSub = async () => {
+    if (!subUrl.trim() || busy) return;
+    setBusy(true);
+    try {
+      await addSubscription(subUrl.trim());
+      setSubUrl("");
+      await refreshSubs();
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSyncSub = async (sub: SubscriptionRow) => {
+    setSyncBusy(sub.id);
+    try {
+      const r = await syncSubscription(sub);
+      await setSubscriptionChecked(sub.id);
+      await refreshSubs();
+      setImportMsg(`同步完成：新增 ${r.added}，更新 ${r.updated}，失败 ${r.failed}`);
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setSyncBusy(null);
+    }
+  };
+
   return (
     <div className="source-manager page">
       <header className="library-header">
@@ -214,6 +293,8 @@ export default function BookSourceManager({ onDebug, onBack }: {
                               onChange={(e) => void handleToggleEnable(s.id, e.target.checked)}
                             />
                             <button className="btn btn-ghost" onClick={() => onDebug?.(s.id, s.name)}>调试</button>
+                            <button className="btn btn-ghost" onClick={() => void handleCopy(s)}>复制</button>
+                            <button className="btn btn-ghost" onClick={() => void handleExport(s)}>导出</button>
                             <button className="btn btn-ghost" onClick={() => void handleDelete(s.id)}>删除</button>
                           </div>
                         </li>
@@ -229,6 +310,7 @@ export default function BookSourceManager({ onDebug, onBack }: {
       <h3 className="source-import-title">导入书源</h3>
       <div className="source-import">
         <button className="btn btn-ghost" onClick={() => void handleFileImport()}>从文件导入</button>
+        <button className="btn btn-ghost" onClick={() => void handleExportAll()}>导出全部</button>
         <div className="source-import-row">
           <input
             aria-label="书源网址"
@@ -270,6 +352,42 @@ export default function BookSourceManager({ onDebug, onBack }: {
         </div>
       )}
       {importMsg && <p className="error import-msg">{importMsg}</p>}
+
+      <h3 className="source-import-title">订阅源</h3>
+      <div className="source-import">
+        <div className="source-import-row">
+          <input
+            aria-label="订阅源网址"
+            value={subUrl}
+            onChange={(e) => setSubUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && void handleAddSub()}
+            placeholder="订阅远程书源合集 JSON 地址"
+          />
+          <button className="btn btn-primary" onClick={() => void handleAddSub()} disabled={busy || !subUrl.trim()}>
+            {busy ? "订阅中…" : "订阅"}
+          </button>
+        </div>
+      </div>
+      {subs.length === 0 ? (
+        <p className="panel-empty">暂无订阅源，粘贴远程书源合集地址开始订阅</p>
+      ) : (
+        <ul className="source-list">
+          {subs.map((sub) => (
+            <li key={sub.id}>
+              <div className="source-info">
+                <span className="source-name">{sub.name}</span>
+                <span className="source-url">{sub.url}</span>
+              </div>
+              <div className="source-actions">
+                <button className="btn btn-ghost" onClick={() => void handleSyncSub(sub)} disabled={syncBusy === sub.id}>
+                  {syncBusy === sub.id ? "同步中…" : "同步"}
+                </button>
+                <button className="btn btn-ghost" onClick={() => void (async () => { try { await deleteSubscription(sub.id); await refreshSubs(); } catch (e) { showError(String(e)); } })()}>删除</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       </div>
     </div>
   );

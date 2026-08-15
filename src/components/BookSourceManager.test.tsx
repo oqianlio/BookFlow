@@ -10,6 +10,11 @@ vi.mock("../services/api", () => ({
   deleteBookSource: vi.fn(),
   setBookSourceEnabled: vi.fn(),
   addBookSource: vi.fn(),
+  writeTextFile: vi.fn().mockResolvedValue(undefined),
+  listSubscriptions: vi.fn().mockResolvedValue([]),
+  addSubscription: vi.fn().mockResolvedValue(1),
+  deleteSubscription: vi.fn().mockResolvedValue(undefined),
+  setSubscriptionChecked: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../services/bookSourceImport", () => ({
   importBookSourceFromUrl: vi.fn(),
@@ -17,8 +22,12 @@ vi.mock("../services/bookSourceImport", () => ({
   commitBookSource: vi.fn(),
   sourceUsesJs: vi.fn(),
 }));
+vi.mock("../services/sourceSubscription", () => ({
+  syncSubscription: vi.fn().mockResolvedValue({ added: 2, updated: 1, removed: 0, failed: 0 }),
+}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue("C:/fake/source.json"),
+  save: vi.fn().mockResolvedValue("C:/fake/export.json"),
 }));
 
 const sources = [
@@ -236,5 +245,40 @@ describe("BookSourceManager", () => {
     await userEvent.clear(screen.getByLabelText("搜索书源"));
     await userEvent.type(screen.getByLabelText("搜索书源"), "https://c.com");
     expect(screen.getByText("同人")).toBeInTheDocument();
+  });
+
+  it("copies source JSON to clipboard", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例书源", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "示例书源" }), enabled: true, last_used_at: null },
+    ]);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<BookSourceManager />);
+    await screen.findByText("示例书源");
+    await userEvent.click(screen.getByRole("button", { name: "复制" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining("bookSourceUrl")));
+  });
+
+  it("exports all sources via save dialog", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例书源", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "示例书源" }), enabled: true, last_used_at: null },
+    ]);
+    render(<BookSourceManager />);
+    await screen.findByText("示例书源");
+    await userEvent.click(screen.getByRole("button", { name: "导出全部" }));
+    await waitFor(() => expect(api.writeTextFile).toHaveBeenCalledWith("C:/fake/export.json", expect.stringContaining("bookSourceUrl")));
+  });
+
+  it("adds and syncs a subscription", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([]);
+    vi.mocked(api.listSubscriptions).mockResolvedValue([{ id: 1, name: "合集", url: "https://repo.com/a.json", last_checked_at: null }]);
+    render(<BookSourceManager />);
+    await screen.findByText(/暂无订阅源/);
+    await userEvent.type(screen.getByLabelText("订阅源网址"), "https://repo.com/b.json");
+    await userEvent.click(screen.getByRole("button", { name: "订阅" }));
+    await waitFor(() => expect(api.addSubscription).toHaveBeenCalledWith("https://repo.com/b.json"));
+    // 同步
+    await userEvent.click(screen.getByRole("button", { name: "同步" }));
+    await waitFor(() => expect(screen.getByText(/同步完成：新增 2，更新 1，失败 0/)).toBeInTheDocument());
   });
 });
