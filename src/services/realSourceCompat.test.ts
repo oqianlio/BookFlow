@@ -3,7 +3,8 @@ import { parseHtml, extractList, parseSearchUrl } from "./bookSourceEngine";
 
 // 说明：vitest 无法调用 Tauri command（Rust 传输层 http_get），故此处用 node fetch 直连真实站点，
 // 仅覆盖 JS 规则引擎（parseHtml/extractList/parseSearchUrl）；Rust 传输层的默认 UA/headers 行为
-// 由 Rust 侧单元测试覆盖。网络用例一律「只跳过、永不硬失败」：请求异常与非 2xx 均走 ctx.skip()。
+// 由 Rust 侧单元测试覆盖。网络用例一律「只跳过、永不硬失败」：请求异常、非 2xx、
+// 或站点反爬/限流提示页（含"搜索间隔"/"限流"/"频繁"等特征文字）均走 ctx.skip()。
 const BIQUMO = {
   bookSourceUrl: "https://www.biqumo.com",
   searchUrl: "https://www.biqumo.com/search.html,{\"method\":\"POST\",\"body\":\"s={{key}}\"}",
@@ -14,6 +15,14 @@ const BIQUMO = {
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 const online = typeof process !== "undefined" && !!process.env.CI === false && navigator.onLine !== false;
+
+// 站点反爬/限流特征：页面含这些文字时视为受限，跳过而非硬失败
+const RATE_LIMIT_PATTERNS = [/搜索间隔/, /限流/, /频繁/, /操作太频繁/, /请稍后/, /验证码/, /安全验证/, /访问过于频繁/];
+
+function isRateLimited(doc: Document): boolean {
+  const text = (doc.body?.textContent ?? "").replace(/\s+/g, "");
+  return RATE_LIMIT_PATTERNS.some((re) => re.test(text));
+}
 
 describe.skipIf(!online)("real source biqumo (smoke, needs network)", () => {
   it("searches and extracts books with UA header", async (ctx) => {
@@ -36,6 +45,11 @@ describe.skipIf(!online)("real source biqumo (smoke, needs network)", () => {
       return;
     }
     const doc = parseHtml(await resp.text());
+    // 限流提示页（如 biqumo 的「搜索间隔【60】秒」）也是 200，识别特征后跳过
+    if (isRateLimited(doc)) {
+      ctx.skip();
+      return;
+    }
     const hits = await extractList(doc, BIQUMO.ruleSearch.bookList, {
       name: BIQUMO.ruleSearch.name,
       author: BIQUMO.ruleSearch.author,
@@ -62,6 +76,10 @@ describe.skipIf(!online)("real source biqumo (smoke, needs network)", () => {
       return;
     }
     const doc = parseHtml(await resp.text());
+    if (isRateLimited(doc)) {
+      ctx.skip();
+      return;
+    }
     const items = await extractList(doc, BIQUMO.ruleToc.chapterList, {
       name: BIQUMO.ruleToc.name,
       url: BIQUMO.ruleToc.url,
