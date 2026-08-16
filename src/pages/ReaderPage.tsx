@@ -300,6 +300,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       // 0. 会话缓存命中：无缝渲染，无 loading
       const mem = getSessionChapter(sourceId, bookUrl, c.url);
       if (mem) {
+        // 递增请求序号：使在途的旧章节 fetch 全部过期，防止旧内容覆盖当前章节
+        // （快速切章时新章命中缓存、旧章网络请求后完成——若不递增，旧响应会误判为最新）
+        ++chapterSeqRef.current;
         nextUrlRef.current = mem.nextUrl;
         if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
         else { setContent(mem.content); setIsManga(false); setImages([]); }
@@ -394,6 +397,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   const applyCachedChapter = useCallback((url: string) => {
     const mem = getSessionChapter(sourceId, bookUrl, url);
     if (!mem) return;
+    // 递增请求序号：使在途旧 fetch 过期（快速切章竞态防护）
+    ++chapterSeqRef.current;
     nextUrlRef.current = mem.nextUrl;
     if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
     else { setContent(mem.content); setIsManga(false); setImages([]); }
