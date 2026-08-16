@@ -768,6 +768,36 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string):
     const node = resolveTagIndex(parsed.value, el);
     return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
   }
+  // item 内链式规则（legado A@B@C，如 .row@a@text / .item@h3@href）：
+  // parseAttrRule 已把末尾 @属性 拆到 parsed.attr，这里 value 里剩余的 @ 段逐层下钻
+  if (parsed.value.includes("@")) {
+    const segs = parsed.value.split("@").map((s) => s.trim()).filter(Boolean);
+    if (segs.length > 1) {
+      const last = segs[segs.length - 1];
+      // 末段 js: → 对下钻到的节点执行 js（node = 当前元素）
+      if (last.startsWith("js:")) {
+        let cur: Element | null = el;
+        for (const seg of segs.slice(0, -1)) {
+          if (!cur) return "";
+          cur = queryIndexed(seg, cur);
+        }
+        if (!cur) return "";
+        try {
+          return String(evalJs(last.slice(3), { doc: el.ownerDocument ?? emptyDoc(), node: cur, result: "", baseUrl }) ?? "");
+        } catch {
+          return "";
+        }
+      }
+      let cur: Element | null = el;
+      for (const seg of segs) {
+        if (!cur) return "";
+        cur = queryIndexed(seg, cur);
+      }
+      return cur
+        ? finalize(applyReplacements(nodeValue(cur, parsed.attr), parsed.replace), parsed.attr, baseUrl)
+        : "";
+    }
+  }
   const node = queryIndexed(parsed.value, el);
   return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
 }
@@ -807,7 +837,7 @@ function applyRegexReplace(source: string, parsed: ParsedRule): string {
  * 在 scope 内查找选择器命中节点；支持 legado `.class.N` 语法（取第 N 个匹配）。
  * 先尝试常规 querySelector；失败（非法选择器）或带数字后缀时，按 base 选择器 + index 取。
  */
-function queryIndexed(selector: string, scope: Document | Element): Element | null {
+export function queryIndexed(selector: string, scope: Document | Element): Element | null {
   const sel = selector.trim();
   // legado `!` 索引：`tr!0`（第 0 个）/`tag.tr!0`（tag 前缀剥除）/`xxx!last`
   const bang = sel.match(/^(?:(?:tag\.)?)(.+?)!(\d+|last)$/);
@@ -821,7 +851,9 @@ function queryIndexed(selector: string, scope: Document | Element): Element | nu
     }
   }
   try {
-    return scope.querySelector(normalizeSelector(sel));
+    const hit = scope.querySelector(normalizeSelector(sel));
+    if (hit) return hit;
+    // 合法但无匹配（如 "tag.span" 视为 tag 元素）→ 继续走 tag.X / 索引回退
   } catch {
     // 非法选择器（如 .author.0）→ 尝试拆分 .数字 后缀
   }

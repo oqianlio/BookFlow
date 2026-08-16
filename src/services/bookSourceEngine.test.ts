@@ -1114,3 +1114,45 @@ describe("legado ## regex replace rules (node outerHtml)", () => {
     expect(items[0].bookUrl).toBe("https://m.suixkan.com/book/123/");
   });
 });
+
+describe("item-level chained rules A@B@C in extractFromElement", () => {
+  const html = `<div class="item">
+    <div class="row"><a href="/a/1.html">书名A</a><a href="/a/2.html">书名B</a></div>
+    <h3><span class="tag">连载</span></h3>
+  </div>`;
+  const doc = parseHtml(html);
+  const item = doc.querySelector(".item")!;
+
+  it("chain .row@a extracts text of first matching a", () => {
+    // parseAttrRule: .row@a@text → value=".row@a", attr="text"
+    expect(extractFromElement(item, ".row@a@text")).toBe("书名A");
+  });
+
+  it("chain with href attribute resolves against baseUrl", () => {
+    // parseAttrRule: .row@a@href → value=".row@a", attr="href"
+    expect(extractFromElement(item, ".row@a@href", "https://ex.com")).toBe("https://ex.com/a/1.html");
+  });
+
+  it("chain through two selectors then attribute (h3@span@text)", () => {
+    // parseAttrRule: h3@span@text → value="h3@span", attr="text"
+    expect(extractFromElement(item, "h3@span@text")).toBe("连载");
+  });
+
+  it("chain with tag segment", () => {
+    expect(extractFromElement(item, "h3@tag.span@text")).toBe("连载");
+  });
+
+  it("chain ending with js: runs on the drilled node", () => {
+    expect(extractFromElement(item, ".row@js:node.selectFirst('a').attr('href')")).toBe("/a/1.html");
+  });
+
+  it("chain works inside extractList item rules", async () => {
+    const listDoc = parseHtml(`<ul><li class="box"><div class="t"><a href="/b.html">斗破</a></div></li></ul>`);
+    const items = await extractList(listDoc, ".box", {
+      name: ".t@a@text",
+      bookUrl: ".t@a@href",
+    }, { baseUrl: "https://ex.com" });
+    expect(items[0].name).toBe("斗破");
+    expect(items[0].bookUrl).toBe("https://ex.com/b.html");
+  });
+});
