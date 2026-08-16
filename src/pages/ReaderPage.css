@@ -434,12 +434,12 @@
 .reader-bottom-bar {
   position: absolute;
   left: 50%;
-  bottom: 18px;
+  bottom: 6px;
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 5px 8px;
+  padding: 3px 6px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-2) 88%, transparent);
   backdrop-filter: blur(12px);
@@ -458,17 +458,17 @@
 }
 
 .reader-bottom-bar .btn {
-  padding: 6px 14px;
+  padding: 4px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .reader-progress {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  min-width: 96px;
+  gap: 6px;
+  padding: 0 6px;
+  min-width: 84px;
   justify-content: center;
 }
 
@@ -502,7 +502,7 @@
 .reader-slice-wrap { position: relative; height: 100%; overflow: hidden; }
 .reader-page-slice {
   position: absolute; inset: 0; overflow: hidden;
-  padding: 4px 10px 76px; /* 底部留白避免悬浮胶囊遮挡 */
+  padding: 4px 10px 20px; /* 底部少量留白（页码胶囊悬浮，几乎不占空白） */
   font-family: var(--font-read);
   line-height: 1.8;
   max-width: 46em;
@@ -513,12 +513,14 @@
 .reader-page-slice > *:last-child { margin-bottom: 0; }
 .reader-page-slice.slide { transition: transform 0.3s ease; }
 .reader-slice-nav {
-  position: absolute; bottom: 14px; right: 14px; display: flex; gap: 6px; align-items: center;
-  background: var(--surface-2);
+  position: absolute; bottom: 6px; right: 10px; display: flex; gap: 4px; align-items: center;
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: 999px;
   box-shadow: var(--shadow-sm);
-  padding: 3px 10px; font-size: 12px; color: var(--fg-muted);
+  padding: 2px 8px; font-size: 11.5px; color: var(--fg-muted);
 }
 .reader-slice-nav button {
   background: none; border: none; cursor: pointer;
