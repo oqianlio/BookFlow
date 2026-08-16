@@ -287,3 +287,25 @@
   containsOwn 语义。
 - 下次：源规则修完用端到端计数验证（写临时 vitest 脚本跑真实
   页面）；真实页面结构不稳定（A/B、登录态），探测要多抓几次。
+
+### 3.26 "章节不完整"的真凶：extractSingle 缺 `<js>` 后缀处理（2026-08-16）
+- 场景：用户反复说"章节不完整"。36xs 章节标题标"（第1页）"且
+  word_read 有 `6516912_1.html` 分页链接，但内容只到第 1 页
+  （1229B）。根因链：text.xxx 修复后 `text.下一@href` 能提取链接，
+  但 nextContentUrl 完整规则 `text.下一@href\n<js>检测</js>` 仍返回
+  空——**extractSingle（顶层规则）没有 `<js>` 后缀处理**（只有
+  extractFromElement 有），`<js>` 块被当 CSS 残留吞掉。
+- 认知：**规则语法支持要检查所有执行入口**——`<js>` 后缀在 item
+  规则（extractFromElement）和顶层规则（extractSingle）都出现，
+  只修一处则另一处静默失败，表现为"内容不完整"而非报错。
+- 下次：修规则语法时全局搜该语法的所有使用入口（extractSingle/
+  extractFromElement/extractList），各补测试；"章节不完整"先看
+  页面标题是否标"（第N页）"、word_read 有无 _N.html 分页链接。
+
+### 3.27 vitest 4 不继承外部 env（2026-08-16）
+- 场景：SOURCE_HEALTH 门控测试突然全 skip——vitest 4 测试进程
+  不再透传 shell 环境变量（process.env.SOURCE_HEALTH undefined）。
+- 认知：临时验证脚本不要依赖 env 门控，直接改 ENABLED 常量；
+  test.env 配置注入也无效（config 加载时机不同）。正式测试不
+  依赖外部 env。
+- 下次：真实源验证脚本用常量开关，不用 process.env。
