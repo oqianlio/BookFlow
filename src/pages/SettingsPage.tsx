@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { SCHEMES, SCHEME_NAMES, Theme, initTheme, setTheme, getTheme } from "../components/theme";
 import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, type FontFileRow, type CacheSummary, type CachedBook } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, readFileContent, writeTextFile, type FontFileRow, type CacheSummary, type CachedBook } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
+import { exportBackupData, importBackupData } from "../services/backup";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DeveloperLogDialog from "../components/DeveloperLogDialog";
@@ -34,7 +35,63 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDevLog, setShowDevLog] = useState(false);
   const [diagBusy, setDiagBusy] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [confirmRestore, setConfirmRestore] = useState(false);
+  const [restoreText, setRestoreText] = useState<string | null>(null);
   const { showError } = useError();
+
+  const handleExportBackup = async () => {
+    if (backupBusy) return;
+    setBackupBusy(true);
+    try {
+      const data = await exportBackupData();
+      const text = JSON.stringify(data, null, 1);
+      const picked = await save({
+        defaultPath: `枕书备份-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: "JSON 备份", extensions: ["json"] }],
+      });
+      if (!picked) return;
+      await writeTextFile(picked, text);
+      showError(`备份完成：${data.bookSources.length} 个书源、${data.shelfSourceBooks.length} 本在线书`);
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const pickRestore = async () => {
+    if (backupBusy) return;
+    try {
+      const picked = await open({
+        multiple: false,
+        filters: [{ name: "JSON 备份", extensions: ["json"] }],
+      });
+      if (!picked) return;
+      const p = Array.isArray(picked) ? picked[0] : picked;
+      if (!p) return;
+      const text = await readFileContent(p);
+      setRestoreText(text);
+      setConfirmRestore(true);
+    } catch (e) {
+      showError(String(e));
+    }
+  };
+
+  const handleRestore = async () => {
+    setConfirmRestore(false);
+    if (!restoreText) return;
+    setBackupBusy(true);
+    try {
+      const sum = await importBackupData(restoreText);
+      showError(`恢复完成：${sum.sources} 个书源、${sum.shelf} 本在线书、${sum.progress} 条进度`);
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setBackupBusy(false);
+      setRestoreText(null);
+    }
+  };
 
   const handleExportDiagnostics = async () => {
     if (diagBusy) return;
@@ -279,6 +336,20 @@ export default function SettingsPage({ onOpenSourceManager }: {
         </div>
         <div className="settings-group">
           <div>
+            <div className="label">备份与恢复</div>
+            <div className="hint">导出/导入书源、书架、阅读进度与设置（本地 JSON 文件）</div>
+          </div>
+          <div className="settings-group-actions">
+            <button className="btn btn-soft" onClick={() => void handleExportBackup()} disabled={backupBusy}>
+              {backupBusy ? "处理中…" : "导出备份"}
+            </button>
+            <button className="btn btn-soft" onClick={() => void pickRestore()} disabled={backupBusy}>
+              从备份恢复
+            </button>
+          </div>
+        </div>
+        <div className="settings-group">
+          <div>
             <div className="label">开发者日志</div>
             <div className="hint">查看前端错误与警告（写于应用数据目录 logs/app.log）</div>
           </div>
@@ -302,6 +373,13 @@ export default function SettingsPage({ onOpenSourceManager }: {
           message={`将清除全部 ${cache?.chapter_count ?? 0} 章离线缓存（${cache ? formatBytes(cache.total_bytes) : ""}），离线阅读将失效。继续？`}
           onConfirm={() => void handleClearCache()}
           onCancel={() => setConfirmClear(false)}
+        />
+      )}
+      {confirmRestore && (
+        <ConfirmDialog
+          message="从备份恢复将覆盖当前书源、书架、进度与设置（书源按地址匹配更新，其余覆盖）。继续？"
+          onConfirm={() => void handleRestore()}
+          onCancel={() => { setConfirmRestore(false); setRestoreText(null); }}
         />
       )}
     </div>

@@ -38,12 +38,24 @@ vi.mock("../services/api", () => ({
   clearLogs: vi.fn().mockResolvedValue(undefined),
   logFileSize: vi.fn().mockResolvedValue(2048),
   exportDiagnostics: vi.fn().mockResolvedValue("== 枕书诊断信息 ==\n版本: 0.1.0"),
+  readFileContent: vi.fn().mockResolvedValue("{}"),
+  writeTextFile: vi.fn().mockResolvedValue(undefined),
+  listBookSources: vi.fn().mockResolvedValue([]),
+  listShelfSourceBooks: vi.fn().mockResolvedValue([]),
+  getBookSourceProgress: vi.fn().mockResolvedValue(null),
+  getSourceByUrl: vi.fn().mockResolvedValue(null),
+  addBookSource: vi.fn().mockResolvedValue(1),
+  updateBookSource: vi.fn().mockResolvedValue(undefined),
+  addShelfSourceBook: vi.fn().mockResolvedValue(1),
+  saveBookSourceProgress: vi.fn().mockResolvedValue(undefined),
+  getSetting: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("../services/fontFiles", () => ({
   injectFontFaces: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue("C:/fonts/myfont.ttf"),
+  save: vi.fn().mockResolvedValue("C:/backups/default.json"),
 }));
 
 describe("SettingsPage", () => {
@@ -123,5 +135,25 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "导出诊断" }));
     expect(api.exportDiagnostics).toHaveBeenCalled();
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("== 枕书诊断信息 =="));
+  });
+
+  it("renders the backup & restore group with export and restore buttons", async () => {
+    render(<SettingsPage />);
+    expect(await screen.findByText(/备份与恢复/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "从备份恢复" })).toBeInTheDocument();
+  });
+
+  it("export backup writes a JSON file via the save dialog", async () => {
+    const api = await import("../services/api");
+    const dialog = await import("@tauri-apps/plugin-dialog");
+    vi.mocked(dialog.save).mockResolvedValue("C:/backups/zhanshu.json");
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "源A", url: "https://a.com", json: "{\"bookSourceUrl\":\"https://a.com\"}", enabled: true, last_used_at: null },
+    ]);
+    render(<SettingsPage />);
+    await screen.findByText(/备份与恢复/);
+    await userEvent.click(screen.getByRole("button", { name: "导出备份" }));
+    expect(api.writeTextFile).toHaveBeenCalledWith("C:/backups/zhanshu.json", expect.stringContaining("https://a.com"));
   });
 });
