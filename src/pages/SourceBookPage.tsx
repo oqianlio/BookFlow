@@ -29,8 +29,14 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     kind?: string; wordCount?: string; lastChapter?: string; status?: string; updateTime?: string;
   }>({ title: initialTitle, author: "", intro: "", coverUrl: "" });
   const [introExpanded, setIntroExpanded] = useState(false);
+  const introExpandedRef = useRef(false);
   const introRef = useRef<HTMLParagraphElement | null>(null);
   const [introClampable, setIntroClampable] = useState(false);
+
+  const toggleIntro = () => {
+    introExpandedRef.current = !introExpandedRef.current;
+    setIntroExpanded(introExpandedRef.current);
+  };
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocLoading, setTocLoading] = useState(true);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
@@ -44,7 +50,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 
   useEffect(() => () => { dlSignalRef.current.cancelled = true; }, []);
 
-  // 简介是否超过 3 行（决定是否显示"展开/收起"）
+  // 简介是否超过 3 行（决定是否显示"展开/收起"）；只在简介内容变化时测量一次
   useEffect(() => {
     const el = introRef.current;
     if (!el || !info.intro) return;
@@ -54,9 +60,14 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     const full = el.scrollHeight;
     const clampable = full > clamped + 4;
     setIntroClampable(clampable);
-    el.style.webkitLineClamp = introExpanded ? "none" : "3";
-    if (!clampable) setIntroExpanded(true); // 不满 3 行无需展开按钮
-  }, [info.intro, introExpanded]);
+    if (!clampable) {
+      // 不满 3 行无需展开按钮
+      introExpandedRef.current = true;
+      setIntroExpanded(true);
+    } else {
+      el.style.webkitLineClamp = introExpandedRef.current ? "none" : "3";
+    }
+  }, [info.intro]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,7 +230,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             {info.intro}
           </p>
           {introClampable && (
-            <button className="btn btn-ghost intro-toggle" onClick={() => setIntroExpanded((v) => !v)}>
+            <button className="btn btn-ghost intro-toggle" onClick={toggleIntro}>
               {introExpanded ? "收起" : "展开"}
             </button>
           )}

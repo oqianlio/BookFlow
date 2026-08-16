@@ -1198,7 +1198,8 @@ input[type="range"] {
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--outline-variant);
-  background: var(--surface-container-high);
+  /* 无封面/封面加载失败时的兜底背景：深色渐变保证白字可读（不依赖主题明暗） */
+  background: linear-gradient(135deg, #2e3440, #1a1d23 70%);
 }
 .source-book-hero-bg {
   position: absolute;
@@ -1228,7 +1229,7 @@ input[type="range"] {
   aspect-ratio: 3/4;
   object-fit: cover;
   border-radius: var(--radius-sm);
-  background: var(--surface-container-high);
+  background: rgba(255, 255, 255, 0.12);
   flex-shrink: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
@@ -1236,7 +1237,8 @@ input[type="range"] {
   width: 118px;
   aspect-ratio: 3/4;
   border-radius: var(--radius-sm);
-  background: var(--surface-container-high);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
@@ -1275,6 +1277,9 @@ input[type="range"] {
   border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
   white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .source-book-tags .status-tag.done {
   background: rgba(255, 255, 255, 0.12);
