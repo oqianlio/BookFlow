@@ -172,3 +172,26 @@
 - 认知：legado 生态里"源规则过时"是常态，修正源与修引擎同等重要；
   DB 直改 + 备份（.bak-before-s2j）+ 重新导出是可重复流程。
 - 下次：源规则问题先备份 DB 再改，改完立即重新导出并端到端验证。
+
+### 3.16 测试环境 ≠ 运行环境：Node 专用依赖会白屏（2026-08-16）
+- 场景：GBK charset 支持引入 iconv-lite 后，Tauri 窗口白屏；vitest 全绿
+  （479 passed）但真实 WebView 空白。Edge headless dump 发现
+  `Uncaught TypeError: Cannot read properties of undefined (reading 'prototype')`
+  来自 iconv-lite（依赖 Node buffer，vite 外部化 buffer → Buffer 为 undefined）。
+- 认知：**vitest 跑在 Node，Node builtin（buffer/stream/process）都有；
+  浏览器/WebView 没有**。引入依赖时先查其 Node 依赖链
+  （require 追踪：iconv-lite → safer-buffer → buffer/stream）。
+  构建时的 `Module "buffer" has been externalized` 警告就是白屏前兆。
+- 下次：前端依赖引入后**必须用真实浏览器验证渲染**（Edge headless
+  `--dump-dom` + 查 console），不能只靠 vitest；build 警告里的
+  externalized 提示要当错误处理。
+
+### 3.17 Windows vite host 绑定与 WebView 解析（2026-08-16）
+- 场景：白屏排查中，vite `host: false` 只监听 IPv6 [::1]:1420，
+  WebView2 解析 `localhost` 走 IPv4 → 连不上 → 空白；netstat 看不到
+  ESTABLISHED 连接是判据。改 vite `host: "127.0.0.1"` + tauri devUrl
+  同步改 `http://127.0.0.1:1420` 后连接建立。
+- 认知：Windows 上 localhost 解析有 IPv4/IPv6 歧义；tauri dev 的
+  devUrl 和 vite server.host 必须明确一致。
+- 下次：白屏先分三层排查——连接层（netstat ESTABLISHED）、
+  加载层（Edge headless dump-dom 看 root 是否渲染）、运行时层（console 报错）。
