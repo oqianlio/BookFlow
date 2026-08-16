@@ -622,15 +622,17 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             </>
           )}
         </main>
-        {/* 侧边栏 ‹ › 收纳开关：面板开时收起（›），关时展开（‹，打开默认面板） */}
-        <button
-          className={`panel-toggle${panel ? " open" : ""}`}
-          onClick={() => setPanel(panel ? null : (isLocal ? "annotations" : "toc"))}
-          aria-label={panel ? "收起侧边栏" : "展开侧边栏"}
-          title={panel ? "收起侧边栏" : "展开侧边栏"}
-        >
-          {panel ? "›" : "‹"}
-        </button>
+        {/* 侧边栏入口：仅面板关闭时显示右缘 ‹ 按钮（贴边小把手，不悬浮遮挡正文） */}
+        {!panel && (
+          <button
+            className="panel-toggle"
+            onClick={() => setPanel(isLocal ? "annotations" : "toc")}
+            aria-label="展开侧边栏"
+            title="展开侧边栏"
+          >
+            ‹
+          </button>
+        )}
         {isLocal && panel === "annotations" && (
           <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} onClose={() => setPanel(null)} />
         )}

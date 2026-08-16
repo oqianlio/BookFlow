@@ -379,14 +379,14 @@
   color: var(--accent);
 }
 
-/* ============ 侧边栏 ‹ › 收纳开关 ============ */
+/* ============ 侧边栏入口按钮（仅面板关闭时显示，右缘贴边小把手） ============ */
 .panel-toggle {
   position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 22px;
-  height: 72px;
+  width: 18px;
+  height: 64px;
   border-radius: 8px 0 0 8px;
   border: 1px solid var(--border);
   border-right: none;
@@ -394,25 +394,18 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   color: var(--fg-muted);
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   z-index: 9;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease, right 0.22s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 .panel-toggle:hover {
   background: var(--accent-soft);
   color: var(--accent);
-}
-/* 面板展开时：按钮贴面板左缘（面板占右 264px） */
-.panel-toggle.open {
-  right: 264px;
-  border-radius: 0 8px 8px 0;
-  border-right: 1px solid var(--border);
-  border-left: none;
 }
 
 .panel ul {
