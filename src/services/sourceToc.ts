@@ -52,7 +52,8 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
   const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
   const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : "";
-  const tocUrl = bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : resolvedBookUrl;
+  // tocUrl 规则可能提取为空（页面无该链接）：回退到书籍页本身，避免空 URL 请求
+  const tocUrl = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
   const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};

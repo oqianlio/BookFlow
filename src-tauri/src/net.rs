@@ -116,6 +116,11 @@ pub async fn http_get(
     cookie_jar: Option<String>,
     state: tauri::State<'_, crate::commands::AppState>,
 ) -> Result<String, String> {
+    // 空/空白 URL 直接拒绝：避免 reqwest builder 错误（"请求构建失败"）与无效请求
+    if url.trim().is_empty() {
+        crate::logs::rust_log(&state.app_data_dir, "error", "[net] 拒绝空 URL 请求（规则提取为空，调用方应回退）");
+        return Err("请求地址为空（书源规则提取失败）".to_string());
+    }
     let cookies = state.cookies.clone();
     let http_clients = state.http_clients.clone();
     let app_data_dir = state.app_data_dir.clone();

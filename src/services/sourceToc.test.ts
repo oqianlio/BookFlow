@@ -113,4 +113,21 @@ describe("fetchToc", () => {
     expect(r.toc.length).toBe(2);
     expect(api.httpGet).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to the book page when tocUrl rule extracts empty (no empty URL request)", async () => {
+    // 错层小说场景：tocUrl 规则"查看全部章节"在页面不存在 → 提取空 → 回退书页，不发起空 URL 请求
+    const src = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "错层",
+      ruleBookInfo: { tocUrl: ".toc-link@href" },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 4, name: "错层", url: "https://ex.com", json: src, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(bookHtml); // 页面无 .toc-link
+    const r = await fetchToc({ sourceId: 4, bookUrl: "https://ex.com/book/1.html", initialTitle: "三体" });
+    expect(r.toc.length).toBe(2);
+    // 只请求一次（书页本身），绝不请求空 URL
+    expect(api.httpGet).toHaveBeenCalledTimes(1);
+    expect(api.httpGet).toHaveBeenCalledWith("https://ex.com/book/1.html", undefined, undefined, undefined, undefined, undefined, "ex.com");  });
 });

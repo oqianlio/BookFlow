@@ -90,6 +90,11 @@ export async function httpGet(
   contentType?: string,
   cookieJar?: string,
 ): Promise<string> {
+  // 空 URL 直接拒绝（书源规则提取失败时调用方应回退），避免无效请求
+  if (!url.trim()) {
+    console.error("[httpGet] 拒绝空 URL 请求（书源规则提取为空）");
+    throw new Error("请求地址为空（书源规则提取失败）");
+  }
   const t0 = performance.now();
   const short = url.length > 100 ? url.slice(0, 100) + "…" : url;
   try {
