@@ -336,8 +336,8 @@ describe("BookSourceManager", () => {
         { id: 3, name: "停用源", url: "https://c.com", json: "{}", enabled: false, last_used_at: null },
       ]);
     verify.mockResolvedValue([
-      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "", group: null },
-      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "无结果", group: "搜索失效" },
+      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "", groups: [] },
+      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "无结果", groups: ["搜索失效"] },
     ]);
     render(<BookSourceManager />);
     await screen.findByText("好源");
