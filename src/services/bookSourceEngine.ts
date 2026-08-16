@@ -494,7 +494,9 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
       newCtx = { ...(newCtx ?? {}), result: rawStr, sourceKey: ctx?.sourceKey, source: ctx?.source, baseUrl: ctx?.baseUrl, cookieHost: ctx?.cookieHost };
       jsDoc = parseHtml(rawStr);
     }
-    return extractSingle(jsDoc, parsed.after ?? "", newCtx);
+    // 无后续规则（after 空）时直接返回 jsBlock 结果（如正文规则 <js>…txt;</js>）
+    if (!parsed.after) return rawStr;
+    return extractSingle(jsDoc, parsed.after, newCtx);
   }
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取文档自身（extractSingle 场景少见，返回空）
