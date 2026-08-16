@@ -28,6 +28,13 @@ vi.mock("../services/sourceSubscription", () => ({
 }));
 vi.mock("../services/sourceVerify", () => ({
   verifySources: vi.fn(),
+  invalidGroupNames: (json: string) => {
+    try {
+      const obj = JSON.parse(json);
+      return String(obj.bookSourceGroup ?? "").split(",").map((s) => s.trim()).filter(Boolean)
+        .filter((g: string) => g.includes("失效") || g === "校验超时");
+    } catch { return []; }
+  },
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue("C:/fake/source.json"),
@@ -314,14 +321,23 @@ describe("BookSourceManager", () => {
 
   it("batch-verifies enabled sources and shows badges + summary", async () => {
     const verify = vi.mocked(verifyMod.verifySources);
-    vi.mocked(api.listBookSources).mockResolvedValue([
-      { id: 1, name: "好源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
-      { id: 2, name: "坏源", url: "https://b.com", json: "{}", enabled: true, last_used_at: null },
-      { id: 3, name: "停用源", url: "https://c.com", json: "{}", enabled: false, last_used_at: null },
-    ]);
+    const okJson = JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "好源" });
+    const badJson = JSON.stringify({ bookSourceUrl: "https://b.com", bookSourceName: "坏源" });
+    vi.mocked(api.listBookSources)
+      .mockResolvedValueOnce([
+        { id: 1, name: "好源", url: "https://a.com", json: okJson, enabled: true, last_used_at: null },
+        { id: 2, name: "坏源", url: "https://b.com", json: badJson, enabled: true, last_used_at: null },
+        { id: 3, name: "停用源", url: "https://c.com", json: "{}", enabled: false, last_used_at: null },
+      ])
+      // 验证后 refresh：坏源已被持久化"搜索失效"分组（学习原版机制）
+      .mockResolvedValueOnce([
+        { id: 1, name: "好源", url: "https://a.com", json: okJson, enabled: true, last_used_at: null },
+        { id: 2, name: "坏源", url: "https://b.com", json: JSON.stringify({ ...JSON.parse(badJson), bookSourceGroup: "搜索失效" }), enabled: true, last_used_at: null },
+        { id: 3, name: "停用源", url: "https://c.com", json: "{}", enabled: false, last_used_at: null },
+      ]);
     verify.mockResolvedValue([
-      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "" },
-      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "无结果" },
+      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "", group: null },
+      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "无结果", group: "搜索失效" },
     ]);
     render(<BookSourceManager />);
     await screen.findByText("好源");
@@ -334,27 +350,41 @@ describe("BookSourceManager", () => {
     expect(screen.getByText("✓ 12本")).toBeInTheDocument();
     expect(screen.getByText("无结果")).toBeInTheDocument();
     expect(screen.getByText("停用源")).toBeInTheDocument();
-    expect(screen.queryByText("✓ 0本")).not.toBeInTheDocument();
+    // 失效分组书源出现"删除失效源"按钮
+    expect(screen.getByRole("button", { name: "删除失效源（1）" })).toBeInTheDocument();
   });
 
-  it("deletes failed sources after verification with confirmation", async () => {
-    const verify = vi.mocked(verifyMod.verifySources);
+  it("shows 删除失效源 for sources whose group contains failure markers (no verify needed)", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
-      { id: 1, name: "好源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
-      { id: 2, name: "坏源", url: "https://b.com", json: "{}", enabled: true, last_used_at: null },
-    ]);
-    verify.mockResolvedValue([
-      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "" },
-      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "HTTP 403" },
+      { id: 1, name: "好源", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "好源" }), enabled: true, last_used_at: null },
+      { id: 2, name: "坏源", url: "https://b.com", json: JSON.stringify({ bookSourceUrl: "https://b.com", bookSourceName: "坏源", bookSourceGroup: "小说,网站失效" }), enabled: true, last_used_at: null },
+      { id: 3, name: "超时源", url: "https://c.com", json: JSON.stringify({ bookSourceUrl: "https://c.com", bookSourceName: "超时源", bookSourceGroup: "校验超时" }), enabled: true, last_used_at: null },
     ]);
     render(<BookSourceManager />);
     await screen.findByText("好源");
-    await userEvent.click(screen.getByRole("button", { name: "批量验证（启用源）" }));
-    await userEvent.click(await screen.findByRole("button", { name: "删除失败源（1）" }));
-    // 确认弹窗列出失败源名
-    expect(screen.getByText(/将删除 1 个验证失败的书源：坏源/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "删除失效源（2）" })).toBeInTheDocument();
+    // 失效分组作为普通分组展示（学习原版：检测状态即分组）
+    expect(screen.getByText("网站失效")).toBeInTheDocument();
+    expect(screen.getByText("校验超时")).toBeInTheDocument();
+  });
+
+  it("deletes invalid sources with confirmation (legado getInvalidGroupNames)", async () => {
+    vi.mocked(api.listBookSources)
+      .mockResolvedValueOnce([
+        { id: 1, name: "好源", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "好源" }), enabled: true, last_used_at: null },
+        { id: 2, name: "坏源", url: "https://b.com", json: JSON.stringify({ bookSourceUrl: "https://b.com", bookSourceName: "坏源", bookSourceGroup: "搜索失效" }), enabled: true, last_used_at: null },
+      ])
+      .mockResolvedValueOnce([
+        { id: 1, name: "好源", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "好源" }), enabled: true, last_used_at: null },
+      ]);
+    render(<BookSourceManager />);
+    await screen.findByText("好源");
+    await userEvent.click(screen.getByRole("button", { name: "删除失效源（1）" }));
+    // 确认弹窗列出失效源名
+    expect(screen.getByText(/将删除 1 个失效书源/)).toBeInTheDocument();
+    expect(screen.getAllByText(/坏源/).length).toBeGreaterThanOrEqual(2);
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     await waitFor(() => expect(api.deleteBookSource).toHaveBeenCalledWith(2));
-    await waitFor(() => expect(screen.queryByText(/删除失败源/)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/删除失效源/)).not.toBeInTheDocument());
   });
 });

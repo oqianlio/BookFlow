@@ -3,7 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, writeTextFile, listSubscriptions, addSubscription, deleteSubscription, setSubscriptionChecked, type BookSource, type SubscriptionRow } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 import { syncSubscription } from "../services/sourceSubscription";
-import { verifySources, type VerifyResult } from "../services/sourceVerify";
+import { verifySources, invalidGroupNames, type VerifyResult } from "../services/sourceVerify";
 import { useError } from "./ErrorDialog";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -79,6 +79,8 @@ export default function BookSourceManager({ onDebug, onBack }: {
         },
       });
       setVerifyResults(new Map(results.filter(Boolean).map((r) => [r.id, r])));
+      // 学习原版：检测结果已写入书源分组并持久化，刷新列表展示失效分组（如"搜索失效"）
+      await refresh();
     } catch (e) {
       showError(String(e));
     } finally {
@@ -87,23 +89,24 @@ export default function BookSourceManager({ onDebug, onBack }: {
     }
   };
 
-  const failedResults = verifyResults ? [...verifyResults.values()].filter((r) => !r.ok) : [];
   const okCount = verifyResults ? [...verifyResults.values()].filter((r) => r.ok).length : 0;
+  // 学习原版 getInvalidGroupNames：失效书源 = 分组含"失效"或"校验超时"（持久化于书源 JSON，重启仍有效）
+  const invalidSources = sources.filter((s) => invalidGroupNames(s.json).length > 0);
 
-  const handleDeleteFailed = () => {
-    if (failedResults.length === 0) return;
-    const names = failedResults.slice(0, 6).map((r) => r.name).join("、");
+  const handleDeleteInvalid = () => {
+    if (invalidSources.length === 0) return;
+    const names = invalidSources.slice(0, 6).map((s) => s.name).join("、");
     setConfirmJs({
-      msg: `将删除 ${failedResults.length} 个验证失败的书源：${names}${failedResults.length > 6 ? ` 等 ${failedResults.length} 个` : ""}。此操作不可撤销，继续？`,
+      msg: `将删除 ${invalidSources.length} 个失效书源（分组含"失效"或"校验超时"）：${names}${invalidSources.length > 6 ? ` 等 ${invalidSources.length} 个` : ""}。此操作不可撤销，继续？`,
       proceed: () => {
         setConfirmJs(null);
         void (async () => {
           let deleted = 0;
-          for (const r of failedResults) {
-            try { await deleteBookSource(r.id); deleted++; } catch { /* 单个失败继续 */ }
+          for (const s of invalidSources) {
+            try { await deleteBookSource(s.id); deleted++; } catch { /* 单个失败继续 */ }
           }
           setVerifyResults(null);
-          setImportMsg(`已删除 ${deleted} 个失败书源`);
+          setImportMsg(`已删除 ${deleted} 个失效书源`);
           await refresh();
         })();
       },
@@ -351,12 +354,12 @@ export default function BookSourceManager({ onDebug, onBack }: {
             {verifying && (
               <button className="btn btn-ghost" onClick={() => { cancelVerifyRef.current = true; }}>取消</button>
             )}
-            {!verifying && verifyResults && (
+            {!verifying && invalidSources.length > 0 && (
               <>
-                <button className="btn btn-primary" onClick={handleDeleteFailed} disabled={failedResults.length === 0}>
-                  删除失败源（{failedResults.length}）
+                <button className="btn btn-primary" onClick={handleDeleteInvalid}>
+                  删除失效源（{invalidSources.length}）
                 </button>
-                <span className="verify-summary">可用 {okCount} / {verifyResults.size}</span>
+                {verifyResults && <span className="verify-summary">可用 {okCount} / {verifyResults.size}</span>}
               </>
             )}
           </div>
