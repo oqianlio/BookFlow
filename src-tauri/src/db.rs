@@ -578,6 +578,34 @@ pub fn delete_book_cache(conn: &Connection, source_id: i64, book_url: &str) -> R
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct CacheSummary {
+    pub book_count: i64,
+    pub chapter_count: i64,
+    pub total_bytes: i64,
+}
+
+pub fn cache_summary(conn: &Connection) -> Result<CacheSummary> {
+    let book_count: i64 = conn.query_row(
+        "SELECT COUNT(DISTINCT source_id || '|' || book_url) FROM chapter_cache",
+        [], |r| r.get(0),
+    )?;
+    let chapter_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM chapter_cache",
+        [], |r| r.get(0),
+    )?;
+    let total_bytes: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(LENGTH(content)), 0) FROM chapter_cache",
+        [], |r| r.get(0),
+    )?;
+    Ok(CacheSummary { book_count, chapter_count, total_bytes })
+}
+
+pub fn clear_all_cache(conn: &Connection) -> Result<()> {
+    conn.execute("DELETE FROM chapter_cache", [])?;
+    Ok(())
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ReadingStats {
     pub source_id: i64,
     pub book_url: String,

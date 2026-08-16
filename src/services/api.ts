@@ -204,6 +204,14 @@ export async function deleteBookCache(sourceId: number, bookUrl: string): Promis
   await invoke("delete_book_cache", { sourceId, bookUrl });
 }
 
+export interface CacheSummary { book_count: number; chapter_count: number; total_bytes: number }
+export async function cacheSummary(): Promise<CacheSummary> {
+  return invoke<CacheSummary>("cache_summary");
+}
+export async function clearAllCache(): Promise<void> {
+  await invoke("clear_all_cache");
+}
+
 export interface ReadingStats {
   source_id: number; book_url: string; title: string;
   read_seconds: number; read_count: number; last_read_at: number | null;

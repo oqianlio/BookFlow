@@ -27,6 +27,8 @@ vi.mock("./services/api", () => ({
   listRssFeeds: vi.fn().mockResolvedValue([]),
   listFontFiles: vi.fn().mockResolvedValue([]),
   copyFontFile: vi.fn().mockResolvedValue({ name: "F", file: "F.ttf" }),
+  cacheSummary: vi.fn().mockResolvedValue({ book_count: 0, chapter_count: 0, total_bytes: 0 }),
+  clearAllCache: vi.fn().mockResolvedValue(undefined),
   listRssArticles: vi.fn().mockResolvedValue([]),
   addRssFeed: vi.fn().mockResolvedValue(1),
   deleteRssFeed: vi.fn().mockResolvedValue(undefined),

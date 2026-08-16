@@ -28,6 +28,8 @@ vi.mock("../services/api", () => ({
   setSetting: vi.fn().mockResolvedValue(undefined),
   copyFontFile: vi.fn().mockResolvedValue({ name: "MyFont", file: "MyFont_123.ttf" }),
   listFontFiles: vi.fn().mockResolvedValue([]),
+  cacheSummary: vi.fn().mockResolvedValue({ book_count: 3, chapter_count: 120, total_bytes: 5242880 }),
+  clearAllCache: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../services/fontFiles", () => ({
   injectFontFaces: vi.fn().mockResolvedValue([]),
@@ -83,5 +85,15 @@ describe("SettingsPage", () => {
     expect(readingSettings.saveReadingSettings).toHaveBeenCalledWith(
       expect.objectContaining({ fontFamily: "MyFont" }),
     );
+  });
+
+  it("shows cache summary and clears all cache with confirmation", async () => {
+    const api = await import("../services/api");
+    render(<SettingsPage />);
+    expect(await screen.findByText(/已缓存 120 章 \/ 3 本书 \/ 5.0 MB/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "清除全部缓存" }));
+    expect(screen.getByText(/将清除全部 120 章离线缓存/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
+    expect(api.clearAllCache).toHaveBeenCalled();
   });
 });

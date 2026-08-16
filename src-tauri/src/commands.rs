@@ -423,6 +423,16 @@ pub fn delete_book_cache(source_id: i64, book_url: String, state: State<'_, AppS
 }
 
 #[tauri::command]
+pub fn cache_summary(state: State<'_, AppState>) -> Result<crate::db::CacheSummary, String> {
+    crate::db::cache_summary(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn clear_all_cache(state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::clear_all_cache(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn record_read(source_id: i64, book_url: String, title: String, seconds: i64, increment_count: bool, state: State<'_, AppState>) -> Result<(), String> {
     crate::db::record_read(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url, &title, seconds, increment_count).map_err(|e| e.to_string())
 }

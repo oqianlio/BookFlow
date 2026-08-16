@@ -5,9 +5,16 @@ import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, type FontFileRow } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, type FontFileRow, type CacheSummary } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
 import { useError } from "../components/ErrorDialog";
+import ConfirmDialog from "../components/ConfirmDialog";
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
 
 export default function SettingsPage({ onOpenSourceManager }: {
   onOpenSourceManager?: () => void;
@@ -20,8 +27,13 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [customFg, setCustomFg] = useState("#2b2b2b");
   const [fonts, setFonts] = useState<FontFileRow[]>([]);
   const [fontBusy, setFontBusy] = useState(false);
+  const [cache, setCache] = useState<CacheSummary | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const { showError } = useError();
 
+  const refreshCache = () => {
+    void cacheSummary().then(setCache).catch(() => {});
+  };
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
     setFontSizeState(getFontSize());
@@ -32,7 +44,22 @@ export default function SettingsPage({ onOpenSourceManager }: {
       if (s.customFg) setCustomFg(s.customFg);
     });
     void listFontFiles().then(setFonts).catch(() => {});
+    refreshCache();
   }, []);
+
+  const confirmClearCache = () => {
+    if (!cache || cache.chapter_count === 0) return;
+    setConfirmClear(true);
+  };
+  const handleClearCache = async () => {
+    setConfirmClear(false);
+    try {
+      await clearAllCache();
+      refreshCache();
+    } catch (e) {
+      showError(String(e));
+    }
+  };
 
   const handleImportFont = async () => {
     if (fontBusy) return;
@@ -196,11 +223,29 @@ export default function SettingsPage({ onOpenSourceManager }: {
         </div>
         <div className="settings-group">
           <div>
+            <div className="label">章节缓存</div>
+            <div className="hint">
+              {cache ? `已缓存 ${cache.chapter_count} 章 / ${cache.book_count} 本书 / ${formatBytes(cache.total_bytes)}` : "加载中…"}
+            </div>
+          </div>
+          <button className="btn btn-soft" onClick={confirmClearCache} disabled={!cache || cache.chapter_count === 0}>
+            清除全部缓存
+          </button>
+        </div>
+        <div className="settings-group">
+          <div>
             <div className="label">关于</div>
             <div className="hint">枕书 · 基于 legado 3.0 规则的桌面阅读器</div>
           </div>
         </div>
       </div>
+      {confirmClear && (
+        <ConfirmDialog
+          message={`将清除全部 ${cache?.chapter_count ?? 0} 章离线缓存（${cache ? formatBytes(cache.total_bytes) : ""}），离线阅读将失效。继续？`}
+          onConfirm={() => void handleClearCache()}
+          onCancel={() => setConfirmClear(false)}
+        />
+      )}
     </div>
   );
 }
