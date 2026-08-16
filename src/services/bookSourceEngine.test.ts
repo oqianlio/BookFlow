@@ -346,6 +346,22 @@ $[*]`;
     expect(items.map((i) => i.name)).toEqual(["a", "b"]);
   });
 
+  it("extractSingle jsBlock without continuation returns js result (36xs content)", async () => {
+    // 正文规则：<js>…解码…txt;</js>（无 after），jsBlock 结果即正文
+    const rule = `<js>
+let txt = "";
+let regex = /<p>[^<]+<\\/p>/g;
+let match;
+while ((match = regex.exec(result)) !== null) { txt += match[0]; }
+txt;
+</js>`;
+    const html = `<div class="content"><p>斗之力，三段！</p><p>望着测验魔石碑</p></div>`;
+    const doc = parseHtml(html);
+    const out = await extractSingle(doc, rule, { result: html, sourceKey: "ex.com" });
+    expect(out).toContain("斗之力，三段！");
+    expect(out).toContain("望着测验魔石碑");
+  });
+
   it("chain A@js:code filters elements via result.toArray() (随心看 pattern)", async () => {
     const doc = parseHtml(`<ul>
       <li class="v-list-item"><a class="v-title" href="/a/">斗破苍穹</a></li>
