@@ -435,3 +435,27 @@
   行用 lastChapter 规则，没有时用目录尾章兜底（基本总有显示）。
 - 下次：加"参考原版"的 UI 前先问用户要哪些区块；长列表类
   区块先确认是否根本不需要展示。
+
+### 3.39 不可用源的调查与排除：App 签名认证 / 地区反爬（2026-08-16）
+- 场景：继续开发时处理遗留"打不开的源"。调查猫眼看书与辣小说网。
+- 猫眼看书（api.jmlldsc.com）：搜索 API 无需认证可用，但详情
+  `/novel/{id}`、章节接口全部要求 header 参数 `client-name`/
+  `client-version`/`client-device`/`client-brand`/`client-source`/
+  `alias-name`（从 H5 前端 chunk 逆向得到）。其中 `alias-name`
+  来自 App 内嵌 WebView URL（`packageName=...&aliasName=...`），
+  服务端做签名认证——**Web 客户端无法伪造**，连该站自己的 H5
+  都打不开详情（页面 JS 直接报错空白）。结论：仅搜索可用，
+  阅读链路断 → 禁用。
+- 辣小说网（txt520.org）：搜索表单参数正确（帝国CMS keyboard/
+  show/classid），但搜"三体"/"斗破"均"没有搜索到相关的内容"；
+  分类页只有导航无书列表；页面内嵌**中国大陆时区检测脚本**
+  （isChinaMainlandTimezone，校验 offset=-480 + 时区名）——地区
+  反爬。结论：搜索无结果 → 禁用。
+- 认知：**逆向 API 参数用 H5 前端 chunk 源码最直接**（webpack
+  chunk 文件直接下载分析，比盲试 header 名快得多）；服务端
+  "XX 不能为空"错误逐步消失 = 参数名被识别，500/4005 变化 =
+  值校验/认证问题。node 内置 `node:sqlite`（DatabaseSync）可
+  直接读写 reader.db，无需 sqlite3 CLI。
+- 下次：处理"打不开的源"先分类原因——反爬（地区/时区/UA）vs
+  签名认证（App 内嵌参数）vs 源已废；签名认证类直接排除，
+  不值得深入逆向。

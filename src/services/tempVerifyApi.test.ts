@@ -6,8 +6,9 @@ import * as api from "./api";
 import { parseBookSourceJson, resolveSearchUrl, extractBookList, resolveUrl, parseHtml } from "./bookSourceEngine";
 import { mergeUserAgent } from "./api";
 
+// 猫眼看书已禁用（App 签名认证，详情/目录打不开）
 const ENABLED = !!process.env.SOURCE_HEALTH;
-const TARGETS = ["丁丁小说🥉", "猫眼看书", "阅友小说", "疯读极速", "南极小说（优）", "🍅 番茄小说聚合API"];
+const TARGETS = ["丁丁小说🥉", "阅友小说", "疯读极速", "南极小说（优）", "🍅 番茄小说聚合API"];
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
