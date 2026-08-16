@@ -490,8 +490,31 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     return "";
   }
   if (parsed.value.startsWith("tag.")) {
-    const node = resolveTagIndex(parsed.value, doc);
+    const node = resolveTagIndex(parsed.value, doc) ?? queryIndexed(parsed.value, doc);
     return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
+  }
+  // 链式 A@B@C（如 class.recommend[-1]@a@text）：从文档起逐层下钻
+  if (parsed.value.includes("@")) {
+    const segs = parsed.value.split("@").map((s) => s.trim()).filter(Boolean);
+    if (segs.length > 1) {
+      const last = segs[segs.length - 1];
+      if (last.startsWith("js:")) {
+        const pre = segs.slice(0, -1);
+        let cur: Element | null = queryIndexed(pre[0], doc);
+        for (let i = 1; i < pre.length && cur; i++) cur = queryIndexed(pre[i], cur);
+        if (!cur) return "";
+        try {
+          return String(evalJs(last.slice(3), { doc, node: cur, result: "", baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+        } catch {
+          return "";
+        }
+      }
+      let cur: Element | null = queryIndexed(segs[0], doc);
+      for (let i = 1; i < segs.length && cur; i++) cur = queryIndexed(segs[i], cur);
+      return cur
+        ? finalize(applyReplacements(nodeValue(cur, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl)
+        : "";
+    }
   }
   const node = queryIndexed(parsed.value, doc);
   return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
@@ -765,7 +788,7 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string):
     return finalize(applyReplacements(nodeValue(el, parsed.attr), parsed.replace), parsed.attr, baseUrl);
   }
   if (parsed.value.startsWith("tag.")) {
-    const node = resolveTagIndex(parsed.value, el);
+    const node = resolveTagIndex(parsed.value, el) ?? queryIndexed(parsed.value, el);
     return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
   }
   // item 内链式规则（legado A@B@C，如 .row@a@text / .item@h3@href）：
@@ -849,6 +872,18 @@ export function queryIndexed(selector: string, scope: Document | Element): Eleme
     } catch {
       return null;
     }
+  }
+  // legado 括号索引：`class.recommend[-1]`（倒数第 1 个）/`.item[0]`（第 0 个）
+  const br = sel.match(/^(?:(?:tag\.)?)(.+?)\[(-?\d+)\]$/);
+  if (br) {
+    let nodes: NodeListOf<Element>;
+    try {
+      nodes = scope.querySelectorAll(normalizeSelector(br[1]));
+    } catch {
+      return null;
+    }
+    const i = parseInt(br[2], 10);
+    return nodes[i < 0 ? nodes.length + i : i] ?? null;
   }
   try {
     const hit = scope.querySelector(normalizeSelector(sel));

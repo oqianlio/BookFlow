@@ -1156,3 +1156,38 @@ describe("item-level chained rules A@B@C in extractFromElement", () => {
     expect(items[0].bookUrl).toBe("https://ex.com/b.html");
   });
 });
+
+describe("bracket index [N] / [-N] in selectors", () => {
+  const html = `<div class="recommend"><a>组1</a></div>
+<div class="recommend"><a>组2</a></div>
+<div class="recommend"><a>组3</a></div>
+<ul><li>行1</li><li>行2</li></ul>`;
+  const doc = parseHtml(html);
+
+  it("class.recommend[-1] picks the last matching element (legado negative index)", async () => {
+    expect(await extractSingle(doc, "class.recommend[-1]@a@text")).toBe("组3");
+  });
+
+  it("[0] picks the first match", async () => {
+    expect(await extractSingle(doc, "class.recommend[0]@a@text")).toBe("组1");
+  });
+
+  it("negative index from extractList chain segment", async () => {
+    const items = await extractList(doc, ".recommend@a[-1]", { name: "@text" });
+    // 每个 .recommend 内最后一个 a
+    expect(items.map((i) => i.name)).toEqual(["组1", "组2", "组3"]);
+  });
+
+  it("out-of-range index returns empty", async () => {
+    expect(await extractSingle(doc, "class.recommend[-9]@a@text")).toBe("");
+  });
+
+  it("tag.li[-1] with tag prefix", async () => {
+    expect(await extractSingle(doc, "tag.li[-1]@text")).toBe("行2");
+  });
+
+  it("attribute selectors with non-numeric content are untouched", async () => {
+    const d2 = parseHtml(`<a href="/x/">链接</a>`);
+    expect(await extractSingle(d2, "a[href]@text")).toBe("链接");
+  });
+});
