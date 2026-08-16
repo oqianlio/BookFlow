@@ -409,11 +409,11 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     }
   };
 
-  // ==== 本地书：键盘快捷键 ====
+  // ==== 键盘快捷键（Esc 全局关闭侧栏面板；本地书附加书签/标注快捷键） ====
   useEffect(() => {
-    if (!isLocal) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setPanel(null);
+      if (!isLocal) return;
       if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         const w = window as any;
@@ -561,6 +561,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             ["--read-bold" as any]: settings.bold ? 700 : 400,
             ["--read-fg" as any]: activeTheme.fg,
           }}
+          onClickCapture={(e) => {
+            // 面板开着：点正文任意处关闭（capture 先于翻页处理，避免同一次点击关面板又翻页）
+            if (panel) {
+              e.stopPropagation();
+              setPanel(null);
+            }
+          }}
           onClick={isLocal || isManga || !chapter.url || loading || failed ? () => setMenuVisible((v) => !v) : undefined}
         >
           {isLocal ? (
@@ -616,14 +623,17 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           )}
         </main>
         {isLocal && panel === "annotations" && (
-          <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} />
+          <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} onClose={() => setPanel(null)} />
         )}
         {isLocal && panel === "bookmarks" && (
-          <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
+          <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} onClose={() => setPanel(null)} />
         )}
         {!isLocal && panel === "toc" && (
           <div className="panel reader-toc-panel">
-            <h3>目录</h3>
+            <div className="panel-head">
+              <h3>目录</h3>
+              <button className="btn-icon panel-close" onClick={() => setPanel(null)} aria-label="关闭目录" title="关闭">×</button>
+            </div>
             {tocLoading && toc.length === 0 && <p className="panel-empty">加载中…</p>}
             {tocFailed && toc.length === 0 && (
               <div className="panel-empty">
@@ -660,7 +670,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         )}
         {panel === "settings" && (
           <div className="panel reader-settings-panel">
-            <h3>阅读设置</h3>
+            <div className="panel-head">
+              <h3>阅读设置</h3>
+              <button className="btn-icon panel-close" onClick={() => setPanel(null)} aria-label="关闭设置" title="关闭">×</button>
+            </div>
             {!isLocal && (
               <div className="settings-group">
                 <label className="settings-label">翻页模式</label>
