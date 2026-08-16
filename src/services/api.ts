@@ -325,3 +325,63 @@ export async function copyFontFile(src: string): Promise<FontFileRow> {
 export async function listFontFiles(): Promise<FontFileRow[]> {
   return invoke<FontFileRow[]>("list_font_files");
 }
+
+// ============ 书架分组 / 书单 ============
+
+export interface ShelfGroup {
+  id: number; name: string; member_count: number; created_at: number;
+}
+export interface ShelfMember { item_kind: "local" | "source"; item_id: number }
+
+export async function listShelfGroups(): Promise<ShelfGroup[]> {
+  return invoke<ShelfGroup[]>("list_shelf_groups");
+}
+export async function createShelfGroup(name: string): Promise<number> {
+  return invoke<number>("create_shelf_group", { name });
+}
+export async function renameShelfGroup(id: number, name: string): Promise<void> {
+  await invoke("rename_shelf_group", { id, name });
+}
+export async function deleteShelfGroup(id: number): Promise<void> {
+  await invoke("delete_shelf_group", { id });
+}
+export async function setShelfGroupMembers(groupId: number, members: ShelfMember[]): Promise<void> {
+  await invoke("set_shelf_group_members", { groupId, members });
+}
+export async function addShelfGroupMembers(groupId: number, members: ShelfMember[]): Promise<void> {
+  await invoke("add_shelf_group_members", { groupId, members });
+}
+export async function removeShelfGroupMembers(groupId: number, members: ShelfMember[]): Promise<void> {
+  await invoke("remove_shelf_group_members", { groupId, members });
+}
+export async function listShelfGroupMembers(groupId: number): Promise<ShelfMember[]> {
+  return invoke<ShelfMember[]>("list_shelf_group_members", { groupId });
+}
+/** 批量移除书架条目（混合 local/source）；返回被删的本地书 id */
+export async function removeShelfItems(items: ShelfMember[]): Promise<number[]> {
+  return invoke<number[]>("remove_shelf_items", { items });
+}
+
+export interface BookList {
+  id: number; name: string; description: string | null; item_count: number; created_at: number;
+}
+export interface BookListItem { item_kind: "local" | "source"; item_id: number; added_at: number }
+
+export async function listBookLists(): Promise<BookList[]> {
+  return invoke<BookList[]>("list_book_lists");
+}
+export async function createBookList(name: string, description?: string): Promise<number> {
+  return invoke<number>("create_book_list", { name, description: description ?? null });
+}
+export async function deleteBookList(id: number): Promise<void> {
+  await invoke("delete_book_list", { id });
+}
+export async function addBookListItem(listId: number, itemKind: "local" | "source", itemId: number): Promise<void> {
+  await invoke("add_book_list_item", { listId, itemKind, itemId });
+}
+export async function removeBookListItem(listId: number, itemKind: "local" | "source", itemId: number): Promise<void> {
+  await invoke("remove_book_list_item", { listId, itemKind, itemId });
+}
+export async function listBookListItems(listId: number): Promise<BookListItem[]> {
+  return invoke<BookListItem[]>("list_book_list_items", { listId });
+}

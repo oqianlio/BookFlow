@@ -23,6 +23,9 @@ beforeEach(() => {
   vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([]);
   vi.spyOn(api, "getProgress").mockResolvedValue(null);
   vi.spyOn(api, "getBookSourceProgress").mockResolvedValue(null);
+  vi.spyOn(api, "listShelfGroups").mockResolvedValue([]);
+  vi.spyOn(api, "listBookLists").mockResolvedValue([]);
+  vi.spyOn(api, "removeShelfItems").mockResolvedValue([]);
   vi.mocked(fetchToc).mockResolvedValue({
     info: { title: "", author: "", intro: "", coverUrl: "" },
     toc: [],
@@ -110,12 +113,12 @@ describe("LibraryPage", () => {
   it("removes a source book from the shelf after confirming", async () => {
     vi.spyOn(api, "listBooks").mockResolvedValue([]);
     vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
-    const spy = vi.spyOn(api, "removeShelfSourceBook").mockResolvedValue(undefined);
+    const spy = vi.spyOn(api, "removeShelfItems").mockResolvedValue([]);
     render(<LibraryPage onOpenBook={() => {}} />);
     await userEvent.click(await screen.findByRole("button", { name: "删除 球状闪电" }));
     // 自定义确认框：确定后执行删除
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
-    expect(spy).toHaveBeenCalledWith(9);
+    expect(spy).toHaveBeenCalledWith([{ item_kind: "source", item_id: 9 }]);
   });
 
   it("shows current and latest chapter for source books in list mode", async () => {
@@ -149,5 +152,103 @@ describe("LibraryPage", () => {
     expect(document.querySelector(".book-list")).not.toBeNull();
     expect(document.querySelectorAll(".book-card-list").length).toBe(2);
     expect(localStorage.getItem("library.layout")).toBe("list");
+  });
+});
+
+describe("LibraryPage 分组/多选/书单", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([]);
+    vi.spyOn(api, "getProgress").mockResolvedValue(null);
+    vi.spyOn(api, "getBookSourceProgress").mockResolvedValue(null);
+    vi.spyOn(api, "listShelfGroups").mockResolvedValue([]);
+    vi.spyOn(api, "listBookLists").mockResolvedValue([]);
+    vi.spyOn(api, "removeShelfItems").mockResolvedValue([]);
+    vi.mocked(fetchToc).mockResolvedValue({
+      info: { title: "", author: "", intro: "", coverUrl: "" },
+      toc: [],
+    });
+  });
+
+  it("shows group chips and filters by group", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    vi.spyOn(api, "listShelfGroups").mockResolvedValue([{ id: 1, name: "科幻", member_count: 1, created_at: 1 }]);
+    vi.spyOn(api, "listShelfGroupMembers").mockResolvedValue([{ item_kind: "local", item_id: 1 }]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    expect(await screen.findByText("三体")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "科幻" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "科幻" }));
+    // 只有三体（id 1 在组内）；算法导论被过滤
+    expect(screen.getByText("三体")).toBeInTheDocument();
+    expect(screen.queryByText("算法导论")).not.toBeInTheDocument();
+    // 默认分组 = 不在任何组的书
+    await userEvent.click(screen.getByRole("button", { name: "默认" }));
+    expect(screen.queryByText("三体")).not.toBeInTheDocument();
+    expect(screen.getByText("算法导论")).toBeInTheDocument();
+  });
+
+  it("creates a group via the manager dialog", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    const createSpy = vi.spyOn(api, "createShelfGroup").mockResolvedValue(5);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText(/书架空空如也/);
+    await userEvent.click(screen.getByRole("button", { name: "管理分组" }));
+    await userEvent.type(screen.getByPlaceholderText("新分组名称"), "修仙");
+    await userEvent.click(screen.getByRole("button", { name: /新建/ }));
+    expect(createSpy).toHaveBeenCalledWith("修仙");
+  });
+
+  it("batch selects books and moves them to a group", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    vi.spyOn(api, "listShelfGroups").mockResolvedValue([{ id: 2, name: "科幻", member_count: 0, created_at: 1 }]);
+    vi.spyOn(api, "listShelfGroupMembers").mockResolvedValue([]);
+    const addSpy = vi.spyOn(api, "addShelfGroupMembers").mockResolvedValue(undefined);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    // 进入多选：点「多选」按钮，然后点卡片切换勾选
+    await userEvent.click(screen.getByRole("button", { name: "多选" }));
+    await userEvent.click(screen.getByRole("button", { name: "选择 三体" }));
+    await userEvent.click(screen.getByRole("button", { name: "选择 算法导论" }));
+    expect(screen.getByText("2 本")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "移动到分组" }));
+    // 弹窗中的分组行（名字 + 本数），避免与顶部分组 chip 同名冲突
+    await userEvent.click(screen.getByRole("button", { name: "科幻0 本" }));
+    expect(addSpy).toHaveBeenCalledWith(2, [
+      { item_kind: "local", item_id: 1 },
+      { item_kind: "local", item_id: 2 },
+    ]);
+  });
+
+  it("creates a book list and shows it in the lists view", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    const createSpy = vi.spyOn(api, "createBookList").mockResolvedValue(7);
+    const addSpy = vi.spyOn(api, "addBookListItem").mockResolvedValue(undefined);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    // 卡片菜单 → 加入书单 → 新建书单
+    await userEvent.click(screen.getByRole("button", { name: "更多操作 三体" }));
+    await userEvent.click(screen.getByRole("button", { name: "加入书单" }));
+    await userEvent.click(screen.getByRole("button", { name: /新建书单/ }));
+    await userEvent.type(screen.getByPlaceholderText("书单名称（必填）"), "年度必读");
+    await userEvent.click(screen.getByRole("button", { name: "创建并加入" }));
+    expect(createSpy).toHaveBeenCalledWith("年度必读", undefined);
+    expect(addSpy).toHaveBeenCalledWith(7, "local", 1);
+  });
+
+  it("batch removes books after confirming", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    const spy = vi.spyOn(api, "removeShelfItems").mockResolvedValue([]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    await userEvent.click(screen.getByRole("button", { name: "多选" }));
+    await userEvent.click(screen.getByRole("button", { name: "选择 三体" }));
+    await userEvent.click(screen.getByRole("button", { name: "选择 算法导论" }));
+    await userEvent.click(screen.getByRole("button", { name: "移除" }));
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
+    expect(spy).toHaveBeenCalledWith([
+      { item_kind: "local", item_id: 1 },
+      { item_kind: "local", item_id: 2 },
+    ]);
   });
 });

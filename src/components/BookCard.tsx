@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import type { Book, ShelfSourceBook } from "../services/api";
 import { coverUrl, getProgress, getBookSourceProgress } from "../services/api";
 import { fetchToc } from "../services/sourceToc";
+import { CheckIcon } from "./icons";
 
 export type ShelfItem =
   | { kind: "local"; book: Book }
@@ -37,9 +38,14 @@ export function formatRelativeTime(ts: number, now: number = Math.floor(Date.now
 
 export type BookCardLayout = "grid" | "list";
 
-function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
+function BookCard({ item, onOpen, onRemove, layout = "grid", selectable = false, selected = false, onToggleSelect, onMenu }: {
   item: ShelfItem; onOpen: (item: ShelfItem) => void; onRemove?: (item: ShelfItem) => void;
   layout?: BookCardLayout;
+  /** 多选模式：点击切换勾选而非打开 */
+  selectable?: boolean; selected?: boolean;
+  onToggleSelect?: (item: ShelfItem) => void;
+  /** 更多菜单（移动到分组 / 加入书单 / 移除书架） */
+  onMenu?: (item: ShelfItem, e: React.MouseEvent) => void;
 }) {
   const title = item.kind === "local" ? item.book.title : item.sb.title;
   // 副行左侧：本地书显示格式标签，在线书统一显示「在线」（不暴露具体书源）
@@ -50,6 +56,19 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
   onOpenRef.current = onOpen;
   const onRemoveRef = useRef(onRemove);
   onRemoveRef.current = onRemove;
+  const onToggleSelectRef = useRef(onToggleSelect);
+  onToggleSelectRef.current = onToggleSelect;
+  const onMenuRef = useRef(onMenu);
+  onMenuRef.current = onMenu;
+
+  const handleActivate = (e?: React.MouseEvent) => {
+    if (selectable) {
+      e?.stopPropagation();
+      onToggleSelectRef.current?.(item);
+      return;
+    }
+    onOpenRef.current(item);
+  };
 
   // 本地书阅读进度（懒加载，读完显示百分比 + 封面进度条）
   const [percent, setPercent] = useState<number | null>(null);
@@ -120,13 +139,18 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
   if (layout === "list") {
     return (
       <div
-        className="book-card book-card-list"
-        onClick={() => onOpenRef.current(item)}
+        className={`book-card book-card-list${selected ? " selected" : ""}`}
+        onClick={() => handleActivate()}
         onKeyDown={handleKey}
         role="button"
         tabIndex={0}
-        aria-label={`打开 ${title}`}
+        aria-label={`${selectable ? "选择" : "打开"} ${title}`}
       >
+        {selectable && (
+          <span className={`select-box${selected ? " on" : ""}`} aria-hidden>
+            {selected && <CheckIcon size={12} />}
+          </span>
+        )}
         <div className="book-cover-wrap book-list-cover">
           {cover}
         </div>
@@ -144,12 +168,20 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
             {extra && <span className="progress">{extra}</span>}
           </div>
         </div>
-        {onRemove && (
+        {onRemove && !selectable && (
           <button
             className="book-remove"
             onClick={(e) => { e.stopPropagation(); onRemoveRef.current?.(item); }}
             aria-label={`删除 ${title}`}
           >×</button>
+        )}
+        {onMenu && !selectable && (
+          <button
+            className="book-menu"
+            onClick={(e) => { e.stopPropagation(); onMenuRef.current?.(item, e); }}
+            aria-label={`更多操作 ${title}`}
+            title="更多操作"
+          >⋯</button>
         )}
       </div>
     );
@@ -157,13 +189,18 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
 
   return (
     <div
-      className="book-card"
-      onClick={() => onOpenRef.current(item)}
+      className={`book-card${selected ? " selected" : ""}`}
+      onClick={() => handleActivate()}
       onKeyDown={handleKey}
       role="button"
       tabIndex={0}
-      aria-label={`打开 ${title}`}
+      aria-label={`${selectable ? "选择" : "打开"} ${title}`}
     >
+      {selectable && (
+        <span className={`select-box${selected ? " on" : ""}`} aria-hidden>
+          {selected && <CheckIcon size={12} />}
+        </span>
+      )}
       <div className="book-cover-wrap">
         {cover}
       </div>
@@ -175,16 +212,25 @@ function BookCard({ item, onOpen, onRemove, layout = "grid" }: {
           </div>
         )}
       </div>
-      {onRemove && (
+      {onRemove && !selectable && (
         <button
           className="book-remove"
           onClick={(e) => { e.stopPropagation(); onRemoveRef.current?.(item); }}
           aria-label={`删除 ${title}`}
         >×</button>
       )}
+      {onMenu && !selectable && (
+        <button
+          className="book-menu"
+          onClick={(e) => { e.stopPropagation(); onMenuRef.current?.(item, e); }}
+          aria-label={`更多操作 ${title}`}
+          title="更多操作"
+        >⋯</button>
+      )}
     </div>
   );
 }
 
 // 书架大列表：仅当 item/layout 引用变化时重渲染（回调经 ref 保持最新）
-export default memo(BookCard, (a, b) => a.item === b.item && a.layout === b.layout);
+export default memo(BookCard, (a, b) =>
+  a.item === b.item && a.layout === b.layout && a.selectable === b.selectable && a.selected === b.selected);

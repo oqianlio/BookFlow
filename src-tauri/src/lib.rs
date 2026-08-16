@@ -67,6 +67,11 @@ pub fn run() {
             add_subscription, list_subscriptions, delete_subscription,
             set_subscription_checked, get_source_by_url, write_text_file,
             copy_font_file, list_font_files,
+            list_shelf_groups, create_shelf_group, rename_shelf_group, delete_shelf_group,
+            set_shelf_group_members, add_shelf_group_members, remove_shelf_group_members,
+            list_shelf_group_members, remove_shelf_items,
+            list_book_lists, create_book_list, delete_book_list,
+            add_book_list_item, remove_book_list_item, list_book_list_items,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

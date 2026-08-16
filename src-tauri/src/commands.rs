@@ -651,3 +651,123 @@ pub fn list_font_files(state: State<'_, AppState>) -> Result<Vec<FontFileRow>, S
     }
     Ok(out)
 }
+
+// ============ 书架分组 / 书单 ============
+
+#[tauri::command]
+pub fn list_shelf_groups(state: State<'_, AppState>) -> Result<Vec<crate::db::ShelfGroup>, String> {
+    crate::db::list_shelf_groups(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_shelf_group(name: String, state: State<'_, AppState>) -> Result<i64, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() { return Err("分组名称不能为空".to_string()); }
+    crate::db::create_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name).map_err(|e| friendly_unique_error(e))
+}
+
+#[tauri::command]
+pub fn rename_shelf_group(id: i64, name: String, state: State<'_, AppState>) -> Result<(), String> {
+    let name = name.trim().to_string();
+    if name.is_empty() { return Err("分组名称不能为空".to_string()); }
+    crate::db::rename_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, &name).map_err(|e| friendly_unique_error(e))
+}
+
+#[tauri::command]
+pub fn delete_shelf_group(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::delete_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Deserialize)]
+pub struct ShelfMemberInput {
+    pub item_kind: String,
+    pub item_id: i64,
+}
+
+#[tauri::command]
+pub fn set_shelf_group_members(group_id: i64, members: Vec<ShelfMemberInput>, state: State<'_, AppState>) -> Result<(), String> {
+    let ms: Vec<crate::db::ShelfMember> = members.into_iter().map(|m| crate::db::ShelfMember { item_kind: m.item_kind, item_id: m.item_id }).collect();
+    crate::db::set_shelf_group_members(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, group_id, &ms).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_shelf_group_members(group_id: i64, members: Vec<ShelfMemberInput>, state: State<'_, AppState>) -> Result<(), String> {
+    let ms: Vec<crate::db::ShelfMember> = members.into_iter().map(|m| crate::db::ShelfMember { item_kind: m.item_kind, item_id: m.item_id }).collect();
+    crate::db::add_shelf_group_members(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, group_id, &ms).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn remove_shelf_group_members(group_id: i64, members: Vec<ShelfMemberInput>, state: State<'_, AppState>) -> Result<(), String> {
+    let ms: Vec<crate::db::ShelfMember> = members.into_iter().map(|m| crate::db::ShelfMember { item_kind: m.item_kind, item_id: m.item_id }).collect();
+    crate::db::remove_shelf_group_members(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, group_id, &ms).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_shelf_group_members(group_id: i64, state: State<'_, AppState>) -> Result<Vec<crate::db::ShelfMember>, String> {
+    crate::db::list_shelf_group_members(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, group_id).map_err(|e| e.to_string())
+}
+
+/// 批量移除书架条目（local=本地书 / source=在线书架书）；返回被删的本地书 id（调用方删文件+索引）
+#[tauri::command]
+pub fn remove_shelf_items(items: Vec<ShelfMemberInput>, state: State<'_, AppState>) -> Result<Vec<i64>, String> {
+    let ms: Vec<crate::db::ShelfMember> = items.into_iter().map(|m| crate::db::ShelfMember { item_kind: m.item_kind, item_id: m.item_id }).collect();
+    let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
+    let deleted = crate::db::remove_shelf_items(&conn, &ms).map_err(|e| e.to_string())?;
+    drop(conn);
+    // 删除本地书文件 + 封面 + 全文索引
+    for id in &deleted {
+        if let Ok(path) = state.with_db(|c| crate::db::get_book(c, *id).map_err(|e| e.to_string())) {
+            if let Some(path) = path {
+                let _ = std::fs::remove_file(&path.path);
+                let _ = std::fs::remove_file(format!("{}.jpg", path.path));
+                if let Some(cp) = &path.cover_path {
+                    let _ = std::fs::remove_file(cp);
+                }
+            }
+        }
+        if let Err(e) = crate::search::delete_book_from_index(&state.app_data_dir, *id) {
+            eprintln!("删除索引条目失败 book_id={id}: {e}");
+        }
+    }
+    Ok(deleted)
+}
+
+fn friendly_unique_error(e: impl ToString) -> String {
+    let s = e.to_string();
+    if s.contains("UNIQUE") || s.contains("constraint") { "分组名称已存在".to_string() } else { s }
+}
+
+// ============ 书单 ============
+
+#[tauri::command]
+pub fn list_book_lists(state: State<'_, AppState>) -> Result<Vec<crate::db::BookList>, String> {
+    crate::db::list_book_lists(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn create_book_list(name: String, description: Option<String>, state: State<'_, AppState>) -> Result<i64, String> {
+    let name = name.trim().to_string();
+    if name.is_empty() { return Err("书单名称不能为空".to_string()); }
+    let desc = description.map(|d| d.trim().to_string()).filter(|d| !d.is_empty());
+    crate::db::create_book_list(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name, desc.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_book_list(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::delete_book_list(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn add_book_list_item(list_id: i64, item_kind: String, item_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::add_book_list_item(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, list_id, &item_kind, item_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn remove_book_list_item(list_id: i64, item_kind: String, item_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::remove_book_list_item(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, list_id, &item_kind, item_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn list_book_list_items(list_id: i64, state: State<'_, AppState>) -> Result<Vec<crate::db::BookListItem>, String> {
+    crate::db::list_book_list_items(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, list_id).map_err(|e| e.to_string())
+}

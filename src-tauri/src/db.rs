@@ -181,6 +181,34 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             url TEXT NOT NULL UNIQUE,
             last_checked_at INTEGER
         );
+        CREATE TABLE IF NOT EXISTS shelf_groups (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS shelf_group_members (
+            group_id INTEGER NOT NULL REFERENCES shelf_groups(id) ON DELETE CASCADE,
+            item_kind TEXT NOT NULL,
+            item_id INTEGER NOT NULL,
+            added_at INTEGER NOT NULL,
+            PRIMARY KEY (group_id, item_kind, item_id)
+        );
+        CREATE TABLE IF NOT EXISTS book_lists (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS book_list_items (
+            list_id INTEGER NOT NULL REFERENCES book_lists(id) ON DELETE CASCADE,
+            item_kind TEXT NOT NULL,
+            item_id INTEGER NOT NULL,
+            added_at INTEGER NOT NULL,
+            sort INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (list_id, item_kind, item_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_shelf_group_members_kind ON shelf_group_members(item_kind, item_id);
+        CREATE INDEX IF NOT EXISTS idx_book_list_items_kind ON book_list_items(item_kind, item_id);
         "#,
     )?;
     Ok(conn)
@@ -822,5 +850,286 @@ pub fn get_source_by_url_db(conn: &Connection, url: &str) -> Result<Option<Sourc
         }))
     } else {
         Ok(None)
+    }
+}
+
+// ============ 书架分组 ============
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ShelfGroup {
+    pub id: i64,
+    pub name: String,
+    pub member_count: i64,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ShelfMember {
+    pub item_kind: String,
+    pub item_id: i64,
+}
+
+pub fn create_shelf_group(conn: &Connection, name: &str) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO shelf_groups (name, created_at) VALUES (?1, ?2)",
+        params![name, now()],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn rename_shelf_group(conn: &Connection, id: i64, name: &str) -> Result<()> {
+    conn.execute("UPDATE shelf_groups SET name=?1 WHERE id=?2", params![name, id])?;
+    Ok(())
+}
+
+pub fn delete_shelf_group(conn: &Connection, id: i64) -> Result<()> {
+    // 成员级联删除（ON DELETE CASCADE）
+    conn.execute("DELETE FROM shelf_groups WHERE id=?1", [id])?;
+    Ok(())
+}
+
+pub fn list_shelf_groups(conn: &Connection) -> Result<Vec<ShelfGroup>> {
+    let mut stmt = conn.prepare(
+        "SELECT g.id, g.name, g.created_at,
+                (SELECT COUNT(*) FROM shelf_group_members m WHERE m.group_id = g.id) AS cnt
+         FROM shelf_groups g ORDER BY g.created_at",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(ShelfGroup {
+            id: r.get(0)?, name: r.get(1)?, created_at: r.get(2)?,
+            member_count: r.get(3)?,
+        })
+    })?;
+    rows.collect()
+}
+
+/// 全量覆盖式设置组成员（先清空再插入）
+pub fn set_shelf_group_members(conn: &Connection, group_id: i64, members: &[ShelfMember]) -> Result<()> {
+    conn.execute("DELETE FROM shelf_group_members WHERE group_id=?1", [group_id])?;
+    let t = now();
+    for m in members {
+        conn.execute(
+            "INSERT OR IGNORE INTO shelf_group_members (group_id, item_kind, item_id, added_at) VALUES (?1,?2,?3,?4)",
+            params![group_id, m.item_kind, m.item_id, t],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn add_shelf_group_members(conn: &Connection, group_id: i64, members: &[ShelfMember]) -> Result<()> {
+    let t = now();
+    for m in members {
+        conn.execute(
+            "INSERT OR IGNORE INTO shelf_group_members (group_id, item_kind, item_id, added_at) VALUES (?1,?2,?3,?4)",
+            params![group_id, m.item_kind, m.item_id, t],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn remove_shelf_group_members(conn: &Connection, group_id: i64, members: &[ShelfMember]) -> Result<()> {
+    for m in members {
+        conn.execute(
+            "DELETE FROM shelf_group_members WHERE group_id=?1 AND item_kind=?2 AND item_id=?3",
+            params![group_id, m.item_kind, m.item_id],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn list_shelf_group_members(conn: &Connection, group_id: i64) -> Result<Vec<ShelfMember>> {
+    let mut stmt = conn.prepare(
+        "SELECT item_kind, item_id FROM shelf_group_members WHERE group_id=?1 ORDER BY added_at",
+    )?;
+    let rows = stmt.query_map([group_id], |r| {
+        Ok(ShelfMember { item_kind: r.get(0)?, item_id: r.get(1)? })
+    })?;
+    rows.collect()
+}
+
+/// 批量移除书架条目（本地书 + 在线书架书）。本地书删除会同步清索引（调用方负责删文件）。
+pub fn remove_shelf_items(conn: &Connection, items: &[ShelfMember]) -> Result<Vec<i64>> {
+    let mut deleted_local: Vec<i64> = Vec::new();
+    for it in items {
+        match it.item_kind.as_str() {
+            "local" => {
+                delete_book(conn, it.item_id)?;
+                deleted_local.push(it.item_id);
+            }
+            "source" => {
+                remove_shelf_source_book(conn, it.item_id)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(deleted_local)
+}
+
+// ============ 书单 ============
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BookList {
+    pub id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub item_count: i64,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BookListItem {
+    pub item_kind: String,
+    pub item_id: i64,
+    pub added_at: i64,
+}
+
+pub fn create_book_list(conn: &Connection, name: &str, description: Option<&str>) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO book_lists (name, description, created_at) VALUES (?1, ?2, ?3)",
+        params![name, description, now()],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn delete_book_list(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute("DELETE FROM book_lists WHERE id=?1", [id])?;
+    Ok(())
+}
+
+pub fn list_book_lists(conn: &Connection) -> Result<Vec<BookList>> {
+    let mut stmt = conn.prepare(
+        "SELECT l.id, l.name, l.description, l.created_at,
+                (SELECT COUNT(*) FROM book_list_items i WHERE i.list_id = l.id) AS cnt
+         FROM book_lists l ORDER BY l.created_at",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok(BookList {
+            id: r.get(0)?, name: r.get(1)?, description: r.get(2)?,
+            created_at: r.get(3)?, item_count: r.get(4)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn add_book_list_item(conn: &Connection, list_id: i64, kind: &str, item_id: i64) -> Result<()> {
+    let sort: i64 = conn.query_row(
+        "SELECT COALESCE(MAX(sort), 0) + 1 FROM book_list_items WHERE list_id=?1",
+        [list_id],
+        |r| r.get(0),
+    )?;
+    conn.execute(
+        "INSERT OR IGNORE INTO book_list_items (list_id, item_kind, item_id, added_at, sort) VALUES (?1,?2,?3,?4,?5)",
+        params![list_id, kind, item_id, now(), sort],
+    )?;
+    Ok(())
+}
+
+pub fn remove_book_list_item(conn: &Connection, list_id: i64, kind: &str, item_id: i64) -> Result<()> {
+    conn.execute(
+        "DELETE FROM book_list_items WHERE list_id=?1 AND item_kind=?2 AND item_id=?3",
+        params![list_id, kind, item_id],
+    )?;
+    Ok(())
+}
+
+pub fn list_book_list_items(conn: &Connection, list_id: i64) -> Result<Vec<BookListItem>> {
+    let mut stmt = conn.prepare(
+        "SELECT item_kind, item_id, added_at FROM book_list_items WHERE list_id=?1 ORDER BY sort",
+    )?;
+    let rows = stmt.query_map([list_id], |r| {
+        Ok(BookListItem { item_kind: r.get(0)?, item_id: r.get(1)?, added_at: r.get(2)? })
+    })?;
+    rows.collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_conn() -> Connection {
+        let dir = tempfile::tempdir().unwrap();
+        init_db(dir.path().join("test.db")).unwrap()
+    }
+
+    #[test]
+    fn shelf_group_crud_and_members() {
+        let conn = test_conn();
+        let g1 = create_shelf_group(&conn, "科幻").unwrap();
+        let g2 = create_shelf_group(&conn, "网络文学").unwrap();
+        assert!(create_shelf_group(&conn, "科幻").is_err()); // UNIQUE
+
+        // 成员增删
+        let members = vec![
+            ShelfMember { item_kind: "local".into(), item_id: 1 },
+            ShelfMember { item_kind: "source".into(), item_id: 2 },
+        ];
+        add_shelf_group_members(&conn, g1, &members).unwrap();
+        add_shelf_group_members(&conn, g1, &members).unwrap(); // 幂等
+        assert_eq!(list_shelf_group_members(&conn, g1).unwrap().len(), 2);
+
+        // 全量覆盖
+        set_shelf_group_members(&conn, g1, &[ShelfMember { item_kind: "local".into(), item_id: 9 }]).unwrap();
+        let ms = list_shelf_group_members(&conn, g1).unwrap();
+        assert_eq!(ms.len(), 1);
+        assert_eq!(ms[0].item_id, 9);
+
+        // 删除分组级联清成员
+        delete_shelf_group(&conn, g1).unwrap();
+        assert!(list_shelf_group_members(&conn, g1).unwrap().is_empty());
+
+        // 分组列表含成员数
+        let groups = list_shelf_groups(&conn).unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].id, g2);
+        assert_eq!(groups[0].name, "网络文学");
+    }
+
+    #[test]
+    fn book_list_crud_and_items() {
+        let conn = test_conn();
+        let l1 = create_book_list(&conn, "2026 必读", Some("年度书单")).unwrap();
+        let l2 = create_book_list(&conn, "三体", None).unwrap();
+
+        add_book_list_item(&conn, l1, "local", 1).unwrap();
+        add_book_list_item(&conn, l1, "local", 2).unwrap();
+        add_book_list_item(&conn, l1, "source", 5).unwrap();
+        add_book_list_item(&conn, l1, "local", 1).unwrap(); // 幂等
+
+        let items = list_book_list_items(&conn, l1).unwrap();
+        assert_eq!(items.len(), 3);
+
+        remove_book_list_item(&conn, l1, "local", 2).unwrap();
+        assert_eq!(list_book_list_items(&conn, l1).unwrap().len(), 2);
+
+        let lists = list_book_lists(&conn).unwrap();
+        assert_eq!(lists.len(), 2);
+        let l1row = lists.iter().find(|l| l.id == l1).unwrap();
+        assert_eq!(l1row.item_count, 2);
+        assert_eq!(l1row.description.as_deref(), Some("年度书单"));
+
+        delete_book_list(&conn, l1).unwrap();
+        assert!(list_book_list_items(&conn, l1).unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_shelf_items_mixed() {
+        let conn = test_conn();
+        // 造一条本地书与一条在线书架书
+        let bid = upsert_book(&conn, &NewBook {
+            title: "本地书".into(), format: "txt".into(), path: "/tmp/x.txt".into(), cover_path: None,
+        }).unwrap();
+        let sid = add_source(&conn, "示例源", "https://ex.com", "{}").unwrap();
+        add_shelf_source_book(&conn, &NewShelfSourceBook {
+            source_id: sid, book_url: "https://ex.com/b".into(),
+            title: "在线书".into(), author: None, cover_url: None,
+        }).unwrap();
+
+        let deleted = remove_shelf_items(&conn, &[
+            ShelfMember { item_kind: "local".into(), item_id: bid },
+            ShelfMember { item_kind: "source".into(), item_id: 1 },
+        ]).unwrap();
+        assert_eq!(deleted, vec![bid]);
+        assert!(list_books(&conn).unwrap().is_empty());
+        assert!(list_shelf_source_books(&conn).unwrap().is_empty());
     }
 }
