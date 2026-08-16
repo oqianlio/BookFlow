@@ -5,7 +5,7 @@ import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, exportDiagnostics, type FontFileRow, type CacheSummary } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, type FontFileRow, type CacheSummary, type CachedBook } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -29,6 +29,8 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [fonts, setFonts] = useState<FontFileRow[]>([]);
   const [fontBusy, setFontBusy] = useState(false);
   const [cache, setCache] = useState<CacheSummary | null>(null);
+  const [cachedBooks, setCachedBooks] = useState<CachedBook[]>([]);
+  const [showCachedBooks, setShowCachedBooks] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDevLog, setShowDevLog] = useState(false);
   const [diagBusy, setDiagBusy] = useState(false);
@@ -50,6 +52,7 @@ export default function SettingsPage({ onOpenSourceManager }: {
 
   const refreshCache = () => {
     void cacheSummary().then(setCache).catch(() => {});
+    void listCachedBooks().then(setCachedBooks).catch(() => {});
   };
   useEffect(() => {
     void initTheme().then(() => setThemeState(getTheme()));
@@ -72,6 +75,15 @@ export default function SettingsPage({ onOpenSourceManager }: {
     setConfirmClear(false);
     try {
       await clearAllCache();
+      refreshCache();
+    } catch (e) {
+      showError(String(e));
+    }
+  };
+
+  const handleDeleteBookCache = async (b: CachedBook) => {
+    try {
+      await deleteBookCache(b.source_id, b.book_url);
       refreshCache();
     } catch (e) {
       showError(String(e));
@@ -245,9 +257,25 @@ export default function SettingsPage({ onOpenSourceManager }: {
               {cache ? `已缓存 ${cache.chapter_count} 章 / ${cache.book_count} 本书 / ${formatBytes(cache.total_bytes)}` : "加载中…"}
             </div>
           </div>
-          <button className="btn btn-soft" onClick={confirmClearCache} disabled={!cache || cache.chapter_count === 0}>
-            清除全部缓存
-          </button>
+          <div className="settings-group-actions">
+            <button className="btn btn-soft" onClick={() => setShowCachedBooks((s) => !s)} disabled={!cache || cache.book_count === 0}>
+              {showCachedBooks ? "收起明细" : "查看明细"}
+            </button>
+            <button className="btn btn-soft" onClick={confirmClearCache} disabled={!cache || cache.chapter_count === 0}>
+              清除全部缓存
+            </button>
+          </div>
+          {showCachedBooks && cachedBooks.length > 0 && (
+            <ul className="cache-books-list">
+              {cachedBooks.map((b) => (
+                <li key={`${b.source_id}:${b.book_url}`}>
+                  <span className="cache-book-title" title={b.book_url}>{b.title}</span>
+                  <span className="cache-book-meta">{b.chapter_count} 章 · {formatBytes(b.bytes)}</span>
+                  <button className="btn btn-ghost" onClick={() => void handleDeleteBookCache(b)}>清除</button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="settings-group">
           <div>

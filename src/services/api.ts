@@ -242,8 +242,15 @@ export async function deleteBookCache(sourceId: number, bookUrl: string): Promis
 }
 
 export interface CacheSummary { book_count: number; chapter_count: number; total_bytes: number }
+export interface CachedBook {
+  source_id: number; book_url: string; title: string;
+  chapter_count: number; bytes: number; updated_at: number;
+}
 export async function cacheSummary(): Promise<CacheSummary> {
   return invoke<CacheSummary>("cache_summary");
+}
+export async function listCachedBooks(): Promise<CachedBook[]> {
+  return invoke<CachedBook[]>("list_cached_books");
 }
 export async function clearAllCache(): Promise<void> {
   await invoke("clear_all_cache");
@@ -272,6 +279,7 @@ export interface RssFeedRow { id: number; title: string; url: string; site_url: 
 export interface RssArticleRow {
   id: number; feed_id: number; guid: string; title: string; link: string | null;
   content: string | null; published_at: number | null; fetched_at: number;
+  is_read: boolean;
 }
 
 export async function fetchRssFeed(url: string): Promise<RssFeedPreview> {
@@ -294,6 +302,21 @@ export async function listRssArticles(feedId: number): Promise<RssArticleRow[]> 
 }
 export async function getRssArticle(id: number): Promise<RssArticleRow | null> {
   return invoke<RssArticleRow | null>("get_rss_article", { id });
+}
+export async function markRssArticleRead(id: number, read: boolean): Promise<void> {
+  await invoke("mark_rss_article_read", { id, read });
+}
+export async function markRssFeedRead(feedId: number): Promise<void> {
+  await invoke("mark_rss_feed_read", { feedId });
+}
+export async function rssUnreadCount(feedId: number): Promise<number> {
+  return invoke<number>("rss_unread_count", { feedId });
+}
+export async function exportRssOpml(): Promise<string> {
+  return invoke<string>("export_rss_opml");
+}
+export async function importRssOpml(opml: string): Promise<number> {
+  return invoke<number>("import_rss_opml", { opml });
 }
 
 export interface SubscriptionRow { id: number; name: string; url: string; last_checked_at: number | null }

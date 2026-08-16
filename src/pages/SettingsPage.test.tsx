@@ -29,6 +29,10 @@ vi.mock("../services/api", () => ({
   copyFontFile: vi.fn().mockResolvedValue({ name: "MyFont", file: "MyFont_123.ttf" }),
   listFontFiles: vi.fn().mockResolvedValue([]),
   cacheSummary: vi.fn().mockResolvedValue({ book_count: 3, chapter_count: 120, total_bytes: 5242880 }),
+  listCachedBooks: vi.fn().mockResolvedValue([
+    { source_id: 1, book_url: "https://ex.com/b1", title: "缓存书A", chapter_count: 40, bytes: 2048, updated_at: 1 },
+  ]),
+  deleteBookCache: vi.fn().mockResolvedValue(undefined),
   clearAllCache: vi.fn().mockResolvedValue(undefined),
   readLogs: vi.fn().mockResolvedValue(["[2026-08-16 14:00:00] [error] test error", "[2026-08-16 14:00:01] [info] ok"]),
   clearLogs: vi.fn().mockResolvedValue(undefined),

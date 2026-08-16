@@ -10,16 +10,28 @@ vi.mock("../services/api", () => ({
   addRssFeed: vi.fn(),
   deleteRssFeed: vi.fn(),
   refreshRssFeed: vi.fn(),
+  markRssArticleRead: vi.fn(),
+  markRssFeedRead: vi.fn(),
+  rssUnreadCount: vi.fn(),
+  exportRssOpml: vi.fn(),
+  importRssOpml: vi.fn(),
 }));
 
 const feeds = [
   { id: 1, title: "科技日报", url: "https://ex.com/rss.xml", site_url: null, added_at: 1 },
 ];
 const articles = [
-  { id: 10, feed_id: 1, guid: "g1", title: "文章甲", link: "https://ex.com/a1", content: "<p>内容</p>", published_at: 1704067200, fetched_at: 1 },
+  { id: 10, feed_id: 1, guid: "g1", title: "文章甲", link: "https://ex.com/a1", content: "<p>内容</p>", published_at: 1704067200, fetched_at: 1, is_read: false },
 ];
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(api.rssUnreadCount).mockResolvedValue(0);
+  vi.mocked(api.markRssArticleRead).mockResolvedValue(undefined);
+  vi.mocked(api.markRssFeedRead).mockResolvedValue(undefined);
+  vi.mocked(api.exportRssOpml).mockResolvedValue("<opml></opml>");
+  vi.mocked(api.importRssOpml).mockResolvedValue(2);
+});
 
 describe("RssPage", () => {
   it("lists feeds and articles for the active feed", async () => {
@@ -59,5 +71,36 @@ describe("RssPage", () => {
     render(<RssPage onOpenArticle={onOpenArticle} />);
     await userEvent.click(await screen.findByText("文章甲"));
     expect(onOpenArticle).toHaveBeenCalledWith(articles[0]);
+  });
+
+  it("marks unread article as read when opened", async () => {
+    vi.mocked(api.listRssFeeds).mockResolvedValue(feeds);
+    vi.mocked(api.rssUnreadCount).mockResolvedValue(1);
+    vi.mocked(api.listRssArticles).mockResolvedValue(articles);
+    const onOpenArticle = vi.fn();
+    render(<RssPage onOpenArticle={onOpenArticle} />);
+    await screen.findByText("科技日报");
+    // 未读徽标
+    expect(await screen.findByText("1")).toBeInTheDocument();
+    await userEvent.click(await screen.findByText("文章甲"));
+    expect(api.markRssArticleRead).toHaveBeenCalledWith(10, true);
+    expect(onOpenArticle).toHaveBeenCalledWith(articles[0]);
+  });
+
+  it("marks the whole feed read", async () => {
+    vi.mocked(api.listRssFeeds).mockResolvedValue(feeds);
+    vi.mocked(api.listRssArticles).mockResolvedValue(articles);
+    render(<RssPage onOpenArticle={() => {}} />);
+    await screen.findByText("科技日报");
+    await userEvent.click(screen.getByRole("button", { name: "全部已读" }));
+    expect(api.markRssFeedRead).toHaveBeenCalledWith(1);
+  });
+
+  it("exports OPML on button click", async () => {
+    vi.mocked(api.listRssFeeds).mockResolvedValue([]);
+    render(<RssPage onOpenArticle={() => {}} />);
+    await screen.findByText(/暂无订阅源/);
+    await userEvent.click(screen.getByRole("button", { name: "导出 OPML" }));
+    expect(api.exportRssOpml).toHaveBeenCalled();
   });
 });

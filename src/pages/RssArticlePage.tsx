@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
-import { getRssArticle, type RssArticleRow } from "../services/api";
+import { getRssArticle, markRssArticleRead, type RssArticleRow } from "../services/api";
 import { useError } from "../components/ErrorDialog";
 
 export default function RssArticlePage({ articleId, onBack }: {
@@ -15,6 +15,8 @@ export default function RssArticlePage({ articleId, onBack }: {
       if (cancelled) return;
       if (!a) { showError("文章不存在"); return; }
       setArticle(a);
+      // 打开即标记已读（幂等）
+      if (!a.is_read) void markRssArticleRead(a.id, true).catch(() => {});
     }).catch((e) => { if (!cancelled) showError(String(e)); });
     return () => { cancelled = true; };
   }, [articleId, showError]);

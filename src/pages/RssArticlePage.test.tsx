@@ -5,6 +5,7 @@ import * as api from "../services/api";
 
 vi.mock("../services/api", () => ({
   getRssArticle: vi.fn(),
+  markRssArticleRead: vi.fn(),
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -14,22 +15,26 @@ describe("RssArticlePage", () => {
     vi.mocked(api.getRssArticle).mockResolvedValue({
       id: 10, feed_id: 1, guid: "g1", title: "文章甲",
       link: "https://ex.com/a1", content: "<p>正文内容 <script>alert(1)</script></p>",
-      published_at: 1704067200, fetched_at: 1,
+      published_at: 1704067200, fetched_at: 1, is_read: false,
     });
     render(<RssArticlePage articleId={10} onBack={() => {}} />);
     expect(await screen.findByText("文章甲")).toBeInTheDocument();
     expect(screen.getByText(/正文内容/)).toBeInTheDocument();
     // DOMPurify 移除 script
     expect(document.querySelector("script")).toBeNull();
+    // 打开即标记已读
+    expect(api.markRssArticleRead).toHaveBeenCalledWith(10, true);
   });
 
   it("shows placeholder when content is empty", async () => {
     vi.mocked(api.getRssArticle).mockResolvedValue({
       id: 11, feed_id: 1, guid: "g2", title: "空文章",
-      link: null, content: "", published_at: null, fetched_at: 1,
+      link: null, content: "", published_at: null, fetched_at: 1, is_read: true,
     });
     const { container } = render(<RssArticlePage articleId={11} onBack={() => {}} />);
     await screen.findByText("空文章");
     expect(container.querySelector(".md-content")?.textContent).toContain("无正文内容");
+    // 已读文章不再重复标记
+    expect(api.markRssArticleRead).not.toHaveBeenCalled();
   });
 });

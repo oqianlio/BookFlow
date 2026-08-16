@@ -481,6 +481,11 @@ pub fn cache_summary(state: State<'_, AppState>) -> Result<crate::db::CacheSumma
 }
 
 #[tauri::command]
+pub fn list_cached_books(state: State<'_, AppState>) -> Result<Vec<crate::db::CachedBook>, String> {
+    crate::db::list_cached_books(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn clear_all_cache(state: State<'_, AppState>) -> Result<(), String> {
     crate::db::clear_all_cache(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?).map_err(|e| e.to_string())
 }
@@ -562,6 +567,80 @@ pub fn list_rss_articles(feed_id: i64, state: State<'_, AppState>) -> Result<Vec
 #[tauri::command]
 pub fn get_rss_article(id: i64, state: State<'_, AppState>) -> Result<Option<crate::db::RssArticleRow>, String> {
     crate::db::get_rss_article_db(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn mark_rss_article_read(id: i64, read: bool, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::mark_rss_article_read(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, read).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn mark_rss_feed_read(feed_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::mark_rss_feed_read(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, feed_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn rss_unread_count(feed_id: i64, state: State<'_, AppState>) -> Result<i64, String> {
+    crate::db::rss_unread_count(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, feed_id).map_err(|e| e.to_string())
+}
+
+/// 导出全部 RSS 订阅为 OPML 文本
+#[tauri::command]
+pub fn export_rss_opml(state: State<'_, AppState>) -> Result<String, String> {
+    let feeds = {
+        let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
+        crate::db::list_rss_feeds_db(&conn).map_err(|e| e.to_string())?
+    };
+    let mut out = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<opml version=\"2.0\">\n  <head><title>枕书 RSS 订阅</title></head>\n  <body>\n");
+    for f in &feeds {
+        let title = xml_escape(&f.title);
+        let url = xml_escape(&f.url);
+        out.push_str(&format!("    <outline type=\"rss\" text=\"{title}\" title=\"{title}\" xmlUrl=\"{url}\"/>\n"));
+    }
+    out.push_str("  </body>\n</opml>\n");
+    Ok(out)
+}
+
+/// 从 OPML 文本导入订阅（返回新增订阅数）
+#[tauri::command]
+pub fn import_rss_opml(opml: String, state: State<'_, AppState>) -> Result<i64, String> {
+    let mut added = 0i64;
+    // 提取所有 xmlUrl="..." 属性（OPML 结构固定，手动扫描避免额外依赖）
+    let mut urls: Vec<String> = Vec::new();
+    let mut rest = opml.as_str();
+    while let Some(i) = rest.find("xmlUrl") {
+        let after = &rest[i + 6..];
+        let eq = after.find('=');
+        if let Some(e) = eq {
+            let val = &after[e + 1..];
+            let v = val.trim_start();
+            if let Some(q) = v.strip_prefix('"') {
+                if let Some(end) = q.find('"') {
+                    urls.push(q[..end].to_string());
+                    rest = &q[end + 1..];
+                    continue;
+                }
+            }
+        }
+        rest = after;
+    }
+    for url in urls {
+        let exists: i64 = {
+            let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
+            conn.query_row("SELECT COUNT(*) FROM rss_feeds WHERE url=?1", [&url], |r| r.get(0)).unwrap_or(0)
+        };
+        if exists > 0 { continue; }
+        // 抓取并写入
+        match add_rss_feed(url.clone(), state.clone()) {
+            Ok(_) => added += 1,
+            Err(e) => eprintln!("OPML 导入失败 {url}: {e}"),
+        }
+    }
+    Ok(added)
+}
+
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 #[tauri::command]

@@ -173,6 +173,7 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             content TEXT,
             published_at INTEGER,
             fetched_at INTEGER NOT NULL,
+            is_read INTEGER NOT NULL DEFAULT 0,
             UNIQUE(feed_id, guid)
         );
         CREATE TABLE IF NOT EXISTS source_subscriptions (
@@ -211,6 +212,14 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
         CREATE INDEX IF NOT EXISTS idx_book_list_items_kind ON book_list_items(item_kind, item_id);
         "#,
     )?;
+    // 迁移：旧库 rss_articles 无 is_read 列（CREATE TABLE IF NOT EXISTS 不会补列）
+    let has_is_read: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('rss_articles') WHERE name = 'is_read'",
+        [], |r| r.get(0),
+    )?;
+    if has_is_read == 0 {
+        conn.execute_batch("ALTER TABLE rss_articles ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")?;
+    }
     Ok(conn)
 }
 
@@ -612,6 +621,41 @@ pub struct CacheSummary {
     pub total_bytes: i64,
 }
 
+/// 按书聚合的缓存条目（缓存管理 UI 用）。书名优先取书架记录，否则用 URL 最后一段。
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CachedBook {
+    pub source_id: i64,
+    pub book_url: String,
+    pub title: String,
+    pub chapter_count: i64,
+    pub bytes: i64,
+    pub updated_at: i64,
+}
+
+pub fn list_cached_books(conn: &Connection) -> Result<Vec<CachedBook>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.source_id, c.book_url,
+                COALESCE((SELECT s.title FROM shelf_source_books s WHERE s.source_id = c.source_id AND s.book_url = c.book_url LIMIT 1), '') AS title,
+                COUNT(*) AS cnt, SUM(LENGTH(content)) AS bytes, MAX(updated_at) AS up
+         FROM chapter_cache c GROUP BY c.source_id, c.book_url ORDER BY up DESC",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        let url: String = r.get(1)?;
+        let title: String = r.get(2)?;
+        let title = if title.is_empty() {
+            url.rsplit('/').next().unwrap_or(&url).to_string()
+        } else {
+            title
+        };
+        Ok(CachedBook {
+            source_id: r.get(0)?, book_url: url, title,
+            chapter_count: r.get(3)?, bytes: r.get::<_, Option<i64>>(4)?.unwrap_or(0),
+            updated_at: r.get(5)?,
+        })
+    })?;
+    rows.collect()
+}
+
 pub fn cache_summary(conn: &Connection) -> Result<CacheSummary> {
     let book_count: i64 = conn.query_row(
         "SELECT COUNT(DISTINCT source_id || '|' || book_url) FROM chapter_cache",
@@ -700,6 +744,7 @@ pub struct RssArticleRow {
     pub content: Option<String>,
     pub published_at: Option<i64>,
     pub fetched_at: i64,
+    pub is_read: bool,
 }
 
 pub fn add_rss_feed_db(conn: &Connection, title: &str, url: &str, site_url: Option<&str>) -> Result<i64> {
@@ -771,12 +816,13 @@ pub fn upsert_rss_article(
 
 pub fn list_rss_articles_db(conn: &Connection, feed_id: i64) -> Result<Vec<RssArticleRow>> {
     let mut stmt = conn.prepare(
-        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at FROM rss_articles WHERE feed_id=?1 ORDER BY COALESCE(published_at, fetched_at) DESC",
+        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at, is_read FROM rss_articles WHERE feed_id=?1 ORDER BY COALESCE(published_at, fetched_at) DESC",
     )?;
     let rows = stmt.query_map([feed_id], |r| {
         Ok(RssArticleRow {
             id: r.get(0)?, feed_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?,
             link: r.get(4)?, content: r.get(5)?, published_at: r.get(6)?, fetched_at: r.get(7)?,
+            is_read: r.get::<_, i64>(8)? != 0,
         })
     })?;
     rows.collect()
@@ -784,17 +830,39 @@ pub fn list_rss_articles_db(conn: &Connection, feed_id: i64) -> Result<Vec<RssAr
 
 pub fn get_rss_article_db(conn: &Connection, id: i64) -> Result<Option<RssArticleRow>> {
     let mut stmt = conn.prepare(
-        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at FROM rss_articles WHERE id=?1",
+        "SELECT id, feed_id, guid, title, link, content, published_at, fetched_at, is_read FROM rss_articles WHERE id=?1",
     )?;
     let mut rows = stmt.query([id])?;
     if let Some(r) = rows.next()? {
         Ok(Some(RssArticleRow {
             id: r.get(0)?, feed_id: r.get(1)?, guid: r.get(2)?, title: r.get(3)?,
             link: r.get(4)?, content: r.get(5)?, published_at: r.get(6)?, fetched_at: r.get(7)?,
+            is_read: r.get::<_, i64>(8)? != 0,
         }))
     } else {
         Ok(None)
     }
+}
+
+pub fn mark_rss_article_read(conn: &Connection, id: i64, read: bool) -> Result<()> {
+    conn.execute(
+        "UPDATE rss_articles SET is_read=?1 WHERE id=?2",
+        params![if read { 1 } else { 0 }, id],
+    )?;
+    Ok(())
+}
+
+pub fn mark_rss_feed_read(conn: &Connection, feed_id: i64) -> Result<()> {
+    conn.execute("UPDATE rss_articles SET is_read=1 WHERE feed_id=?1", [feed_id])?;
+    Ok(())
+}
+
+pub fn rss_unread_count(conn: &Connection, feed_id: i64) -> Result<i64> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM rss_articles WHERE feed_id=?1 AND is_read=0",
+        [feed_id],
+        |r| r.get(0),
+    )
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1131,5 +1199,62 @@ mod tests {
         assert_eq!(deleted, vec![bid]);
         assert!(list_books(&conn).unwrap().is_empty());
         assert!(list_shelf_source_books(&conn).unwrap().is_empty());
+    }
+
+    #[test]
+    fn rss_article_read_state() {
+        let conn = test_conn();
+        let fid = add_rss_feed_db(&conn, "科技日报", "https://ex.com/rss.xml", None).unwrap();
+        let a = crate::rss::RssArticlePreview {
+            guid: "g1".into(), title: "文章甲".into(), link: Some("https://ex.com/a1".into()),
+            content: Some("<p>正文</p>".into()), published_at: Some(1704067200),
+        };
+        upsert_rss_article(&conn, fid, &a).unwrap();
+        let rows = list_rss_articles_db(&conn, fid).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(!rows[0].is_read);
+        assert_eq!(rss_unread_count(&conn, fid).unwrap(), 1);
+
+        mark_rss_article_read(&conn, rows[0].id, true).unwrap();
+        assert_eq!(rss_unread_count(&conn, fid).unwrap(), 0);
+        assert!(get_rss_article_db(&conn, rows[0].id).unwrap().unwrap().is_read);
+
+        // 再插入一篇 → 未读 1 → 全部已读 → 0
+        let b = crate::rss::RssArticlePreview {
+            guid: "g2".into(), title: "文章乙".into(), link: None,
+            content: None, published_at: None,
+        };
+        upsert_rss_article(&conn, fid, &b).unwrap();
+        assert_eq!(rss_unread_count(&conn, fid).unwrap(), 1);
+        mark_rss_feed_read(&conn, fid).unwrap();
+        assert_eq!(rss_unread_count(&conn, fid).unwrap(), 0);
+    }
+
+    #[test]
+    fn cached_books_aggregation() {
+        let conn = test_conn();
+        save_cached_chapter(&conn, &NewCachedChapter {
+            source_id: 1, book_url: "https://ex.com/b1".into(),
+            chapter_index: 0, chapter_url: "c1".into(), chapter_name: "第1章".into(),
+            content: "内容一".into(),
+        }).unwrap();
+        save_cached_chapter(&conn, &NewCachedChapter {
+            source_id: 1, book_url: "https://ex.com/b1".into(),
+            chapter_index: 1, chapter_url: "c2".into(), chapter_name: "第2章".into(),
+            content: "内容二内容二".into(),
+        }).unwrap();
+        save_cached_chapter(&conn, &NewCachedChapter {
+            source_id: 2, book_url: "https://ex.com/b2".into(),
+            chapter_index: 0, chapter_url: "c1".into(), chapter_name: "第1章".into(),
+            content: "另一本书".into(),
+        }).unwrap();
+
+        let books = list_cached_books(&conn).unwrap();
+        assert_eq!(books.len(), 2);
+        let b1 = books.iter().find(|b| b.book_url == "https://ex.com/b1").unwrap();
+        assert_eq!(b1.chapter_count, 2);
+        // SQLite LENGTH() 按字符数计（非 UTF-8 字节数）
+        assert_eq!(b1.bytes, "内容一内容二内容二".chars().count() as i64);
+        assert_eq!(b1.title, "b1"); // 未在书架 → URL 最后一段兜底
     }
 }

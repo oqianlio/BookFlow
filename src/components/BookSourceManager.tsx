@@ -318,11 +318,35 @@ export default function BookSourceManager({ onDebug, onBack }: {
   const [subs, setSubs] = useState<SubscriptionRow[]>([]);
   const [subUrl, setSubUrl] = useState("");
   const [syncBusy, setSyncBusy] = useState<number | null>(null);
+  const [syncAllBusy, setSyncAllBusy] = useState(false);
 
   const refreshSubs = useCallback(async () => {
     try { setSubs(await listSubscriptions()); } catch (e) { showError(String(e)); }
   }, [showError]);
   useEffect(() => { void refreshSubs(); }, [refreshSubs]);
+
+  // 自动刷新：打开书源管理时，超过 24h 未检查的订阅自动同步（静默失败）
+  const AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const list = await listSubscriptions();
+        if (cancelled) return;
+        for (const sub of list) {
+          const last = sub.last_checked_at;
+          if (last == null || Date.now() - last * 1000 > AUTO_REFRESH_MS) {
+            void syncSubscription(sub).then((r) => {
+              if (cancelled) return;
+              void setSubscriptionChecked(sub.id).catch(() => {});
+              if (r.added > 0 || r.updated > 0) setImportMsg(`订阅「${sub.name}」自动同步：新增 ${r.added}，更新 ${r.updated}`);
+            }).catch(() => {});
+          }
+        }
+      } catch { /* 静默 */ }
+    })();
+    return () => { cancelled = true; };
+  }, [showError]);
 
   const handleAddSub = async () => {
     if (!subUrl.trim() || busy) return;
@@ -350,6 +374,24 @@ export default function BookSourceManager({ onDebug, onBack }: {
     } finally {
       setSyncBusy(null);
     }
+  };
+
+  const handleSyncAll = async () => {
+    if (syncAllBusy || subs.length === 0) return;
+    setSyncAllBusy(true);
+    let added = 0, updated = 0, failed = 0;
+    for (const sub of subs) {
+      try {
+        const r = await syncSubscription(sub);
+        await setSubscriptionChecked(sub.id);
+        added += r.added; updated += r.updated; failed += r.failed;
+      } catch {
+        failed++;
+      }
+    }
+    await refreshSubs();
+    setImportMsg(`全部同步完成：新增 ${added}，更新 ${updated}，失败 ${failed}`);
+    setSyncAllBusy(false);
   };
 
   return (
@@ -556,22 +598,30 @@ export default function BookSourceManager({ onDebug, onBack }: {
       {subs.length === 0 ? (
         <p className="panel-empty">暂无订阅源，粘贴远程书源合集地址开始订阅</p>
       ) : (
-        <ul className="source-list">
-          {subs.map((sub) => (
-            <li key={sub.id}>
-              <div className="source-info">
-                <span className="source-name">{sub.name}</span>
-                <span className="source-url">{sub.url}</span>
-              </div>
-              <div className="source-actions">
-                <button className="btn btn-ghost" onClick={() => void handleSyncSub(sub)} disabled={syncBusy === sub.id}>
-                  {syncBusy === sub.id ? "同步中…" : "同步"}
-                </button>
-                <button className="btn btn-ghost" onClick={() => void (async () => { try { await deleteSubscription(sub.id); await refreshSubs(); } catch (e) { showError(String(e)); } })()}>删除</button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="source-import-row">
+            <span className="source-hint">打开本页面时自动同步超过 24 小时未检查的订阅</span>
+            <button className="btn btn-ghost" onClick={() => void handleSyncAll()} disabled={syncAllBusy}>
+              {syncAllBusy ? "同步中…" : "全部同步"}
+            </button>
+          </div>
+          <ul className="source-list">
+            {subs.map((sub) => (
+              <li key={sub.id}>
+                <div className="source-info">
+                  <span className="source-name">{sub.name}</span>
+                  <span className="source-url">{sub.url}</span>
+                </div>
+                <div className="source-actions">
+                  <button className="btn btn-ghost" onClick={() => void handleSyncSub(sub)} disabled={syncBusy === sub.id}>
+                    {syncBusy === sub.id ? "同步中…" : "同步"}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => void (async () => { try { await deleteSubscription(sub.id); await refreshSubs(); } catch (e) { showError(String(e)); } })()}>删除</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       </div>
       {confirmJs && (

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addRssFeed, deleteRssFeed, listRssArticles, listRssFeeds, refreshRssFeed, type RssArticleRow, type RssFeedRow } from "../services/api";
+import {
+  addRssFeed, deleteRssFeed, listRssArticles, listRssFeeds, refreshRssFeed,
+  markRssArticleRead, markRssFeedRead, rssUnreadCount, exportRssOpml, importRssOpml,
+  type RssArticleRow, type RssFeedRow,
+} from "../services/api";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
 
@@ -12,6 +16,7 @@ export default function RssPage({ onOpenArticle }: {
   onOpenArticle: (article: RssArticleRow) => void;
 }) {
   const [feeds, setFeeds] = useState<RssFeedRow[]>([]);
+  const [unread, setUnread] = useState<Map<number, number>>(new Map());
   const [activeId, setActiveId] = useState<number | null>(null);
   const [articles, setArticles] = useState<RssArticleRow[]>([]);
   const [articlesLoading, setArticlesLoading] = useState(false);
@@ -20,10 +25,21 @@ export default function RssPage({ onOpenArticle }: {
   const [busy, setBusy] = useState(false);
   const { showError } = useError();
 
+  const flash = (msg: string) => {
+    setNotice(msg);
+    window.setTimeout(() => setNotice(null), 3000);
+  };
+
   const refreshFeeds = useCallback(async () => {
     try {
       const list = await listRssFeeds();
       setFeeds(list);
+      // 每个源的未读数
+      const unreadMap = new Map<number, number>();
+      await Promise.all(list.map(async (f) => {
+        try { unreadMap.set(f.id, await rssUnreadCount(f.id)); } catch { /* 忽略单源失败 */ }
+      }));
+      setUnread(unreadMap);
       if (list.length > 0 && activeId == null) setActiveId(list[0].id);
     } catch (e) {
       showError(String(e));
@@ -54,8 +70,8 @@ export default function RssPage({ onOpenArticle }: {
     try {
       await addRssFeed(trimmed);
       setUrl("");
+      await refreshFeeds();
       const list = await listRssFeeds();
-      setFeeds(list);
       if (list.length > 0) {
         setActiveId(list[list.length - 1].id);
         void loadArticles(list[list.length - 1].id);
@@ -93,11 +109,57 @@ export default function RssPage({ onOpenArticle }: {
     try {
       const added = await refreshRssFeed(feed.id);
       if (activeId === feed.id) await loadArticles(feed.id);
-      // 正向反馈用页面内提示，不复用错误弹窗
-      if (added > 0) {
-        setNotice(`新增 ${added} 篇文章`);
-        window.setTimeout(() => setNotice(null), 3000);
-      }
+      await refreshFeeds();
+      if (added > 0) flash(`新增 ${added} 篇文章`);
+    } catch (e) {
+      showError(String(e));
+    }
+  };
+
+  const handleOpenArticle = async (a: RssArticleRow) => {
+    // 打开即标记已读（乐观更新）
+    if (!a.is_read) {
+      void markRssArticleRead(a.id, true).catch(() => {});
+      setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_read: true } : x)));
+      setUnread((prev) => {
+        const next = new Map(prev);
+        next.set(a.feed_id, Math.max(0, (next.get(a.feed_id) ?? 1) - 1));
+        return next;
+      });
+    }
+    onOpenArticle(a);
+  };
+
+  const handleMarkFeedRead = async (feed: RssFeedRow) => {
+    await markRssFeedRead(feed.id);
+    setUnread((prev) => new Map(prev).set(feed.id, 0));
+    if (activeId === feed.id) await loadArticles(feed.id);
+  };
+
+  const handleExportOpml = async () => {
+    try {
+      const opml = await exportRssOpml();
+      // 下载到本地文件
+      const blob = new Blob([opml], { type: "application/xml" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "rss-subscriptions.opml";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      flash("已导出 OPML");
+    } catch (e) {
+      showError(String(e));
+    }
+  };
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const handleImportOpml = async (file: File) => {
+    try {
+      const text = await file.text();
+      const added = await importRssOpml(text);
+      await refreshFeeds();
+      flash(`OPML 导入完成，新增 ${added} 个订阅`);
     } catch (e) {
       showError(String(e));
     }
@@ -107,6 +169,15 @@ export default function RssPage({ onOpenArticle }: {
     <div className="rss-page">
       <header className="library-header">
         <div className="brand"><h1>RSS 订阅</h1></div>
+        <div className="library-actions">
+          <button className="btn btn-ghost" onClick={() => void handleExportOpml()}>导出 OPML</button>
+          <button className="btn btn-ghost" onClick={() => importFileRef.current?.click()}>导入 OPML</button>
+          <input
+            ref={importFileRef} type="file" accept=".opml,.xml" style={{ display: "none" }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleImportOpml(f); e.target.value = ""; }}
+            aria-label="导入 OPML 文件"
+          />
+        </div>
       </header>
       <div className="rss-layout">
         <div className="rss-feeds">
@@ -120,15 +191,22 @@ export default function RssPage({ onOpenArticle }: {
             <p className="panel-empty">暂无订阅源</p>
           ) : (
             <ul className="rss-feed-list">
-              {feeds.map((f) => (
-                <li key={f.id} className={`rss-feed-item${activeId === f.id ? " active" : ""}`}>
-                  <button className="rss-feed-title" onClick={() => setActiveId(f.id)}>{f.title}</button>
-                  <div className="rss-feed-actions">
-                    <button className="btn btn-ghost" onClick={() => void handleRefresh(f)}>刷新</button>
-                    <button className="btn btn-ghost" onClick={() => void handleDelete(f)}>删除</button>
-                  </div>
-                </li>
-              ))}
+              {feeds.map((f) => {
+                const n = unread.get(f.id) ?? 0;
+                return (
+                  <li key={f.id} className={`rss-feed-item${activeId === f.id ? " active" : ""}`}>
+                    <button className="rss-feed-title" onClick={() => setActiveId(f.id)}>
+                      {f.title}
+                      {n > 0 && <span className="rss-unread-badge">{n}</span>}
+                    </button>
+                    <div className="rss-feed-actions">
+                      <button className="btn btn-ghost" onClick={() => void handleMarkFeedRead(f)}>全部已读</button>
+                      <button className="btn btn-ghost" onClick={() => void handleRefresh(f)}>刷新</button>
+                      <button className="btn btn-ghost" onClick={() => void handleDelete(f)}>删除</button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -144,11 +222,11 @@ export default function RssPage({ onOpenArticle }: {
           ) : (
             <div className="discover-results">
               {articles.map((a) => (
-                <div className="hit-card" key={a.id} onClick={() => onOpenArticle(a)}
+                <div className={`hit-card${a.is_read ? " read" : ""}`} key={a.id} onClick={() => void handleOpenArticle(a)}
                   role="button" tabIndex={0}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpenArticle(a); } }}>
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void handleOpenArticle(a); } }}>
                   <div className="hit-info">
-                    <span className="hit-title">{a.title}</span>
+                    <span className="hit-title">{!a.is_read && <span className="rss-dot" aria-label="未读" />}{a.title}</span>
                     {a.published_at && <span className="hit-author">{formatDate(a.published_at)}</span>}
                   </div>
                   <span className="hit-source">阅读</span>
