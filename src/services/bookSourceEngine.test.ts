@@ -502,6 +502,40 @@ url="https://www.27jj.org/search/,"+JSON.stringify(option);`;
     expect(r.url).toBe("/search?q=%B6%B7%C6%C6%B2%D4%F1%B7");
   });
 
+  it("replaces {{page}} placeholder in searchUrl (丁丁小说 pattern)", () => {
+    const r = resolveSearchUrl("/search?page={{page}}&keyword={{key}}", "斗破", 1);
+    expect(r.url).toBe("/search?page=1&keyword=" + encodeURIComponent("斗破"));
+    const r2 = resolveSearchUrl("/search?page={{page}}&keyword={{key}}", "斗破", 3);
+    expect(r2.url).toBe("/search?page=3&keyword=" + encodeURIComponent("斗破"));
+  });
+
+  it("replaces {{page}} in POST body too", () => {
+    const searchUrl = `/s.php,{"method":"POST","body":"s={{key}}&page={{page}}"}`;
+    const r = resolveSearchUrl(searchUrl, "斗破", 2);
+    expect(r.body).toBe("s=" + encodeURIComponent("斗破") + "&page=2");
+  });
+
+  it("supports $.. recursive descent (阅友/疯读 pattern)", () => {
+    const j = { code: 0, data: { count: 439, list: [{ bookName: "灵破苍穹", id: 1 }] } };
+    const r = jsonGet(j, "$..list[*]");
+    expect(Array.isArray(r)).toBe(true);
+    expect(r[0].bookName).toBe("灵破苍穹");
+    // 深层嵌套
+    const j2 = { result: { sections: [{ type: "search", books: [] }, { type: "search", books: [{ name: "斗破" }] }] } };
+    const r2 = jsonGet(j2, "$..books[*]");
+    expect(Array.isArray(r2)).toBe(true);
+    expect(r2[0].name).toBe("斗破");
+  });
+
+  it("JSON field rule supports ## replace suffix (阅友 name pattern)", () => {
+    expect(extractFromJsonObject(
+      { bookName: "灵破苍穹（大结局）最新章节免费阅读" },
+      "$.bookName##\\（.*|\\（.*|免费阅读|最新章节",
+    )).toBe("灵破苍穹");
+    // 单段替换：删除匹配部分
+    expect(extractFromJsonObject({ bookName: "斗破苍穹·全文阅读" }, "$.bookName##·全文阅读")).toBe("斗破苍穹");
+  });
+
   it("jsBlock can call source.getKey()", () => {
     const r = evalJs("source.getKey()", {
       doc: emptyDoc(),
@@ -736,6 +770,39 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     expect(parseRule("$[0]")).toEqual({ type: "json", value: "$[0]" });
   });
 
+  it("recognizes JSON paths without $ prefix (legado JSON sources, e.g. data.state[*])", () => {
+    expect(parseRule("data.state[*]").type).toBe("json");
+    expect(parseRule("arr[?(@.x==1)]").type).toBe("json");
+    expect(parseRule("data.items[0:2]").type).toBe("json");
+    // CSS 属性选择器/类名/类下标选择器不得误判为 JSON
+    expect(parseRule(".item[href]").type).not.toBe("json");
+    expect(parseRule("div.item").type).not.toBe("json");
+    expect(parseRule("class.recommend[0]").type).not.toBe("json");
+    expect(parseRule("tag.li[-1]").type).not.toBe("json");
+  });
+
+  it("extractList does not split @js: bookList on internal && operators (番茄聚合API pattern)", async () => {
+    const doc = parseHtml("<div></div>");
+    const result = JSON.stringify({
+      data: { search_tabs: [{ tab_type: 3, data: [{ book_data: [{ title: "A" }, { title: "B" }] }] }] },
+    });
+    const listRule = `@js:
+var d = JSON.parse(result);
+var out = [];
+for (var i = 0; i < d.data.search_tabs.length; i++) {
+  var t = d.data.search_tabs[i];
+  if (t.tab_type == 3 && t.data) {
+    for (var j = 0; j < t.data.length; j++) {
+      var g = t.data[j];
+      if (g.book_data) { for (var k = 0; k < g.book_data.length; k++) out.push(g.book_data[k]); }
+    }
+  }
+}
+result = out;`;
+    const items = await extractList(doc, listRule, { name: "$.title" }, { baseUrl: "http://x", result, sourceKey: "x" });
+    expect(items.map((i) => i.name)).toEqual(["A", "B"]);
+  });
+
   it("jsonGet walks nested paths and array indexes", () => {
     const obj = { a: { b: [{ c: 1 }, { c: 2 }] } };
     expect(jsonGet(obj, "$.a.b[0].c")).toBe(1);
@@ -772,6 +839,25 @@ describe("JSON rule extraction (@Json: / $.)", () => {
     const obj = { data: [{ id: 7 }] };
     const out = extractFromJsonObject(obj, "@Json:data[0].id@js:'type=' + result", {});
     expect(out).toBe("type=7");
+  });
+
+  it("extractFromJsonObject substitutes {{...}} templates (bookUrl/kind patterns)", () => {
+    const item = { novelId: "abc", docId: "90000001_1100468914", is_finished: 1 };
+    expect(extractFromJsonObject(item, "/novel/{{$.novelId}}?isSearch=0", {})).toBe("/novel/abc?isSearch=0");
+    // 模板内 ## 正则替换只作用于模板内部（$..docId##.*_ 删到最后一个下划线）
+    expect(extractFromJsonObject(item, "https://x/bookInfo?resourceId={{$..docId##.*_}}", {})).toBe("https://x/bookInfo?resourceId=1100468914");
+    // 外层 ## 替换后缀作用于整体（kind 模式）
+    expect(extractFromJsonObject(item, "连载{{$..is_finished}}完结,##连载1|0完结", {})).toBe("完结,");
+  });
+
+  it("extractList js branch parses JSON.stringify'd string items (番茄聚合API pattern)", async () => {
+    const doc = parseHtml("<div></div>");
+    const listRule = `@js:result = [JSON.stringify({book_name:'A', author:'x'}), JSON.stringify({book_name:'B', author:'y'})];`;
+    const items = await extractList(doc, listRule, { name: "$.book_name", author: "$.author" }, { baseUrl: "http://x", result: "{}", sourceKey: "x" });
+    expect(items).toEqual([
+      { name: "A", author: "x" },
+      { name: "B", author: "y" },
+    ]);
   });
 
   it("returns empty on invalid JSON without throwing", async () => {

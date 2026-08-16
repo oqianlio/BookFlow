@@ -90,13 +90,15 @@ export function parseHtml(html: string): Document {
 export function jsonGet(obj: any, path: string): any {
   if (obj == null) return undefined;
   let p = path.trim();
-  if (p.startsWith("$.")) p = p.slice(2);
+  if (p.startsWith("$..")) p = p.slice(1); // 保留递归标记 `..`
+  else if (p.startsWith("$.")) p = p.slice(2);
   else if (p.startsWith("$")) p = p.slice(1);
   if (!p) return obj;
   return jsonWalk(obj, jsonTokens(p));
 }
 
-// 路径分词：[] 括号内容整体为一个 token（兼容 ?(...) 过滤里的 .），其余按 . 分隔
+// 路径分词：[] 括号内容整体为一个 token（兼容 ?(...) 过滤里的 .），其余按 . 分隔；
+// `..` 递归下降标记（legado JsonPath，如 $..books[*] 任意深度找 books）
 function jsonTokens(p: string): string[] {
   const tokens: string[] = [];
   let i = 0;
@@ -108,7 +110,13 @@ function jsonTokens(p: string): string[] {
       tokens.push(p.slice(i + 1, end));
       i = end + 1;
     } else if (ch === ".") {
-      i++;
+      // `..` → 递归标记；单 `.` 跳过
+      if (p[i + 1] === ".") {
+        tokens.push("..");
+        i += 2;
+      } else {
+        i++;
+      }
     } else {
       let end = p.length;
       const dot = p.indexOf(".", i);
@@ -122,11 +130,42 @@ function jsonTokens(p: string): string[] {
   return tokens;
 }
 
+/** 任意深度递归查找 key（legado `..` 语义）：遍历对象与数组的所有层级 */
+function jsonFindDeep(cur: any, key: string, rest: string[]): any {
+  if (cur == null) return undefined;
+  if (Array.isArray(cur)) {
+    const out: any[] = [];
+    for (const it of cur) {
+      const v = jsonFindDeep(it, key, rest);
+      if (v != null) out.push(...(Array.isArray(v) ? v : [v]));
+    }
+    return out.length ? out : undefined;
+  }
+  if (typeof cur !== "object") return undefined;
+  if (key in cur) {
+    const v = jsonWalk(cur[key], rest);
+    if (v != null) return v;
+  }
+  // 递归子对象
+  const out: any[] = [];
+  for (const k of Object.keys(cur)) {
+    if (k === key) continue;
+    const v = jsonFindDeep(cur[k], key, rest);
+    if (v != null) out.push(...(Array.isArray(v) ? v : [v]));
+  }
+  return out.length ? out : undefined;
+}
+
 // legado JsonPath 子集：支持 [n] 索引、[*] 通配（返回匹配数组）、[a:b] 范围切片、[?(条件)] 过滤、数组上取字段
 function jsonWalk(cur: any, tokens: string[]): any {
   if (tokens.length === 0 || cur == null) return cur;
   const tok = tokens[0];
   const rest = tokens.slice(1);
+  // `..` 递归下降：任意深度找下一个 token 的 key
+  if (tok === "..") {
+    if (rest.length === 0) return cur;
+    return jsonFindDeep(cur, rest[0], rest.slice(1));
+  }
   if (Array.isArray(cur)) {
     if (/^\d+$/.test(tok)) return jsonWalk(cur[Number(tok)], rest);
     if (tok === "*") {
@@ -222,6 +261,12 @@ export function parseRule(rule: string): ParsedRule {
   if (s.startsWith("$.") || s.startsWith("$[")) {
     return { type: "json", value: s };
   }
+  // 无 `$` 前缀的 JSON 路径（legado JSON 源可省略 $，如 data.state[*] / list[0] / arr[?(@.x==1)]）：
+  // 仅当含 JSON 特有的括号写法（[*]、范围切片、过滤）才判定为 JSON；
+  // [N] / [-N] 与 CSS 类/标签下标选择器（class.recommend[0] / tag.li[-1]）歧义，不触发 JSON
+  if (/\[(?:\*|-?\d+:-?\d+|\?\()[^\]]*\]/.test(s) && !/^\s*@/.test(s)) {
+    return { type: "json", value: s };
+  }
   // legado ## 替换规则（对齐原版 SourceRule：rule.split("##")）
   //   ##re##rep       → 对节点 outerHtml 全替换
   //   ##re##rep###    → replaceFirst：取第一个匹配的 group0 替换，无匹配返回空
@@ -250,8 +295,12 @@ function splitReplaceSuffix(s: string): { body: string; replaces: Array<[string,
   const trimmed = s.trim();
   if (!trimmed.includes("##")) return { body: trimmed, replaces: [] };
   const parts = trimmed.split("##");
-  if (parts.length < 3) return { body: trimmed, replaces: [] };
+  if (parts.length < 2) return { body: trimmed, replaces: [] };
   const body = parts[0].trim();
+  if (parts.length === 2) {
+    // `body##正则`：只有正则无替换 = 删除匹配（legado replacement 为空）
+    return { body, replaces: [[parts[1], ""]] };
+  }
   const replaces: Array<[string, string]> = [];
   for (let i = 1; i + 1 < parts.length; i += 2) {
     replaces.push([parts[i], parts[i + 1]]);
@@ -549,7 +598,9 @@ export async function extractList(
   // 链式元素规则（legado A@B@C）：含 @ 且非已知前缀（@xpath/@js/json/纯属性）
   const trimmedList = listRule.trim();
   // legado bookList 支持 && 合并多个列表规则（js 块内的 && 不受影响）
-  const masked = trimmedList.replace(/<js>[\s\S]*?<\/js>/g, (m) => "x".repeat(m.length));
+  const masked = trimmedList
+    .replace(/<js>[\s\S]*?<\/js>/g, (m) => "x".repeat(m.length))
+    .replace(/@js:[\s\S]*$/g, (m) => "x".repeat(m.length));
   if (masked.includes("&&")) {
     const parts: string[] = [];
     let last = 0;
@@ -661,9 +712,17 @@ export async function extractList(
     } catch {
       items = [];
     }
+    // legado 书源常 push JSON.stringify(...) 的字符串项（如番茄聚合 API），逐项解析回对象
+    const norm = (item: any): any => {
+      if (typeof item === "string") {
+        try { return JSON.parse(item); } catch { return item; }
+      }
+      return item;
+    };
     return (items as any[]).map((item) => {
+      const it = norm(item);
       const out: Record<string, string> = {};
-      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromJsObject(item, rule, ctx?.baseUrl, ctx?.sourceKey);
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromJsObject(it, rule, ctx?.baseUrl, ctx?.sourceKey);
       return out;
     });
   }
@@ -742,7 +801,26 @@ export function extractFromJsonObject(
   if (jsIdx === 0) {
     return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
-  const pathPart = (jsIdx > 0 ? s.slice(0, jsIdx) : s).trim();
+  // `{{...}}` 模板：字面文本 + 求值子规则（legado 常见于 bookUrl 拼 URL、kind 拼状态文本）
+  // 如 https://x/{{$.novelId}}?a=1 或 连载{{$..is_finished}}完结,{{$..tag_views##\s##,}}
+  if (s.includes("{{") && s.includes("}}")) {
+    const out = s.replace(/\{\{(.*?)\}\}/g, (_m, inner: string) => {
+      try {
+        return extractFromJsonObject(obj, String(inner).trim(), ctx) ?? "";
+      } catch {
+        return "";
+      }
+    });
+    // 模板求值结果整体走 ## 替换后缀（外层，如 ##连载1|0完结）
+    if (out.includes("##")) {
+      const { body, replaces } = splitReplaceSuffix(out);
+      if (replaces.length) return applyReplacements(body, replaces);
+    }
+    return out;
+  }
+  // JSON 字段规则的 `##正则##替换` 后缀（如 $.bookName##\（.*|\(.*|最新章节）
+  const { body: pathBody, replaces } = splitReplaceSuffix(s);
+  const pathPart = (jsIdx > 0 ? pathBody.slice(0, jsIdx) : pathBody).trim();
   const path = pathPart.startsWith("@Json:")
     ? pathPart.slice(6).trim()
     : pathPart.replace(/^\$\.?/, "");
@@ -751,7 +829,8 @@ export function extractFromJsonObject(
     return String(evalJs(s.slice(jsIdx + 4), { doc: emptyDoc(), result: v, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
   if (v == null) return "";
-  const str = String(v);
+  let str = String(v);
+  str = applyReplacements(str, replaces.length ? replaces : undefined);
   if (str && isUrlField(path) && ctx?.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(str)) return resolveUrl(str, ctx.baseUrl);
   return str;
 }
@@ -1233,21 +1312,24 @@ function encodeKeyByCharset(key: string, charset?: string): string {
   return encodeURIComponent(key);
 }
 
-export function parseSearchUrl(searchUrl: string, key: string): { url: string; method?: string; body?: string; charset?: string } {
+export function parseSearchUrl(searchUrl: string, key: string, page?: number): { url: string; method?: string; body?: string; charset?: string } {
+  const p = page ?? 1;
+  const replaceVars = (s: string, encKey: string) =>
+    s.replace(/\{\{key\}\}/g, encKey).replace(/\{\{page\}\}/g, String(p));
   const commaIdx = searchUrl.indexOf(",{");
   if (commaIdx === -1) {
-    return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
+    return { url: replaceVars(searchUrl, encodeURIComponent(key)) };
   }
   const url = searchUrl.slice(0, commaIdx);
   try {
     const opts = JSON.parse(searchUrl.slice(commaIdx + 1));
     const charset = typeof opts.charset === "string" ? opts.charset : undefined;
     const encKey = encodeKeyByCharset(key, charset);
-    const body = (opts.body ?? "").replace("{{key}}", encKey);
-    const urlWithKey = url.replace("{{key}}", encKey);
+    const body = replaceVars(opts.body ?? "", encKey);
+    const urlWithKey = replaceVars(url, encKey);
     return { url: urlWithKey, method: opts.method ?? "POST", body, charset };
   } catch {
-    return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
+    return { url: replaceVars(searchUrl, encodeURIComponent(key)) };
   }
 }
 
@@ -1259,9 +1341,9 @@ export function resolveSearchUrl(searchUrl: string, key: string, page: number, c
       sourceKey: ctx?.sourceKey, source: ctx?.source,
     }) ?? "");
     // jsBlock 可能产出 legado 的 "URL,{json 请求选项}" 形式（如 url="https://x/search/,"+JSON.stringify({method:"POST",body})）
-    return parseSearchUrl(url, key);
+    return parseSearchUrl(url, key, page);
   }
-  return parseSearchUrl(s, key);
+  return parseSearchUrl(s, key, page);
 }
 
 function parseJsonExplore(raw: unknown): Array<{ title: string; url: string }> | null {
