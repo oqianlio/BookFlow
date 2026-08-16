@@ -151,12 +151,34 @@
   height: 100%;
 }
 
-/* ============ 阅读排版：正文用衬线体 ============ */
+/* ============ 阅读排版：正文用衬线体（分页式，不滚动） ============ */
 .md-reader {
   height: 100%;
-  overflow-y: auto;
-  padding: 40px 28px 60px;
+  overflow: hidden;
+  position: relative;
   box-sizing: border-box;
+}
+
+.md-paged {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.md-paged .md-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 24px 28px 20px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.md-paged .reader-slice-nav {
+  position: static;
+  align-self: center;
+  margin-bottom: 8px;
+  flex-shrink: 0;
 }
 
 .md-content {
@@ -355,6 +377,42 @@
 .panel-close:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* ============ 侧边栏 ‹ › 收纳开关 ============ */
+.panel-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 72px;
+  border-radius: 8px 0 0 8px;
+  border: 1px solid var(--border);
+  border-right: none;
+  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--fg-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, right 0.22s ease;
+}
+.panel-toggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* 面板展开时：按钮贴面板左缘（面板占右 264px） */
+.panel-toggle.open {
+  right: 264px;
+  border-radius: 0 8px 8px 0;
+  border-right: 1px solid var(--border);
+  border-left: none;
 }
 
 .panel ul {

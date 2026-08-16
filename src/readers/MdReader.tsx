@@ -1,46 +1,67 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readLocalText } from "../services/localBookCache";
 import { convertText, type Conversion } from "../services/tradSimpl";
+import { sliceHtmlIntoPages } from "./PaginatedReader";
 
 export default function MdReader({ path, bookId, onError, conversion }: {
   path: string; bookId: number; onError?: (msg: string) => void; conversion?: Conversion;
 }) {
   const [html, setHtml] = useState("");
   const [totalLines, setTotalLines] = useState(0);
+  const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const { location, percent, loaded, save, saveDebounced } = useReaderProgress(bookId);
   useSaveOnLocationChange(bookId, location, percent, save);
-  const containerRef = useRef<HTMLDivElement>(null);
-  // 搜索跳转可能在内容加载完成前到达：先缓存，内容就绪后再滚动定位
-  const pendingJumpRef = useRef<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef(false);
+  const pendingJumpRef = useRef<string | null>(null);
 
-  const scrollTo = (pct: number) => {
-    const el = containerRef.current;
-    if (!el) return;
-    el.scrollTop = pct * (el.scrollHeight - el.clientHeight);
-  };
+  // 分页：按容器可用高度切分 markdown 渲染结果（与书源正文一致的翻页式，不滚动）
+  const styleHtml = useMemo(() => `<style>.md-slice{font-family:inherit} .md-slice h1,.md-slice h2,.md-slice h3{line-height:1.4;margin:1.2em 0 0.6em} .md-slice p{margin:0 0 1.1em} .md-slice pre{overflow-x:auto} .md-slice img{max-width:100%} .md-slice blockquote{margin:0 0 1.1em;padding:0 1em;border-left:3px solid #ccc;color:#777} .md-slice table{border-collapse:collapse} .md-slice td,.md-slice th{border:1px solid #ddd;padding:4px 8px}</style>`, []);
+  const pages = useMemo(() => {
+    if (!html) return [] as string[];
+    const el = wrapRef.current;
+    const h = Math.max(120, (el?.clientHeight ?? 600) - 24);
+    const w = el?.clientWidth ?? 600;
+    return sliceHtmlIntoPages(html, h, w, undefined, styleHtml);
+  }, [html, styleHtml]);
+  const total = pages.length;
 
-  const applyJump = (loc: string) => {
-    // 搜索命中：行号 -> 滚动百分比
+  const savePage = useCallback((p: number) => {
+    const t = Math.max(1, pages.length);
+    const loc = String(p);
+    (window as any).__readerLocation = loc;
+    saveDebounced(loc, p / t);
+  }, [pages.length, saveDebounced]);
+
+  const go = useCallback((p: number) => {
+    setPage((prev) => {
+      const c = Math.min(Math.max(0, p), Math.max(0, pages.length - 1));
+      if (c !== prev) savePage(c);
+      return c;
+    });
+  }, [pages.length, savePage]);
+
+  const applyJump = useCallback((loc: string) => {
+    // 搜索命中：行号 -> 按行比例估算页码
     if (loc.startsWith("line:")) {
       const line = parseInt(loc.slice(5), 10);
       if (!Number.isFinite(line) || line < 0) return;
-      const total = Math.max(1, totalLines);
-      scrollTo(Math.min(1, line / total));
+      const totalL = Math.max(1, totalLines);
+      const target = Math.floor((line / totalL) * Math.max(1, pages.length));
+      go(target);
       return;
     }
-    const pct = parseFloat(loc);
-    if (Number.isFinite(pct)) scrollTo(pct);
-  };
+    const p = parseInt(loc, 10);
+    if (Number.isFinite(p)) go(p);
+  }, [go, pages.length, totalLines]);
 
   useJumpTarget((loc) => {
-    if (!readyRef.current) {
-      // 内容尚未就绪：缓存跳转，就绪后补放
+    if (!readyRef.current || pages.length === 0) {
       pendingJumpRef.current = loc;
       return;
     }
@@ -54,9 +75,7 @@ export default function MdReader({ path, bookId, onError, conversion }: {
         const text = await readLocalText(path);
         if (cancelled) return;
         setTotalLines(text.split(/\r?\n/).length);
-        // 简繁转换（设置面板可选，与书源正文一致）
         const converted = conversion && conversion !== "none" ? convertText(text, conversion) : text;
-        // 用户导入的 Markdown 可能含恶意 HTML：marked 输出经 DOMPurify 清洗后再注入
         const raw = marked.parse(converted) as string;
         setHtml(DOMPurify.sanitize(raw));
       } catch (e) {
@@ -68,49 +87,41 @@ export default function MdReader({ path, bookId, onError, conversion }: {
     return () => { cancelled = true; };
   }, [path, conversion]);
 
-  const onScroll = () => {
-    const el = containerRef.current;
-    if (!el) return;
-    const pct = el.scrollTop / (el.scrollHeight - el.clientHeight);
-    (window as any).__readerLocation = String(Math.round(pct * 1000) / 1000);
-    saveDebounced(String(Math.round((pct + Number.EPSILON) * 1000) / 1000), pct);
-  };
-
-  const initialScroll = useMemo(() => {
-    if (loaded && location) {
-      const pct = parseFloat(location);
-      return Number.isFinite(pct) ? pct : 0;
-    }
-    return 0;
-  }, [loaded, location]);
-
+  // 恢复进度（页码）
   useEffect(() => {
-    const el = containerRef.current;
-    if (el && initialScroll > 0) {
-      el.scrollTop = initialScroll * (el.scrollHeight - el.clientHeight);
+    if (loaded && location && pages.length > 0) {
+      const p = parseInt(location, 10);
+      if (Number.isFinite(p) && p > 0 && p < pages.length) setPage(p);
     }
-    // 内容就绪后发布初始位置，供书签/标注使用
-    (window as any).__readerLocation = String(initialScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, html, initialScroll]);
+  }, [loaded, pages.length]);
 
-  // 内容就绪后补放加载前到达的搜索跳转
+  // 内容就绪：补放搜索跳转 + 发布初始位置
   useEffect(() => {
-    if (readyRef.current) return;
-    if (!html) return;
+    if (readyRef.current || pages.length === 0) return;
     readyRef.current = true;
+    (window as any).__readerLocation = String(page);
     const pj = pendingJumpRef.current;
     if (pj != null) {
       pendingJumpRef.current = null;
       applyJump(pj);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html]);
+  }, [pages.length]);
 
   return (
-    <div className="md-reader" ref={containerRef} onScroll={onScroll}>
+    <div className="md-reader md-paged" ref={wrapRef}>
       {error && <p className="error">{error}</p>}
-      <div className="md-content" dangerouslySetInnerHTML={{ __html: html }} />
+      {pages.length > 0 && (
+        <>
+          <div className="md-content md-slice" dangerouslySetInnerHTML={{ __html: pages[page] ?? "" }} />
+          <div className="reader-slice-nav">
+            <button onClick={(e) => { e.stopPropagation(); go(page - 1); }} disabled={page === 0}>‹</button>
+            <span>{total ? `${page + 1} / ${total}` : "0 / 0"}</span>
+            <button onClick={(e) => { e.stopPropagation(); go(page + 1); }} disabled={page >= total - 1}>›</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
