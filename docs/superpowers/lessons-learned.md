@@ -309,3 +309,34 @@
   test.env 配置注入也无效（config 加载时机不同）。正式测试不
   依赖外部 env。
 - 下次：真实源验证脚本用常量开关，不用 process.env。
+
+### 3.28 测试全绿 ≠ 真实可用：jsdom 无布局掩盖分页 bug（2026-08-16）
+- 场景：用户连续反馈"每章只能看一页""测试有什么用"。真实浏览器
+  （Edge headless dump-dom）复现：60 段内容只分 1 页！根因：
+  sliceByBatchMeasure 用 `host.firstElementChild` 取测量容器，但
+  styleHtml 注入后第一个子元素是 `<style>` → parent 无子元素 →
+  整篇一页。**jsdom 测试全用 mockMeasure（sliceByAccumulate），
+  真实分页路径（sliceByBatchMeasure）从未被测试覆盖**。
+- 认知：**布局相关逻辑必须用真实浏览器验证**（Edge headless +
+  file:// 页面 + dump-dom 读结果），jsdom 没有布局无法测 offsetTop
+  分页。测试环境与运行环境的差异会静默掩盖致命 bug。
+- 下次：分页/测量/布局类逻辑，写独立 HTML 页面用 Edge headless
+  验证（可复现、可回归）；修复后先真实验证再提交。
+
+### 3.29 API 源"打不开"是规则链缺口，逐环打通（2026-08-16）
+- 场景：用户报"搜索出的书不能打开"。南极（松鹤庭沐）bookInfo API
+  无 Referer 返回 17B `"incorrect referer"`；ruleBookInfo 的
+  `init: $.data.bookInfo` 引擎不支持；tocUrl 模板 `{{$.resourceID}}`
+  被当正则；chapterUrl 的 `{{baseUrl.match(/bookId=(\d+)/)[1]}}`
+  js 表达式模板不支持——**四个缺口叠加**导致目录为空。
+- 认知：API 源（非 HTML 页）的书打开链路是：bookUrl(带 header) →
+  init 定位 → 模板拼 tocUrl → toc API → chapterUrl 模板。任一环
+  缺口都表现为"打不开"。逐一用真实 API 验证修复（Referer、
+  init 规则、JSON 路径模板、js 表达式模板）。
+- 下次：API 源打不开先抓各环节真实响应（长度+内容），按链路
+  逐环定位；`{{...}}` 模板有三态：JSON 路径/正则/js 表达式。
+
+### 3.30 真实浏览器验证分页必须看渲染结果（2026-08-16）
+- 场景：Edge headless `--dump-dom` 不输出 console.log——把验证
+  结果写入 DOM（<pre id="result">）再 dump 读取。
+- 下次：headless 验证脚本把结果写进页面 DOM 而非 console。
