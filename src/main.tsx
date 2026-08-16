@@ -19,14 +19,18 @@ declare global {
 }
 
 if (window.__TAURI_INTERNALS__) {
+  // 日志上报失败必须静默：避免 rejection 再触发 unhandledrejection 造成无限循环
+  const safeLog = (level: string, message: string) => {
+    logFrontend(level, message).catch(() => {});
+  };
   window.addEventListener("error", (e) => {
-    void logFrontend("error", e.message + " @ " + (e.filename ?? "") + ":" + (e.lineno ?? ""));
+    safeLog("error", e.message + " @ " + (e.filename ?? "") + ":" + (e.lineno ?? ""));
   });
   window.addEventListener("unhandledrejection", (e) => {
-    void logFrontend("error", "unhandled rejection: " + String(e.reason));
+    safeLog("error", "unhandled rejection: " + String(e.reason));
   });
   const fwd = (level: string) => (...args: unknown[]) => {
-    void logFrontend(level, args.map((a) => String(a)).join(" "));
+    safeLog(level, args.map((a) => String(a)).join(" "));
   };
   console.log = fwd("log");
   console.warn = fwd("warn");
