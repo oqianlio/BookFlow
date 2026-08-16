@@ -18,6 +18,13 @@
   --radius-md: 14px;
 }
 
+/* 阅读页所有滚动容器隐藏滚动条（保持滚动能力，沉浸视觉） */
+.reader-page * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.reader-page *::-webkit-scrollbar { display: none; }
+
 [data-mode="dark"] .reader-page {
   --bg: #1b1915;
   --bg-soft: #221f1a;
@@ -302,7 +309,7 @@
   font-family: var(--font-read);
 }
 
-/* ============ 侧栏面板（抽屉：滑入动画） ============ */
+/* ============ 侧栏面板（抽屉：滑入动画，隐藏滚动条） ============ */
 .panel {
   width: 264px;
   border-left: 1px solid var(--border);
@@ -311,7 +318,10 @@
   background: var(--surface-2);
   flex-shrink: 0;
   animation: panel-slide-in 0.22s ease;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge 旧 */
 }
+.panel::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
 @keyframes panel-slide-in {
   from { transform: translateX(24px); opacity: 0; }
