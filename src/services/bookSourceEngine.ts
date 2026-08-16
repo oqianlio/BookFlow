@@ -445,7 +445,129 @@ export interface ExtractContext {
   book?: any;
 }
 
-export async function extractSingle(doc: Document, rule: string, ctx?: ExtractContext): Promise<string> {
+// ============ legado @put:/@get: 变量语法 ============
+// 变量存 sourceVars（per-source Map，与 java.put/get 共用）。真实源用法：
+//   ruleBookInfo.init: "@put:{n:\"[property$=book_name]@content\",a:\"...\"}"  → 存多变量
+//   ruleBookInfo.name: "@get:{n}"                                            → 读变量
+//   ruleBookInfo.name: "$..bookVo.bookName@put:{bookid:$..bookVo.bookId}"     → 链式 put（返回提取值）
+//   ruleToc.chapterUrl: "https://x/read?bookId=@get:{bookid}&id={{$.id}}"     → URL 模板内替换
+
+/** `@get:{key}` / `@get:key` → 变量值；无匹配原样返回（不替换非变量 @ 用法） */
+function substituteGetVars(s: string, sourceKey?: string): string {
+  if (!s || !s.includes("@get:")) return s;
+  const vars = getSourceVars(sourceKey ?? "default");
+  return s.replace(/@get:\{([^}]+)\}|@get:([\w-]+)/g, (_m, b1: string, b2: string) => {
+    const key = String(b1 ?? b2 ?? "").trim();
+    return vars.get(key) ?? "";
+  });
+}
+
+/**
+ * 解析 `@put:` 载荷为 [key, valueRule] 列表。
+ * - `@put:{key:value,key2:value2}`：JSON 对象形式，值带引号（值为规则串）；
+ *   失败时手动按顶层逗号/冒号拆分（容错无引号键值，如 `@put:{bid:bid}`）。
+ * - `@put:key:value`：简单形式。
+ * 解析失败返回 null（调用方忽略该块）。
+ */
+function parsePutPayload(inner: string): Array<[string, string]> | null {
+  const s = inner.trim();
+  if (!s) return null;
+  if (s.startsWith("{")) {
+    const objInner = s.slice(1, -1).trim();
+    if (objInner) {
+      try {
+        const obj = JSON.parse(s) as Record<string, unknown>;
+        return Object.entries(obj).map(([k, v]) => [k, v == null ? "" : String(v)]);
+      } catch {
+        // JSON 失败：手动拆分（引号感知顶层逗号 → 首个冒号）
+        const entries: Array<[string, string]> = [];
+        let i = 0;
+        let cur = "";
+        let inStr = false;
+        while (i <= objInner.length) {
+          const ch = i < objInner.length ? objInner[i] : ",";
+          if (ch === '"' && objInner[i - 1] !== "\\") inStr = !inStr;
+          if (ch === "," && !inStr) {
+            const colon = cur.indexOf(":");
+            if (colon > 0) entries.push([cur.slice(0, colon).trim().replace(/^"|"$/g, ""), cur.slice(colon + 1).trim().replace(/^"|"$/g, "")]);
+            cur = "";
+          } else if (i < objInner.length) {
+            cur += ch;
+          }
+          i++;
+        }
+        return entries.length ? entries : null;
+      }
+    }
+  }
+  const m = s.match(/^([^:]+):([\s\S]*)$/);
+  if (m) {
+    const stripQ = (x: string) => x.trim().replace(/^"(.*)"$/, "$1");
+    return [[stripQ(m[1]), stripQ(m[2])]];
+  }
+  return null;
+}
+
+/** 判断 @put 值是否为纯字面量（无规则语法：无选择器/路径/模板/正则/@ 前缀） */
+function isPutLiteral(v: string): boolean {
+  if (!v) return true;
+  return !/[@{}$#.]/.test(v) && !v.includes("{{") && !v.includes("##") && !/^\//.test(v);
+}
+
+/**
+ * @put 值求值：先按规则求值；结果为空且值本身是纯字面量时存字面量
+ * （如 `@put:{bookid:"999"}` → 存 "999"；`@put:{bid:bid}` 且 obj 无 bid → 存 "bid"）。
+ */
+function evalPutValue(raw: string, evalRule: (r: string) => string): string {
+  const v = evalRule(raw);
+  if (v) return v;
+  return isPutLiteral(raw) ? raw : "";
+}
+
+/**
+ * 扫描规则串中所有 `@put:{...}` 块（引号感知括号匹配，值内可含 @ 与 :）。
+ * 返回块区间与载荷；用于在链/路径解析前剥离并执行副作用。
+ */
+function findPutBlocks(s: string): Array<{ start: number; end: number; payload: string }> {
+  const out: Array<{ start: number; end: number; payload: string }> = [];
+  let i = 0;
+  while (i < s.length) {
+    const idx = s.indexOf("@put:", i);
+    if (idx === -1) break;
+    const after = idx + 5;
+    if (s[after] !== "{") {
+      // 简单形式 @put:key:value：到行尾/规则尾（不含后续 @ 链段——简单形式很少见，取到行尾）
+      const nl = s.indexOf("\n", after);
+      const end = nl === -1 ? s.length : nl;
+      out.push({ start: idx, end, payload: s.slice(after, end) });
+      i = end;
+      continue;
+    }
+    // 块形式：引号感知括号匹配
+    let depth = 0;
+    let inStr = false;
+    let j = after;
+    let closed = -1;
+    while (j < s.length) {
+      const ch = s[j];
+      if (ch === '"' && s[j - 1] !== "\\") inStr = !inStr;
+      if (!inStr) {
+        if (ch === "{") depth++;
+        else if (ch === "}") {
+          depth--;
+          if (depth === 0) { closed = j; break; }
+        }
+      }
+      j++;
+    }
+    if (closed === -1) break; // 未闭合：不再扫描
+    out.push({ start: idx, end: closed + 1, payload: s.slice(after, closed + 1) });
+    i = closed + 1;
+  }
+  return out;
+}
+
+async function extractSingleInner(doc: Document, rule: string, ctx?: ExtractContext): Promise<string> {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -454,6 +576,34 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     }
     return "";
   }
+  // `@put:{...}` 块剥离并执行（副作用：值规则求值后存变量）。必须先于链/路径解析，
+  // 因为块内值规则含 @ 与 :（如 `[property$=book_name]@content`），不能参与 @ 链拆分。
+  const putBlocks = findPutBlocks(rule);
+  let putRuleStr = rule;
+  if (putBlocks.length) {
+    const vars = getSourceVars(ctx?.sourceKey ?? "default");
+    for (const block of putBlocks) {
+      const entries = parsePutPayload(block.payload);
+      if (!entries) continue;
+      for (const [k, valueRule] of entries) {
+        const v = await (async () => {
+          const r = await extractSingleInner(doc, valueRule, ctx);
+          return r ? r : isPutLiteral(valueRule) ? valueRule : "";
+        })();
+        vars.set(k, v);
+      }
+    }
+    putRuleStr = putBlocks.reduce((acc, b) => acc.slice(0, b.start) + acc.slice(b.end), rule);
+  }
+  // 纯 @put 规则（剥离后为空）→ 返回空
+  if (!putRuleStr.trim()) return "";
+  // 单独 `@get:{key}` / `@get:key` 规则 → 直接返回变量值
+  const getMatch = putRuleStr.trim().match(/^@get:\{([^}]+)\}$|^@get:([\w-]+)$/);
+  if (getMatch) {
+    const vars = getSourceVars(ctx?.sourceKey ?? "default");
+    return vars.get(getMatch[1] ?? getMatch[2] ?? "") ?? "";
+  }
+  rule = putRuleStr;
   // `{{...}}` 模板求值（legado 三态）：
   // 1. `{{$.xxx}}` JSON 路径 → 从 result 的 JSON 取值（如 tocUrl 的 {{$.resourceID}}）
   // 2. `{{js 表达式}}` → evalJs 求值（如 {{baseUrl.match(/bookId=(\d+)/)[1]}}）
@@ -611,15 +761,21 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     // 纯属性规则（如 "@text"）：取文档自身（extractSingle 场景少见，返回空）
     return "";
   }
-  if (parsed.value.startsWith("tag.")) {
-    const node = resolveTagIndex(parsed.value, doc) ?? queryIndexed(parsed.value, doc);
-    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
-  }
-  // 链式 A@B@C（如 class.recommend[-1]@a@text）：从文档起逐层下钻
+  // 链式 A@B@C（如 class.recommend[-1]@a@text / tag.h1@text@get:{k}）：从文档起逐层下钻
   if (parsed.value.includes("@")) {
     const segs = parsed.value.split("@").map((s) => s.trim()).filter(Boolean);
     if (segs.length > 1) {
       const last = segs[segs.length - 1];
+      // 链内 @get:{key} / @get:key：结果替换为变量值（legado 链语义 get 覆盖；真实源无 get 后接链段）
+      // 注意：split("@") 后链段无 @ 前缀，段形如 `get:{k}`
+      const getSeg = segs.findIndex((s) => /^get:\{[\w-]+\}$|^get:[\w-]+$/.test(s));
+      if (getSeg !== -1) {
+        const m = segs[getSeg].match(/^get:\{([\w-]+)\}$|^get:([\w-]+)$/);
+        if (m) {
+          const vars = getSourceVars(ctx?.sourceKey ?? "default");
+          return vars.get(m[1] ?? m[2] ?? "") ?? "";
+        }
+      }
       if (last.startsWith("js:")) {
         const pre = segs.slice(0, -1);
         let cur: Element | null = queryIndexed(pre[0], doc);
@@ -638,8 +794,17 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
         : "";
     }
   }
+  if (parsed.value.startsWith("tag.")) {
+    const node = resolveTagIndex(parsed.value, doc) ?? queryIndexed(parsed.value, doc);
+    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
+  }
   const node = queryIndexed(parsed.value, doc);
   return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
+}
+
+/** extractSingle 导出 wrapper：结果统一替换 `@get:{key}` / `@get:key`（URL/模板内变量） */
+export async function extractSingle(doc: Document, rule: string, ctx?: ExtractContext): Promise<string> {
+  return substituteGetVars(await extractSingleInner(doc, rule, ctx), ctx?.sourceKey);
 }
 
 function finalize(v: string, attr?: string, baseUrl?: string): string {
@@ -837,7 +1002,7 @@ export async function extractList(
 
 /** item 字段提取 + URL 字段（bookUrl/coverUrl）相对地址解析（regexReplace 等规则产出相对路径） */
 function extractItemValue(node: Element, key: string, rule: string, ctx?: ExtractContext): string {
-  let v = extractFromElement(node, rule, ctx?.baseUrl, ctx?.book);
+  let v = extractFromElement(node, rule, ctx?.baseUrl, ctx?.book, ctx?.sourceKey);
   if ((key === "bookUrl" || key === "coverUrl") && v && !ABS_URL_RE.test(v)) {
     v = resolveUrl(v, ctx?.baseUrl ?? "");
   }
@@ -848,14 +1013,35 @@ export function extractFromJsObject(obj: any, rule: string, baseUrl?: string, so
   return extractFromJsonObject(obj, rule, { baseUrl, sourceKey });
 }
 
-export function extractFromJsonObject(
+function extractFromJsonObjectInner(
   obj: any,
   rule: string,
   ctx?: { baseUrl?: string; sourceKey?: string; book?: any },
 ): string {
   if (obj == null || typeof obj !== "object") return "";
-  const s = rule.trim();
+  let s = rule.trim();
   if (!s) return "";
+  // `@put:{...}` 块剥离并执行（值规则相对当前 json object 求值），如 `$.name@put:{bookid:$.id}`
+  const putBlocks = findPutBlocks(s);
+  if (putBlocks.length) {
+    const vars = getSourceVars(ctx?.sourceKey ?? "default");
+    for (const block of putBlocks) {
+      const entries = parsePutPayload(block.payload);
+      if (!entries) continue;
+      for (const [k, valueRule] of entries) {
+        vars.set(k, evalPutValue(valueRule, (r) => extractFromJsonObjectInner(obj, r, ctx)));
+      }
+    }
+    s = putBlocks.reduce((acc, b) => acc.slice(0, b.start) + acc.slice(b.end), s).trim();
+  }
+  // 纯 @put 规则 → 返回空
+  if (!s) return "";
+  // 单独 `@get:{key}` / `@get:key` → 返回变量值
+  const getMatch = s.match(/^@get:\{([^}]+)\}$|^@get:([\w-]+)$/);
+  if (getMatch) {
+    const vars = getSourceVars(ctx?.sourceKey ?? "default");
+    return vars.get(getMatch[1] ?? getMatch[2] ?? "") ?? "";
+  }
   const jsIdx = s.indexOf("@js:");
   if (jsIdx === 0) {
     return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
@@ -903,14 +1089,45 @@ export function extractFromJsonObject(
   return str;
 }
 
-export function extractFromElement(el: Element, rule: string, baseUrl?: string, book?: any): string {
+/** extractFromJsonObject 导出 wrapper：结果统一替换 `@get:{key}` / `@get:key` */
+export function extractFromJsonObject(
+  obj: any,
+  rule: string,
+  ctx?: { baseUrl?: string; sourceKey?: string; book?: any },
+): string {
+  return substituteGetVars(extractFromJsonObjectInner(obj, rule, ctx), ctx?.sourceKey);
+}
+
+function extractFromElementInner(el: Element, rule: string, baseUrl?: string, book?: any, sourceKey?: string): string {
+  // `@put:{...}` 块剥离并执行（值规则相对当前元素求值），如 `a@href@put:{u:text}`
+  const putBlocks = findPutBlocks(rule);
+  let putRuleStr = rule;
+  if (putBlocks.length) {
+    const vars = getSourceVars(sourceKey ?? "default");
+    for (const block of putBlocks) {
+      const entries = parsePutPayload(block.payload);
+      if (!entries) continue;
+      for (const [k, valueRule] of entries) {
+        vars.set(k, evalPutValue(valueRule, (r) => extractFromElementInner(el, r, baseUrl, book, sourceKey)));
+      }
+    }
+    putRuleStr = putBlocks.reduce((acc, b) => acc.slice(0, b.start) + acc.slice(b.end), rule);
+  }
+  rule = putRuleStr.trim();
+  if (!rule) return "";
+  // 单独 `@get:{key}` / `@get:key` → 返回变量值
+  const getMatch = rule.match(/^@get:\{([^}]+)\}$|^@get:([\w-]+)$/);
+  if (getMatch) {
+    const vars = getSourceVars(sourceKey ?? "default");
+    return vars.get(getMatch[1] ?? getMatch[2] ?? "") ?? "";
+  }
   // item 规则 `<js>...</js>` 后缀（legado：前段提取值作 result 交给 js 处理，
   // 如 chapterUrl: `onclick##.*\\((\\d+)\\);##$1\n<js>…book.bookUrl…</js>`）
   const jsIdx = rule.indexOf("<js>");
   if (jsIdx > 0) {
     const jsEnd = rule.indexOf("</js>", jsIdx);
     if (jsEnd !== -1) {
-      const base = extractFromElement(el, rule.slice(0, jsIdx), baseUrl, book);
+      const base = extractFromElementInner(el, rule.slice(0, jsIdx), baseUrl, book, sourceKey);
       try {
         return String(evalJs(rule.slice(jsIdx + 4, jsEnd), {
           doc: el.ownerDocument ?? emptyDoc(), node: el, result: base, baseUrl, book,
@@ -923,7 +1140,7 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string, 
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
-      const v = extractFromElement(el, alt, baseUrl);
+      const v = extractFromElementInner(el, alt, baseUrl, book, sourceKey);
       if (v) return v;
     }
     return "";
@@ -964,16 +1181,22 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string, 
     // 纯属性规则（如 "@text"）：取当前节点自身
     return finalize(applyReplacements(nodeValue(el, parsed.attr), parsed.replace), parsed.attr, baseUrl);
   }
-  if (parsed.value.startsWith("tag.")) {
-    const node = resolveTagIndex(parsed.value, el) ?? queryIndexed(parsed.value, el);
-    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
-  }
-  // item 内链式规则（legado A@B@C，如 .row@a@text / .item@h3@href）：
+  // item 内链式规则（legado A@B@C，如 .row@a@text / .item@h3@href / tag.h1@text@get:{k}）：
   // parseAttrRule 已把末尾 @属性 拆到 parsed.attr，这里 value 里剩余的 @ 段逐层下钻
   if (parsed.value.includes("@")) {
     const segs = parsed.value.split("@").map((s) => s.trim()).filter(Boolean);
     if (segs.length > 1) {
       const last = segs[segs.length - 1];
+      // 链内 @get:{key} / @get:key：结果替换为变量值（legado 链语义 get 覆盖）
+      // 注意：split("@") 后链段无 @ 前缀，段形如 `get:{k}`
+      const getSeg = segs.findIndex((s) => /^get:\{[\w-]+\}$|^get:[\w-]+$/.test(s));
+      if (getSeg !== -1) {
+        const m = segs[getSeg].match(/^get:\{([\w-]+)\}$|^get:([\w-]+)$/);
+        if (m) {
+          const vars = getSourceVars(sourceKey ?? "default");
+          return vars.get(m[1] ?? m[2] ?? "") ?? "";
+        }
+      }
       // 末段 js: → 对下钻到的节点执行 js（node = 当前元素）
       if (last.startsWith("js:")) {
         let cur: Element | null = el;
@@ -998,8 +1221,17 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string, 
         : "";
     }
   }
+  if (parsed.value.startsWith("tag.")) {
+    const node = resolveTagIndex(parsed.value, el) ?? queryIndexed(parsed.value, el);
+    return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
+  }
   const node = queryIndexed(parsed.value, el);
   return node ? finalize(applyReplacements(nodeValue(node as Element, parsed.attr), parsed.replace), parsed.attr, baseUrl) : "";
+}
+
+/** extractFromElement 导出 wrapper：结果统一替换 `@get:{key}` / `@get:key`（URL/模板内变量） */
+export function extractFromElement(el: Element, rule: string, baseUrl?: string, book?: any, sourceKey?: string): string {
+  return substituteGetVars(extractFromElementInner(el, rule, baseUrl, book, sourceKey), sourceKey);
 }
 
 /** 应用 legado `##正则##替换` 链式替换；非法正则跳过（保留原值） */

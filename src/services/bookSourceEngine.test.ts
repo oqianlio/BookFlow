@@ -3,6 +3,7 @@ import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSo
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { loadJsLib } from "./jsLib";
+import { resetSourceVars } from "./sourceVars";
 import { SAMPLE_HTML, SAMPLE_SOURCE } from "./fixtures";
 
 const { httpGetMock, mergeUserAgentMock } = vi.hoisted(() => ({
@@ -1376,5 +1377,74 @@ describe("bracket index [N] / [-N] in selectors", () => {
   it("text.xxx works inside item rules (text.下一章)", () => {
     const doc = parseHtml(`<div class="page"><a href="/c/2.html">下一章</a></div>`);
     expect(extractFromElement(doc.querySelector(".page")!, "text.下一章@href")).toBe("/c/2.html");
+  });
+});
+
+describe("legado @put:/@get: 变量语法", () => {
+  const SK = "putget.test.source";
+
+  beforeEach(() => {
+    resetSourceVars(SK);
+  });
+
+  it("顶层 @put:{...} 存变量、@get:{n} 读取（4020 书源结构）", async () => {
+    const html = `<div class="book"><meta property="og:novel:book_name" content="三体"><meta property="og:novel:author" content="刘慈欣"></div>`;
+    const doc = parseHtml(html);
+    const init = `@put:{n:"[property$=book_name]@content",a:"[property$=author]@content"}`;
+    expect(await extractSingle(doc, init, { sourceKey: SK })).toBe(""); // 纯 put 返回空
+    expect(await extractSingle(doc, "@get:{n}", { sourceKey: SK })).toBe("三体");
+    expect(await extractSingle(doc, "@get:{a}", { sourceKey: SK })).toBe("刘慈欣");
+  });
+
+  it("@get:key 简单形式（无花括号）", async () => {
+    const doc = parseHtml(`<div>hi</div>`);
+    await extractSingle(doc, `@put:{x:"tag.div@text"}`, { sourceKey: SK });
+    expect(await extractSingle(doc, "@get:x", { sourceKey: SK })).toBe("hi");
+  });
+
+  it("@get 未设置的变量返回空串", async () => {
+    const doc = parseHtml(`<div>hi</div>`);
+    expect(await extractSingle(doc, "@get:{missing}", { sourceKey: SK })).toBe("");
+  });
+
+  it("链式 @put：`提取@put:{...}` 返回提取值并存变量（爱看书网结构）", async () => {
+    const obj = { bookVo: { bookName: "三体", bookId: "12345" } };
+    const name = extractFromJsonObject(obj, "$..bookVo.bookName@put:{bookid:$..bookVo.bookId}", { sourceKey: SK });
+    expect(name).toBe("三体");
+    expect(extractFromJsonObject(obj, "@get:{bookid}", { sourceKey: SK })).toBe("12345");
+  });
+
+  it("URL 模板内 @get:{key} 替换（爱看书网 chapterUrl）", async () => {
+    const obj = { id: "88" };
+    const bookid = "999";
+    await extractFromJsonObject(obj, `@put:{bookid:"${bookid}"}`, { sourceKey: SK });
+    const url = extractFromJsonObject(obj, "https://cxb-pro.cread.com/cx/itf/chapterRead?bookId=@get:{bookid}&chapterId={{$.id}}&full=0", { sourceKey: SK });
+    expect(url).toBe("https://cxb-pro.cread.com/cx/itf/chapterRead?bookId=999&chapterId=88&full=0");
+  });
+
+  it("无引号值容错：@put:{bid:bid} 存字面量（红薯阅读结构）", () => {
+    const obj = { catename: "玄幻", bid: "42" };
+    const name = extractFromJsonObject(obj, "$.catename@put:{bid:bid}", { sourceKey: SK });
+    expect(name).toBe("玄幻");
+    expect(extractFromJsonObject(obj, "@get:{bid}", { sourceKey: SK })).toBe("42");
+  });
+
+  it("extractFromElement 内 @put/@get（元素上下文）", () => {
+    const doc = parseHtml(`<div class="item"><a href="/c/1.html">第一章</a></div>`);
+    const el = doc.querySelector(".item")!;
+    expect(extractFromElement(el, "a@href@put:{u:a@text}", undefined, undefined, SK)).toBe("/c/1.html");
+    expect(extractFromElement(el, "@get:{u}", undefined, undefined, SK)).toBe("第一章");
+  });
+
+  it("extractSingle 链式 @get 覆盖（A@get:{k}）", async () => {
+    const doc = parseHtml(`<div><h1 class="t">标题</h1></div>`);
+    await extractSingle(doc, `@put:{k:"tag.h1@text"}`, { sourceKey: SK });
+    expect(await extractSingle(doc, "tag.h1@text@get:{k}", { sourceKey: SK })).toBe("标题");
+  });
+
+  it("变量跨调用持久（同一 sourceKey）", async () => {
+    const doc = parseHtml(`<span id="s">值A</span>`);
+    await extractSingle(doc, `@put:{v:"#s@text"}`, { sourceKey: SK });
+    expect(await extractSingle(doc, "@get:{v}", { sourceKey: SK })).toBe("值A");
   });
 });

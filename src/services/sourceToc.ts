@@ -1,5 +1,5 @@
 import { listBookSources, httpGet, mergeUserAgent } from "./api";
-import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, jsonGet, type BookSource } from "./bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, jsonGet, type BookSource, type ExtractContext } from "./bookSourceEngine";
 
 export interface TocItem { name: string; url: string }
 /** 书籍信息（对应 legado ruleBookInfo 解析结果） */
@@ -49,6 +49,21 @@ export function applyInitResult(init: string | undefined, result: string): strin
   return result;
 }
 
+/**
+ * init 规则统一处理（legado）：
+ * - `@put:{...}` / `@get:...` 开头 → 走规则求值（副作用：变量落 sourceVars，result 不变）
+ * - 其余（JSON 路径如 `$.data.bookInfo`）→ applyInitResult
+ * 返回 string 或 Promise<string>：非 @put/@get 路径同步返回（保持原 applyInitResult 时序，
+ * 避免额外 microtask 改变 ReaderPage 渲染时机——组件测试依赖该时序）。
+ */
+export function applyInitRule(doc: Document, init: string | undefined, html: string, ctx: ExtractContext): string | Promise<string> {
+  const t = (init ?? "").trim();
+  if (t.startsWith("@put:") || t.startsWith("@get:")) {
+    return extractSingle(doc, t, { ...ctx, result: html }).then(() => html);
+  }
+  return applyInitResult(init, html);
+}
+
 export async function fetchToc(opts: {
   sourceId: number;
   bookUrl: string;
@@ -78,8 +93,9 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const bi = s.ruleBookInfo ?? {};
-  // init：legado JSON 源初始路径（如 $.data.bookInfo）——后续规则相对子对象执行
-  const biResult = applyInitResult(bi.init, html);
+  // init：legado init 规则（JSON 路径取子对象；@put/@get 落变量）——后续规则相对处理后的 result 执行
+  const initBi = applyInitRule(doc, bi.init, html, { sourceKey: s.bookSourceUrl, source: s, baseUrl: resolvedBookUrl });
+  const biResult = typeof initBi === "string" ? initBi : await initBi;
   // legado js 上下文 book 对象（chapterUrl 等规则可能引用 book.bookUrl/tocUrl）
   const book = { bookUrl: resolvedBookUrl, name: opts.initialTitle, tocUrl: "" };
   const title = bi.name ? await extractSingle(doc, bi.name, { result: biResult, sourceKey: s.bookSourceUrl, book }) : opts.initialTitle;
@@ -107,7 +123,8 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   for (let page = 0; page < 50; page++) {
     const curDoc = page === 0 ? tocDoc : parseHtml(curHtml);
     // 每页响应独立应用 init（分页目录结构相同）
-    const pageResult = applyInitResult(rules.init, curHtml);
+    const initPage = applyInitRule(curDoc, rules.init, curHtml, { sourceKey: s.bookSourceUrl, source: s, baseUrl: curUrl });
+    const pageResult = typeof initPage === "string" ? initPage : await initPage;
     const items = await extractList(curDoc, rules.chapterList ?? "", {
       name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
     }, { baseUrl: curUrl, result: pageResult, sourceKey: s.bookSourceUrl, book: tocBook });

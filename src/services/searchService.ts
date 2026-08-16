@@ -1,5 +1,6 @@
 import { httpGet, listBookSources, mergeUserAgent, type BookSource as ApiBookSource } from "./api";
-import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, hostOf, resolveUrl, type BookSource as Src } from "./bookSourceEngine";
+import { parseHtml, parseBookSourceJson, resolveSearchUrl, extractBookList, hostOf, resolveUrl, type BookSource as Src, type ExtractContext } from "./bookSourceEngine";
+import { applyInitRule } from "./sourceToc";
 
 export interface SearchHit {
   title: string; author: string; coverUrl: string; bookUrl: string;
@@ -16,7 +17,11 @@ async function searchSource(key: string, bs: ApiBookSource): Promise<SearchHit[]
   const html = await httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 10000, parsed.method, parsed.body, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const rules = src.ruleSearch ?? {};
-  const items = await extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
+  // ruleSearch.init（legado）：JSON 路径取子对象 / @put:@get 落变量
+  const ctx: ExtractContext = { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl, source: src };
+  const initSearch = applyInitRule(doc, rules.init, html, ctx);
+  const searchResult = typeof initSearch === "string" ? initSearch : await initSearch;
+  const items = await extractBookList(doc, rules, { ...ctx, result: searchResult });
   return items.filter((i) => i.name).map((i) => ({
     title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",
     bookUrl: i.bookUrl ?? "", sourceId: bs.id, sourceName: bs.name,
