@@ -267,16 +267,26 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   // ==== 书源：会话级章节缓存（模块级，App 运行期间跨页面保留已读/预取章节）====
   // 由 chapterSessionCache 提供：重新打开刚看过的书/换源返回时零加载直接显示
 
-  // ==== 书源：后台预取下一章（翻到末页时无缝衔接，无加载闪烁）====
+  // ==== 书源：后台预加载后续章节（链式：翻到末页时无缝衔接，无加载闪烁）====
   const prefetchingRef = useRef<Set<string>>(new Set());
+  // 预加载深度：相对当前章节最多提前 PREFETCH_DEPTH 章（防整本递归雪崩）
+  const PREFETCH_DEPTH = 3;
   const prefetchChapter = useCallback(async (c: ChapterState) => {
     if (getSessionChapter(sourceId, bookUrl, c.url) || prefetchingRef.current.has(c.url)) return;
     prefetchingRef.current.add(c.url);
     try {
       const data = await fetchChapterData(c);
       setSessionChapter(sourceId, bookUrl, c.url, data);
-    } catch {
-      // 预取失败静默：翻页时走正常加载
+      // 链式：本章预取完成后继续预取后续章节，直到达到深度上限
+      const curIdx = chapterRef.current.index;
+      const nextIdx = c.index + 1;
+      if (nextIdx <= curIdx + PREFETCH_DEPTH) {
+        const n = tocRef.current[nextIdx];
+        if (n) void prefetchChapter({ index: nextIdx, url: n.url, name: n.name });
+      }
+    } catch (e) {
+      // 预取失败不阻塞阅读：记录日志便于排查（翻页时走正常加载）
+      console.warn(`[sourcereader] 预加载失败 ${c.url}: ${String(e).slice(0, 80)}`);
     } finally {
       prefetchingRef.current.delete(c.url);
     }
@@ -294,6 +304,11 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         if (mem.isManga) { setImages(mem.images); setIsManga(true); setContent(""); }
         else { setContent(mem.content); setIsManga(false); setImages([]); }
         setLoading(false);
+        // 缓存命中同样推进预加载链（可能用户跳读，需补齐后续章节）
+        const n = tocRef.current[c.index + 1];
+        if (n && c.index + 1 <= c.index + PREFETCH_DEPTH) {
+          void prefetchChapter({ index: c.index + 1, url: n.url, name: n.name });
+        }
         return;
       }
       const seq = ++chapterSeqRef.current;
