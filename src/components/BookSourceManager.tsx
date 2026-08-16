@@ -56,6 +56,31 @@ export default function BookSourceManager({ onDebug, onBack }: {
   const [confirmJs, setConfirmJs] = useState<{ msg: string; proceed: () => void } | null>(null);
 
   // ==== 批量验证 / 删除失败源 ====
+  // 检测配置（原版 CheckSource.putConfig / CacheManager 对应物：localStorage 持久化）
+  const VERIFY_CFG_KEY = "sourceVerify.config";
+  const loadVerifyConfig = (): { keyword: string; concurrency: number; checks: { search: boolean; toc: boolean; content: boolean } } => {
+    try {
+      const raw = localStorage.getItem(VERIFY_CFG_KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        return {
+          keyword: typeof p.keyword === "string" ? p.keyword : "我的",
+          concurrency: Number.isFinite(p.concurrency) && p.concurrency >= 1 ? p.concurrency : 10,
+          checks: { search: true, toc: true, content: true, ...(p.checks ?? {}) },
+        };
+      }
+    } catch { /* 损坏配置回退默认 */ }
+    return { keyword: "我的", concurrency: 10, checks: { search: true, toc: true, content: true } };
+  };
+  const [verifyConfig, setVerifyConfig] = useState(loadVerifyConfig);
+  const updateVerifyConfig = (patch: Partial<typeof verifyConfig>) => {
+    setVerifyConfig((prev) => {
+      const next = { ...prev, ...patch, checks: patch.checks ? { ...prev.checks, ...patch.checks } : prev.checks };
+      try { localStorage.setItem(VERIFY_CFG_KEY, JSON.stringify(next)); } catch { /* 忽略 */ }
+      return next;
+    });
+  };
+
   const [verifying, setVerifying] = useState(false);
   const [verifyResults, setVerifyResults] = useState<Map<number, VerifyResult> | null>(null);
   const [verifyProgress, setVerifyProgress] = useState<{ done: number; total: number } | null>(null);
@@ -71,7 +96,9 @@ export default function BookSourceManager({ onDebug, onBack }: {
     cancelVerifyRef.current = false;
     try {
       const results = await verifySources(enabled, {
-        concurrency: 10,
+        keyword: verifyConfig.keyword,
+        concurrency: verifyConfig.concurrency,
+        checks: verifyConfig.checks,
         shouldCancel: () => cancelVerifyRef.current,
         onProgress: (done, total, r) => {
           setVerifyProgress({ done, total });
@@ -362,6 +389,36 @@ export default function BookSourceManager({ onDebug, onBack }: {
                 {verifyResults && <span className="verify-summary">可用 {okCount} / {verifyResults.size}</span>}
               </>
             )}
+          </div>
+          <div className="source-verify-config">
+            <label>关键字
+              <input
+                aria-label="检测关键字"
+                value={verifyConfig.keyword}
+                onChange={(e) => updateVerifyConfig({ keyword: e.target.value })}
+                placeholder="我的"
+              />
+            </label>
+            <label>并发
+              <input
+                aria-label="检测并发数"
+                type="number" min={1} max={30}
+                value={verifyConfig.concurrency}
+                onChange={(e) => updateVerifyConfig({ concurrency: Math.max(1, Number(e.target.value) || 1) })}
+              />
+            </label>
+            <span className="verify-config-checks">
+              {(["search", "toc", "content"] as const).map((k) => (
+                <label key={k} className="verify-config-check">
+                  <input
+                    type="checkbox"
+                    checked={verifyConfig.checks[k]}
+                    onChange={(e) => updateVerifyConfig({ checks: { [k]: e.target.checked } as any })}
+                  />
+                  {k === "search" ? "搜索" : k === "toc" ? "目录" : "正文"}
+                </label>
+              ))}
+            </span>
           </div>
           {(() => {
             const filtered = query.trim()

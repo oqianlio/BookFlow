@@ -55,6 +55,7 @@ const groupedSources = [
 describe("BookSourceManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it("renders sources with enable toggle", async () => {
@@ -386,5 +387,43 @@ describe("BookSourceManager", () => {
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     await waitFor(() => expect(api.deleteBookSource).toHaveBeenCalledWith(2));
     await waitFor(() => expect(screen.queryByText(/删除失效源/)).not.toBeInTheDocument());
+  });
+
+  it("shows verify config with defaults and persists changes to localStorage", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue(sources);
+    render(<BookSourceManager />);
+    await screen.findByText("示例书源");
+    expect(screen.getByLabelText("检测关键字")).toHaveValue("我的");
+    expect(screen.getByLabelText("检测并发数")).toHaveValue(10);
+    expect(screen.getByLabelText("搜索")).toBeChecked();
+    expect(screen.getByLabelText("目录")).toBeChecked();
+    expect(screen.getByLabelText("正文")).toBeChecked();
+    // 修改关键字并关闭"目录"检测
+    await userEvent.clear(screen.getByLabelText("检测关键字"));
+    await userEvent.type(screen.getByLabelText("检测关键字"), "斗破");
+    await userEvent.click(screen.getByLabelText("目录"));
+    const saved = JSON.parse(localStorage.getItem("sourceVerify.config")!);
+    expect(saved).toMatchObject({ keyword: "斗破", concurrency: 10, checks: { search: true, toc: false, content: true } });
+  });
+
+  it("passes verify config (keyword/concurrency/checks) to verifySources", async () => {
+    const verify = vi.mocked(verifyMod.verifySources);
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "好源", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "好源" }), enabled: true, last_used_at: null },
+    ]);
+    verify.mockResolvedValue([{ id: 1, name: "好源", ok: true, count: 1, ms: 10, reason: "", groups: [] }]);
+    render(<BookSourceManager />);
+    await screen.findByText("好源");
+    // 改关键字并关掉目录检测
+    await userEvent.clear(screen.getByLabelText("检测关键字"));
+    await userEvent.type(screen.getByLabelText("检测关键字"), "测试");
+    await userEvent.click(screen.getByLabelText("正文"));
+    await userEvent.click(screen.getByRole("button", { name: "批量验证（启用源）" }));
+    await waitFor(() => expect(verify).toHaveBeenCalledTimes(1));
+    expect(verify.mock.calls[0][1]).toMatchObject({
+      keyword: "测试",
+      concurrency: 10,
+      checks: { search: true, toc: true, content: false },
+    });
   });
 });
