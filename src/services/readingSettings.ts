@@ -1,7 +1,7 @@
 import { getSetting, setSetting } from "./api";
 import type { Conversion } from "./tradSimpl";
 
-export type PageMode = "scroll" | "cover" | "slide";
+export type PageMode = "cover" | "slide";
 
 export interface ReadingSettings {
   pageMode: PageMode;
@@ -39,7 +39,7 @@ export function resolveFontCss(fontFamily: string): string {
 }
 
 export const DEFAULT_READING_SETTINGS: ReadingSettings = {
-  pageMode: "scroll",
+  pageMode: "cover",
   fontSizePx: 18,
   lineHeight: 1.8,
   bgTheme: "paper",
@@ -53,7 +53,7 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   customFg: "",
 };
 
-const PAGE_MODES: PageMode[] = ["scroll", "cover", "slide"];
+const PAGE_MODES: PageMode[] = ["cover", "slide"];
 const CONVERSIONS: Conversion[] = ["none", "simp", "trad"];
 const FONT_MIN = 14;
 const FONT_MAX = 24;

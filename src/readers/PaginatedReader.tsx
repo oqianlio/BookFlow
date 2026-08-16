@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
-export type PageMode = "scroll" | "cover" | "slide";
+export type PageMode = "cover" | "slide";
 
 export interface TypographyStyle {
   letterSpacingPx: number;
@@ -13,7 +13,7 @@ export interface TypographyStyle {
 const DEFAULT_TYPO: TypographyStyle = { letterSpacingPx: 0, paragraphSpacingPx: 11, indentEm: 0, bold: false, fontFamily: "serif" };
 
 export default function PaginatedReader({
-  html, mode = "scroll", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd, onReachStart,
+  html, mode = "cover", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd, onReachStart,
 }: {
   html: string; mode?: PageMode; fontSizePx?: number; lineHeight?: number;
   typography?: TypographyStyle;

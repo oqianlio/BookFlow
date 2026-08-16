@@ -678,10 +678,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
               <div className="settings-group">
                 <label className="settings-label">翻页模式</label>
                 <div className="segmented" role="group" aria-label="翻页模式">
-                  {(["scroll", "cover", "slide"] as const).map((m) => (
+                  {(["cover", "slide"] as const).map((m) => (
                     <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
                       onClick={() => updateSetting({ pageMode: m })}>
-                      {{ scroll: "滚动", cover: "覆盖", slide: "滑动" }[m]}
+                      {{ cover: "覆盖", slide: "滑动" }[m]}
                     </button>
                   ))}
                 </div>

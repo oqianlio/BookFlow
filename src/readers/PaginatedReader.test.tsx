@@ -88,7 +88,7 @@ function mockWrapRect(el: HTMLElement, width = 1200) {
 describe("PaginatedReader", () => {
   it("renders current page and reports progress", () => {
     const onPageChange = vi.fn();
-    render(<PaginatedReader html={CONTENT} mode="scroll" onPageChange={onPageChange} measure={mockMeasure} />);
+    render(<PaginatedReader html={CONTENT} mode="cover" onPageChange={onPageChange} measure={mockMeasure} />);
     expect(onPageChange).toHaveBeenCalledWith(0, expect.any(Number));
     // 首页内容可见
     const wrap = screen.getByText(/段落0/);
@@ -117,17 +117,17 @@ describe("PaginatedReader", () => {
   it("applies lineHeight to the slice container and re-slices when it changes", () => {
     const onPageChange = vi.fn();
     const { container, rerender } = render(
-      <PaginatedReader html={CONTENT} mode="scroll" lineHeight={1.8} measure={mockMeasure} onPageChange={onPageChange} />,
+      <PaginatedReader html={CONTENT} mode="cover" lineHeight={1.8} measure={mockMeasure} onPageChange={onPageChange} />,
     );
     const slice = container.querySelector(".reader-page-slice") as HTMLElement;
     expect(slice.style.lineHeight).toBe("1.8");
-    rerender(<PaginatedReader html={CONTENT} mode="scroll" lineHeight={2.4} measure={mockMeasure} onPageChange={onPageChange} />);
+    rerender(<PaginatedReader html={CONTENT} mode="cover" lineHeight={2.4} measure={mockMeasure} onPageChange={onPageChange} />);
     expect(container.querySelector(".reader-page-slice")!.getAttribute("style")).toContain("2.4");
   });
 
   it("applies typography styles to the slice container", () => {
     const typography = { letterSpacingPx: 1.5, paragraphSpacingPx: 16, indentEm: 1, bold: true, fontFamily: "serif" };
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" typography={typography} measure={mockMeasure} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" typography={typography} measure={mockMeasure} />);
     const slice = container.querySelector(".reader-page-slice") as HTMLElement;
     expect(slice.style.letterSpacing).toBe("1.5px");
     expect(slice.style.textIndent).toBe("1em");
@@ -137,7 +137,7 @@ describe("PaginatedReader", () => {
 
   it("does not call onReachEnd on initial render or when navigating away from the end", () => {
     const onReachEnd = vi.fn();
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     expect(onReachEnd).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe("PaginatedReader", () => {
 
   it("does not call onReachEnd when navigating to the last page (10/11 → 11/11 is normal flip)", () => {
     const onReachEnd = vi.fn();
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     const span = wrap.querySelector(".reader-slice-nav span")!;
@@ -162,7 +162,7 @@ describe("PaginatedReader", () => {
 
   it("calls onReachEnd only when flipping past the last page", () => {
     const onReachEnd = vi.fn();
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     const span = wrap.querySelector(".reader-slice-nav span")!;
@@ -177,7 +177,7 @@ describe("PaginatedReader", () => {
 
   it("treats a single-page chapter flip as reaching the end", () => {
     const onReachEnd = vi.fn();
-    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="cover" measure={mockMeasure} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     fireEvent.click(wrap, { clientX: 900 });
@@ -186,7 +186,7 @@ describe("PaginatedReader", () => {
 
   it("calls onReachStart when flipping back past the first page", () => {
     const onReachStart = vi.fn();
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachStart={onReachStart} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} onReachStart={onReachStart} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     // 初始在首页，点击左侧（继续向前）→ 越过首页 → 触发上一章衔接
@@ -196,7 +196,7 @@ describe("PaginatedReader", () => {
 
   it("does not call onReachStart on initial render or when flipping back to the first page", () => {
     const onReachStart = vi.fn();
-    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachStart={onReachStart} />);
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} onReachStart={onReachStart} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     expect(onReachStart).not.toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe("PaginatedReader", () => {
   it("treats a single-page chapter back-flip as reaching the start", () => {
     const onReachStart = vi.fn();
     const onReachEnd = vi.fn();
-    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="scroll" measure={mockMeasure} onReachStart={onReachStart} onReachEnd={onReachEnd} />);
+    const { container } = render(<PaginatedReader html="<p>只有一页</p>" mode="cover" measure={mockMeasure} onReachStart={onReachStart} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
     mockWrapRect(wrap);
     // 单页章节点击左侧 → 上一章衔接；不误触发下一章
