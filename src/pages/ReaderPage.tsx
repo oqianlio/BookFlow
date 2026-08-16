@@ -235,11 +235,18 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       void console.warn(`[sourcereader] 分页拼接 ${pageGuard}: ${nextAbs} → 累计 ${text.length}`);
     }
     console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
-    // 循环后剩余的 next：若非同章节分页（实为"下一章"链接）→ 作为下一章候选；
-    // 分页 URL（同前缀）不充当下一章（下一章由目录兜底）
-    const nextChapter = next && !isSameChapterPage(resolveUrl(next, c.url), c.url)
+    // 下一章判定（优先级）：
+    // 1. 目录中的下一章最可靠（tocRef 已加载时）
+    // 2. nextContentUrl 的非分页值仅作无目录时的兜底候选，且排除：
+    //    - 等于书详情页 URL（错层小说等源最后一章的"下一章"按钮回落书页）
+    //    - 等于当前章节 URL
+    const tocNext = tocRef.current[c.index + 1]?.url;
+    const nextCandidate = next && !isSameChapterPage(resolveUrl(next, c.url), c.url)
       ? resolveUrl(next, c.url)
       : "";
+    const nextChapter = tocNext
+      ? tocNext
+      : (nextCandidate && nextCandidate !== bookUrl && nextCandidate !== c.url ? nextCandidate : "");
     const urls = extractImageUrls(text, c.url);
     if (isImageChapter(text) && urls.length !== 1) {
       return { content: "", images: urls, isManga: true, nextUrl: nextChapter };

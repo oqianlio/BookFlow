@@ -1346,6 +1346,13 @@ describe("bracket index [N] / [-N] in selectors", () => {
     expect(await extractSingle(d, "text.不存在@href")).toBe("");
   });
 
+  it("text.xxx matches by contains, not exact (查看全部章节 >> pattern)", async () => {
+    // 真实页面文本常带符号后缀："查看全部章节 >>"；text.查看全部章节 应命中（legado contains 语义）
+    const d = parseHtml(`<div id="allchapter"><dl><dd><a href="/c1.html">第1章</a></dd>
+      <dd><a href="/book/chapter/1.html">查看全部章节 &gt;&gt;</a></dd></dl></div>`);
+    expect(await extractSingle(d, "text.查看全部章节@href")).toBe("/book/chapter/1.html");
+  });
+
   it("text.xxx works inside item rules (text.下一章)", () => {
     const doc = parseHtml(`<div class="page"><a href="/c/2.html">下一章</a></div>`);
     expect(extractFromElement(doc.querySelector(".page")!, "text.下一章@href")).toBe("/c/2.html");

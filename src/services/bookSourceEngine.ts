@@ -971,12 +971,19 @@ function applyRegexReplace(source: string, parsed: ParsedRule): string {
  */
 export function queryIndexed(selector: string, scope: Document | Element): Element | null {
   const sel = selector.trim();
-  // legado text.xxx：元素文本等于 xxx（锚点定位，如 text.章节目录 / text.下一章）
+  // legado text.xxx：元素自身文本（直接文本子节点）包含 xxx（锚点定位，如 text.章节目录 / text.下一章）。
+  // 用 ownText（不含后代）而非 textContent：祖先元素 textContent 含全部后代文本，会先误匹配；
+  // contains 而非等于：真实页面文本常带符号后缀，如"查看全部章节 >>"
   if (sel.startsWith("text.")) {
     const target = sel.slice(5).trim();
+    if (!target) return null;
     const all = scope.querySelectorAll("*");
     for (const el of all) {
-      if ((el.textContent ?? "").trim() === target) return el;
+      let own = "";
+      for (const n of Array.from(el.childNodes)) {
+        if (n.nodeType === Node.TEXT_NODE) own += n.textContent ?? "";
+      }
+      if (own.includes(target)) return el;
     }
     return null;
   }
