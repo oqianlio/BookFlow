@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ExplorePage from "./ExplorePage";
 import * as api from "../services/api";
 import { resetJsLib } from "../services/jsLib";
+import { resetNavCache } from "./navCache";
 
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
@@ -18,6 +19,8 @@ const sourceJson = JSON.stringify({
 });
 
 describe("ExplorePage", () => {
+  beforeEach(() => resetNavCache());
+
   it("renders categories and fetches books on click", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
@@ -105,5 +108,33 @@ describe("ExplorePage", () => {
       const items = container.querySelectorAll(".explore-cat-item");
       expect(items[0].className).toContain("active");
     });
+  });
+
+  it("restores category selection and books after unmount/remount", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    const get = vi.mocked(api.httpGet);
+    get.mockResolvedValue(
+      `<ul class="list"><li><a class="n" href="/b/1">三体</a><span class="a">刘慈欣</span></li></ul>`,
+    );
+    get.mockClear();
+    const first = render(<ExplorePage sourceId={1} sourceName="示例" onBack={() => {}} onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("玄幻")).toBeInTheDocument());
+    await userEvent.click(screen.getByText("玄幻"));
+    await waitFor(() => expect(screen.getByText("三体")).toBeInTheDocument());
+    expect(get).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    // 模拟从详情页返回：重新挂载，应恢复分类与书籍，且不再发请求
+    get.mockClear();
+    const second = render(<ExplorePage sourceId={1} sourceName="示例" onBack={() => {}} onOpenBook={() => {}} />);
+    await waitFor(() => expect(screen.getByText("三体")).toBeInTheDocument());
+    expect(get).not.toHaveBeenCalled();
+    await waitFor(() => {
+      const items = second.container.querySelectorAll(".explore-cat-item");
+      expect(items[0].className).toContain("active");
+    });
+    second.unmount();
   });
 });

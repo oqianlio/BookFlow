@@ -4,6 +4,7 @@ import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resol
 import { loadJsLib } from "../services/jsLib";
 import type { SearchHit } from "./DiscoverPage";
 import { useError } from "../components/ErrorDialog";
+import { restoreExploreSnapshot, saveExploreSnapshot, takeExploreSnapshot } from "./navCache";
 
 export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }: {
   sourceId: number; sourceName: string; onBack: () => void; onOpenBook: (h: SearchHit) => void;
@@ -27,7 +28,16 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
         if (cancelled) return;
         setSrc(s);
         loadJsLib(s.bookSourceUrl, s.jsLib);
-        setCategories(parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s }));
+        const cats = parseExploreUrl(s.exploreUrl ?? "", { sourceKey: s.bookSourceUrl, source: s });
+        if (cancelled) return;
+        setCategories(cats);
+        // 从详情页/阅读页返回时恢复上次的分类与书籍，避免重新选择分类
+        const snap = restoreExploreSnapshot(takeExploreSnapshot(sourceId), cats);
+        if (snap) {
+          setActive(snap.active);
+          setBooks(snap.books);
+          setPage(snap.page);
+        }
       } catch (e) { if (!cancelled) showError(String(e)); }
     })();
     return () => { cancelled = true; };
@@ -53,6 +63,7 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
       }));
       setBooks(rendered);
       setActive(cat); setPage(pg);
+      saveExploreSnapshot(sourceId, { active: cat, books: rendered, page: pg });
     } catch (e) {
       if (seq !== reqIdRef.current) return;
       setBooks([]);

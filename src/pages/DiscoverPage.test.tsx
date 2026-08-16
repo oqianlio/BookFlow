@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DiscoverPage, { groupExploreSources, groupSearchHits, toChannelCards } from "./DiscoverPage";
 import * as api from "../services/api";
+import { resetNavCache } from "./navCache";
 
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
@@ -14,6 +15,8 @@ vi.mock("../services/api", () => ({
 }));
 
 describe("DiscoverPage", () => {
+  beforeEach(() => resetNavCache());
+
   it("searches enabled sources and lists hits", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例书源", url: "https://ex.com", json: JSON.stringify({
@@ -53,6 +56,35 @@ describe("DiscoverPage", () => {
     await screen.findByText(/书源频道/);
     await userEvent.click(screen.getByText("小说"));
     expect(onOpenGroupExplore).toHaveBeenCalledWith("小说", [{ id: 1, name: "有浏览" }]);
+  });
+
+  it("restores search query and hits after unmount/remount", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例书源", url: "https://ex.com", json: JSON.stringify({
+        bookSourceUrl: "https://ex.com", bookSourceName: "示例书源",
+        searchUrl: "https://ex.com/search?q={{key}}",
+        ruleSearch: { bookList: "@css:li", name: ".name@text", author: ".author@text", bookUrl: ".name@href" },
+      }), enabled: true, last_used_at: null },
+    ]);
+    const get = vi.mocked(api.httpGet);
+    get.mockResolvedValue(
+      `<ul><li><span class="name">三体</span><span class="author">刘慈欣</span><a class="name" href="/b/1.html"></a></li></ul>`,
+    );
+    const first = render(<DiscoverPage onOpenBook={() => {}} />);
+    await userEvent.type(screen.getByLabelText("搜索关键词"), "三体");
+    await userEvent.click(screen.getByRole("button", { name: /搜索/ }));
+    expect(await screen.findByText("三体")).toBeInTheDocument();
+    first.unmount();
+
+    // 模拟从详情页返回：重新挂载，应恢复搜索词与结果，且不再发请求
+    get.mockClear();
+    const second = render(<DiscoverPage onOpenBook={() => {}} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText("搜索关键词")).toHaveValue("三体");
+      expect(screen.getByText("三体")).toBeInTheDocument();
+    });
+    expect(get).not.toHaveBeenCalled();
+    second.unmount();
   });
 });
 

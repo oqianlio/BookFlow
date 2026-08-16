@@ -3,6 +3,7 @@ import { listBookSources } from "../services/api";
 import { parseBookSourceJson } from "../services/bookSourceEngine";
 import { searchBookSources, type SearchHit } from "../services/searchService";
 import { useError } from "../components/ErrorDialog";
+import { saveDiscoverSnapshot, takeDiscoverSnapshot } from "./navCache";
 
 export type { SearchHit } from "../services/searchService";
 
@@ -101,13 +102,24 @@ export default function DiscoverPage({ onOpenBook, onOpenExplore, onOpenGroupExp
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    // 从详情页返回时恢复上次的搜索词与结果，避免重新搜索
+    const snap = takeDiscoverSnapshot();
+    if (snap) {
+      setQuery(snap.query);
+      setHits(snap.hits);
+    }
+  }, []);
+
   const groups = groupExploreSources(exploreSources);
 
   const run = async () => {
     if (!query.trim()) return;
     setBusy(true);
     try {
-      setHits(await searchBookSources(query));
+      const h = await searchBookSources(query);
+      setHits(h);
+      saveDiscoverSnapshot({ query, hits: h });
     } catch (e) {
       showError(String(e));
     } finally {
