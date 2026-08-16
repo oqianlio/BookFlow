@@ -7,7 +7,8 @@
 //    js失效/搜索链接规则为空/搜索目录失效/搜索正文失效），成功清除全部失效标记；
 // 4) "删除失效源"按含"失效"/"校验超时"的分组筛选（legado getInvalidGroupNames）。
 import { httpGet, mergeUserAgent, updateBookSource, type BookSource } from "./api";
-import { parseBookSourceJson, parseHtml, resolveSearchUrl, extractBookList, extractList, extractSingle, hostOf, resolveUrl, type BookSource as Src } from "./bookSourceEngine";
+import { parseBookSourceJson, parseHtml, resolveSearchUrl, extractBookList, extractSingle, hostOf, resolveUrl, type BookSource as Src } from "./bookSourceEngine";
+import { fetchTocBySource } from "./sourceToc";
 
 export const CHECK_KEYWORD = "我的";
 
@@ -98,29 +99,24 @@ export interface VerifySourceOptions {
 
 /**
  * 校验目录与正文（原版 checkBook）：
- * 取第一本书 → 提取 ruleToc 目录 → 若启用了正文检测，取第一章提取 ruleContent 正文。
+ * 取第一本书 → 走真实目录链路（fetchTocBySource：bookUrl→ruleBookInfo→tocUrl→目录，
+ * 与阅读页共用，JSON API 源不再误报）→ 若启用了正文检测，取第一章提取 ruleContent 正文。
  * 返回失败标记数组（原版文案："搜索目录失效" / "搜索正文失效"）。
  */
 async function checkTocAndContent(src: Src, bookUrl: string, checks: VerifyChecks): Promise<string[]> {
   const marks: string[] = [];
-  const base = src.bookSourceUrl || bookUrl;
-  const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : resolveUrl(bookUrl, base);
-  const cookieJarHost = hostOf(src.bookSourceUrl);
-  const ua = mergeUserAgent(src.httpHeaders, src.httpUserAgent);
-  const html = await httpGet(resolvedBookUrl, ua, 8000, undefined, undefined, undefined, cookieJarHost);
-  const doc = parseHtml(html);
-  const rules = src.ruleToc ?? {};
-  if (checks.toc && rules.chapterList) {
-    const items = await extractList(doc, rules.chapterList, {
-      name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-    }, { baseUrl: resolvedBookUrl, result: html, sourceKey: src.bookSourceUrl, source: src });
-    const toc = items.filter((i) => i.url);
-    if (toc.length === 0) {
+  try {
+    // 真实链路（与 fetchToc/阅读页一致）
+    const r = await fetchTocBySource(src, bookUrl, "校验");
+    const toc = r.toc;
+    if (checks.toc && toc.length === 0) {
       marks.push("搜索目录失效");
       return marks;
     }
-    if (checks.content && src.ruleContent?.content) {
-      const chUrl = toc[0].url.startsWith("http") ? toc[0].url : resolveUrl(toc[0].url, resolvedBookUrl);
+    if (checks.content && src.ruleContent?.content && toc.length > 0) {
+      const chUrl = toc[0].url;
+      const cookieJarHost = hostOf(src.bookSourceUrl);
+      const ua = mergeUserAgent(src.httpHeaders, src.httpUserAgent);
       const chHtml = await httpGet(chUrl, ua, 8000, undefined, undefined, undefined, cookieJarHost);
       const chDoc = parseHtml(chHtml);
       const content = await extractSingle(chDoc, src.ruleContent.content, {
@@ -128,6 +124,9 @@ async function checkTocAndContent(src: Src, bookUrl: string, checks: VerifyCheck
       });
       if (!content || content.trim().length < 30) marks.push("搜索正文失效");
     }
+  } catch {
+    // 网络失败 → 目录环节失败（分类由外层 reason 判定）
+    marks.push("搜索目录失效");
   }
   return marks;
 }
@@ -185,31 +184,47 @@ export interface VerifyOptions extends VerifySourceOptions {
   persist?: (id: number, name: string, url: string, json: string) => Promise<void>;
 }
 
-/** 并发批量验证，保持输入顺序返回；检测结果写入书源分组并持久化（legado 机制） */
+/** 并发批量验证，保持输入顺序返回；检测结果写入书源分组并持久化（legado 机制）。
+ *  同域名（同服务商）源串行执行 + 间隔，避免触发服务商限流误报（lessons 3.40）。 */
 export async function verifySources(sources: BookSource[], opts?: VerifyOptions): Promise<VerifyResult[]> {
-  const concurrency = Math.max(1, Math.min(opts?.concurrency ?? 10, sources.length || 1));
   const persist = opts?.persist ?? ((id, name, url, json) => updateBookSource(id, name, url, json));
   const results: VerifyResult[] = new Array(sources.length);
-  let next = 0;
-  let done = 0;
-  const worker = async () => {
-    while (next < sources.length) {
+  const done = { n: 0 };
+  const runOne = async (i: number, bs: BookSource) => {
+    if (opts?.shouldCancel?.()) return;
+    const r = await verifySource(bs, { keyword: opts?.keyword, checks: opts?.checks });
+    results[i] = r;
+    // 学习原版：检测结果持久化到书源分组（失败标记 / 清除失效标记）+ 响应耗时（respondTime）
+    let updatedJson = updateSourceGroups(bs.json, r.groups.length > 0 ? r.groups : null);
+    if (r.ok) updatedJson = updateRespondTime(updatedJson, r.ms);
+    if (updatedJson !== bs.json) {
+      try { await persist(bs.id, bs.name, bs.url, updatedJson); } catch { /* 持久化失败不影响结果 */ }
+    }
+    done.n++;
+    opts?.onProgress?.(done.n, sources.length, r, updatedJson);
+  };
+  // 按域名分组：同域名串行（组内 200ms 间隔），组间并发（上限 concurrency）
+  const groups = new Map<string, Array<{ i: number; bs: BookSource }>>();
+  for (let i = 0; i < sources.length; i++) {
+    let host = "unknown";
+    try { host = new URL(sources[i].url || (JSON.parse(sources[i].json) as any).bookSourceUrl || "").hostname; } catch { /* 保持 unknown */ }
+    if (!groups.has(host)) groups.set(host, []);
+    groups.get(host)!.push({ i, bs: sources[i] });
+  }
+  const concurrency = Math.max(1, Math.min(opts?.concurrency ?? 10, groups.size || 1));
+  const hosts = [...groups.keys()];
+  let nextHost = 0;
+  const hostWorker = async () => {
+    while (nextHost < hosts.length) {
       if (opts?.shouldCancel?.()) return;
-      const i = next++;
-      const bs = sources[i];
-      const r = await verifySource(bs, { keyword: opts?.keyword, checks: opts?.checks });
-      results[i] = r;
-      // 学习原版：检测结果持久化到书源分组（失败标记 / 清除失效标记）+ 响应耗时（respondTime）
-      let updatedJson = updateSourceGroups(bs.json, r.groups.length > 0 ? r.groups : null);
-      if (r.ok) updatedJson = updateRespondTime(updatedJson, r.ms);
-      if (updatedJson !== bs.json) {
-        try { await persist(bs.id, bs.name, bs.url, updatedJson); } catch { /* 持久化失败不影响结果 */ }
+      const host = hosts[nextHost++];
+      for (const { i, bs } of groups.get(host)!) {
+        await runOne(i, bs);
+        await new Promise((r) => setTimeout(r, 200));
       }
-      done++;
-      opts?.onProgress?.(done, sources.length, r, updatedJson);
     }
   };
-  await Promise.all(Array.from({ length: concurrency }, worker));
+  await Promise.all(Array.from({ length: concurrency }, hostWorker));
   return results;
 }
 
