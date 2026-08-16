@@ -136,12 +136,15 @@ export async function verifySource(bs: BookSource, opts?: VerifySourceOptions): 
       baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl, source: src,
     });
     if (items.length === 0) return fail("无结果");
-    // 学习原版：搜索到书后继续校验目录/正文（仅当源配置了对应规则且检测项启用）
+    // 学习原版：搜索到书后继续校验目录/正文（仅当源配置了对应规则且检测项启用）。
+    // ok 由搜索判定：轻量检测无 Referer/cookie 全流程，详情页常因网络/反爬失败，
+    // 若目录/正文失败即判失效会大量误杀可用源（真实源实测 72→9）。
+    // 目录/正文失败作为质量标记附加，源仍算可用。
     const hasTocRule = !!(src.ruleToc?.chapterList) && (checks.toc || checks.content);
     if (hasTocRule && items[0]?.bookUrl) {
       const marks = await checkTocAndContent(src, items[0].bookUrl, checks);
       if (marks.length > 0) {
-        return { id: bs.id, name: bs.name, ok: false, count: items.length, ms: Date.now() - t0, reason: marks.join("、"), groups: marks };
+        return { id: bs.id, name: bs.name, ok: true, count: items.length, ms: Date.now() - t0, reason: marks.join("、"), groups: marks };
       }
     }
     return { id: bs.id, name: bs.name, ok: true, count: items.length, ms: Date.now() - t0, reason: "", groups: [] };

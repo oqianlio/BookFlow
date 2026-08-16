@@ -443,9 +443,12 @@ export default function BookSourceManager({ onDebug, onBack }: {
                             <span className="source-url">{s.url}</span>
                             {verifyResults?.has(s.id) && (() => {
                               const r = verifyResults.get(s.id)!;
-                              return r.ok
+                              // ok 且无附加标记 → 绿；ok 但目录/正文标记 → 黄；失败 → 红
+                              return r.ok && !r.reason
                                 ? <span className="verify-badge ok" title={`${r.ms}ms`}>✓ {r.count}本</span>
-                                : <span className="verify-badge fail" title={r.reason}>{r.reason}</span>;
+                                : r.ok
+                                  ? <span className="verify-badge warn" title={`${r.ms}ms`}>{r.reason}</span>
+                                  : <span className="verify-badge fail" title={r.reason}>{r.reason}</span>;
                             })()}
                           </div>
                           <div className="source-actions">

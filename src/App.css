@@ -1003,6 +1003,7 @@ input[type="range"] {
 .source-verify-config .verify-config-check { gap: 4px; cursor: pointer; }
 .verify-badge { display: inline-block; margin-top: 4px; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .verify-badge.ok { color: var(--primary); background: var(--secondary-container); }
+.verify-badge.warn { color: #8a5a00; background: #fdeecb; }
 .verify-badge.fail { color: var(--error, #b3261e); background: var(--error-container, #f9dedc); }
 
 /* ============ 发现与搜索（书源） ============ */

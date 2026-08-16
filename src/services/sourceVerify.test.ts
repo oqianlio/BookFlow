@@ -147,7 +147,7 @@ describe("sourceVerify", () => {
     expect(api.httpGet).toHaveBeenCalledTimes(3);
   });
 
-  it("marks 搜索目录失效 when toc extraction fails", async () => {
+  it("marks 搜索目录失效 as quality flag but keeps source ok (search decides usability)", async () => {
     const searchHtml = `<html><body><ul class="bookbox">
       <li class="bookname"><a href="/b/1.html">我的</a></li></ul></body></html>`;
     const tocHtml = `<html><body><div>目录为空，章节列表加载失败</div></body></html>`;
@@ -161,7 +161,7 @@ describe("sourceVerify", () => {
       ruleContent: { content: ".content@text" },
     }));
     const r = await verifySource(src);
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true); // 搜索可用 → 仍算可用
     expect(r.reason).toContain("搜索目录失效");
     expect(r.groups).toEqual(["搜索目录失效"]);
   });
