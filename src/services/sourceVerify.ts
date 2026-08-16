@@ -50,6 +50,29 @@ export function updateSourceGroups(json: string, addGroups: string[] | null): st
   }
 }
 
+/** 写回响应耗时（legado BookSource.respondTime，毫秒，用于按响应速度排序）；解析失败或无变化时返回原 json */
+export function updateRespondTime(json: string, ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return json;
+  try {
+    const obj = JSON.parse(json);
+    if (obj.respondTime === ms) return json;
+    obj.respondTime = Math.round(ms);
+    return JSON.stringify(obj);
+  } catch {
+    return json;
+  }
+}
+
+/** 从书源 JSON 读取响应耗时（毫秒；无则返回 null） */
+export function respondTimeOf(json: string): number | null {
+  try {
+    const v = JSON.parse(json).respondTime;
+    return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 检测项开关（对应原版 CheckSource.checkSearch/checkCategory/checkContent） */
 export interface VerifyChecks {
   search?: boolean;
@@ -176,8 +199,9 @@ export async function verifySources(sources: BookSource[], opts?: VerifyOptions)
       const bs = sources[i];
       const r = await verifySource(bs, { keyword: opts?.keyword, checks: opts?.checks });
       results[i] = r;
-      // 学习原版：检测结果持久化到书源分组（失败标记 / 清除失效标记）
-      const updatedJson = updateSourceGroups(bs.json, r.groups.length > 0 ? r.groups : null);
+      // 学习原版：检测结果持久化到书源分组（失败标记 / 清除失效标记）+ 响应耗时（respondTime）
+      let updatedJson = updateSourceGroups(bs.json, r.groups.length > 0 ? r.groups : null);
+      if (r.ok) updatedJson = updateRespondTime(updatedJson, r.ms);
       if (updatedJson !== bs.json) {
         try { await persist(bs.id, bs.name, bs.url, updatedJson); } catch { /* 持久化失败不影响结果 */ }
       }

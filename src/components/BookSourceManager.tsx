@@ -3,7 +3,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, writeTextFile, listSubscriptions, addSubscription, deleteSubscription, setSubscriptionChecked, type BookSource, type SubscriptionRow } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 import { syncSubscription } from "../services/sourceSubscription";
-import { verifySources, invalidGroupNames, type VerifyResult } from "../services/sourceVerify";
+import { verifySources, invalidGroupNames, respondTimeOf, type VerifyResult } from "../services/sourceVerify";
 import { useError } from "./ErrorDialog";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -42,6 +42,7 @@ export default function BookSourceManager({ onDebug, onBack }: {
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"default" | "name" | "respond">("default");
   const { showError } = useError();
   const [pendingSources, setPendingSources] = useState<any[] | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -363,13 +364,25 @@ export default function BookSourceManager({ onDebug, onBack }: {
         <p className="panel-empty">暂无书源</p>
       ) : (
         <>
-          <input
-            className="source-filter"
-            aria-label="搜索书源"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索书源名称或网址"
-          />
+          <div className="source-filter-row">
+            <input
+              className="source-filter"
+              aria-label="搜索书源"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="搜索书源名称或网址"
+            />
+            <select
+              className="source-sort"
+              aria-label="书源排序"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as any)}
+            >
+              <option value="default">默认顺序</option>
+              <option value="name">按名称</option>
+              <option value="respond">按响应速度</option>
+            </select>
+          </div>
           <div className="source-verify-bar">
             <button
               className="btn btn-ghost"
@@ -425,7 +438,13 @@ export default function BookSourceManager({ onDebug, onBack }: {
               ? sources.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()) || s.url.toLowerCase().includes(query.trim().toLowerCase()))
               : sources;
             if (filtered.length === 0) return <p className="panel-empty">无匹配书源</p>;
-            return groupSources(filtered).map(({ group, items }) => {
+            // 排序（原版 BookSourceSort：名称 / 响应耗时）
+            const sorted = sortMode === "name"
+              ? [...filtered].sort((a, b) => a.name.localeCompare(b.name, "zh"))
+              : sortMode === "respond"
+                ? [...filtered].sort((a, b) => (respondTimeOf(a.json) ?? 999999) - (respondTimeOf(b.json) ?? 999999))
+                : filtered;
+            return groupSources(sorted).map(({ group, items }) => {
               const isCollapsed = collapsed.has(group);
               return (
                 <div key={group}>

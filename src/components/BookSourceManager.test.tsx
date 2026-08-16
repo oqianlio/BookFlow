@@ -35,6 +35,12 @@ vi.mock("../services/sourceVerify", () => ({
         .filter((g: string) => g.includes("失效") || g === "校验超时");
     } catch { return []; }
   },
+  respondTimeOf: (json: string) => {
+    try {
+      const v = JSON.parse(json).respondTime;
+      return typeof v === "number" && v > 0 ? v : null;
+    } catch { return null; }
+  },
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue("C:/fake/source.json"),
@@ -414,7 +420,7 @@ describe("BookSourceManager", () => {
     verify.mockResolvedValue([{ id: 1, name: "好源", ok: true, count: 1, ms: 10, reason: "", groups: [] }]);
     render(<BookSourceManager />);
     await screen.findByText("好源");
-    // 改关键字并关掉目录检测
+    // 改关键字并关掉正文检测
     await userEvent.clear(screen.getByLabelText("检测关键字"));
     await userEvent.type(screen.getByLabelText("检测关键字"), "测试");
     await userEvent.click(screen.getByLabelText("正文"));
@@ -425,5 +431,19 @@ describe("BookSourceManager", () => {
       concurrency: 10,
       checks: { search: true, toc: true, content: false },
     });
+  });
+
+  it("sorts sources by respondTime (原版 BookSourceSort.Respond)", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "慢源", url: "https://a.com", json: JSON.stringify({ bookSourceUrl: "https://a.com", bookSourceName: "慢源", respondTime: 9000 }), enabled: true, last_used_at: null },
+      { id: 2, name: "快源", url: "https://b.com", json: JSON.stringify({ bookSourceUrl: "https://b.com", bookSourceName: "快源", respondTime: 300 }), enabled: true, last_used_at: null },
+    ]);
+    render(<BookSourceManager />);
+    await screen.findByText("慢源");
+    await userEvent.selectOptions(screen.getByLabelText("书源排序"), "respond");
+    // 按响应快慢：快源在前
+    const names = screen.getAllByText(/快源|慢源/).map((n) => n.textContent);
+    expect(names[0]).toBe("快源");
+    expect(names[1]).toBe("慢源");
   });
 });

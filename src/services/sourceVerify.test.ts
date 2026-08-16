@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   verifySource, verifySources, failureGroup, updateSourceGroups, invalidGroupNames, isInvalidGroup,
+  updateRespondTime, respondTimeOf,
 } from "./sourceVerify";
 import * as api from "./api";
 
@@ -67,6 +68,25 @@ describe("failureGroup / group helpers", () => {
     expect(invalidGroupNames(okJson({ bookSourceGroup: "小说,网站失效,校验超时" }))).toEqual(["网站失效", "校验超时"]);
     expect(invalidGroupNames(okJson({ bookSourceGroup: "小说" }))).toEqual([]);
     expect(invalidGroupNames("not json")).toEqual([]);
+  });
+
+  it("updateRespondTime writes ms and respondTimeOf reads it back", () => {
+    const out = updateRespondTime(okJson(), 1234);
+    expect(JSON.parse(out).respondTime).toBe(1234);
+    expect(respondTimeOf(out)).toBe(1234);
+    expect(respondTimeOf(okJson())).toBeNull();
+    expect(updateRespondTime("not json", 100)).toBe("not json");
+  });
+
+  it("verifySources persists respondTime for ok sources", async () => {
+    vi.mocked(api.httpGet).mockResolvedValue('<html><body><ul class="bookbox"><li class="bookname"><a href="/a.html">我的</a></li></ul></body></html>');
+    const src = bs(11, "好源", okJson());
+    await verifySources([src], { concurrency: 1 });
+    expect(api.updateBookSource).toHaveBeenCalledTimes(1);
+    const [, , , updatedJson] = vi.mocked(api.updateBookSource).mock.calls[0];
+    const obj = JSON.parse(String(updatedJson));
+    expect(typeof obj.respondTime).toBe("number");
+    expect(obj.respondTime).toBeGreaterThan(0);
   });
 });
 
@@ -216,11 +236,15 @@ describe("sourceVerify", () => {
     expect(JSON.parse(String(updatedJson)).bookSourceGroup).toContain("搜索失效");
   });
 
-  it("does not persist when json is unchanged (ok source without stale markers)", async () => {
+  it("persists only respondTime for ok sources (no group markers added)", async () => {
     vi.mocked(api.httpGet).mockResolvedValue('<html><body><ul class="bookbox"><li class="bookname"><a href="/a.html">我的</a></li></ul></body></html>');
     const src = bs(10, "好源", okJson());
     await verifySources([src], { concurrency: 1 });
-    expect(api.updateBookSource).not.toHaveBeenCalled();
+    expect(api.updateBookSource).toHaveBeenCalledTimes(1);
+    const [, , , updatedJson] = vi.mocked(api.updateBookSource).mock.calls[0];
+    const obj = JSON.parse(String(updatedJson));
+    expect(obj.bookSourceGroup).toBeUndefined(); // 无失效标记写入
+    expect(typeof obj.respondTime).toBe("number");
   });
 
   it("verifySources respects shouldCancel", async () => {
