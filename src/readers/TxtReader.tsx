@@ -56,6 +56,19 @@ export default function TxtReader({ path, bookId, onError, conversion }: {
     save(String(clamped), clamped / pageCount);
   };
 
+  // 键盘翻页：←/→/空格/PgUp/PgDn（输入框聚焦时不触发）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); go(page + 1); }
+      else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); go(page - 1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageCount]);
+
   const goRef = useRef(go);
   goRef.current = go;
 

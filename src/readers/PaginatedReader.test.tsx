@@ -217,4 +217,32 @@ describe("PaginatedReader", () => {
     expect(onReachStart).toHaveBeenCalledTimes(1);
     expect(onReachEnd).not.toHaveBeenCalled();
   });
+
+  it("keyboard ArrowRight/ArrowLeft flips pages", () => {
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    const span = wrap.querySelector(".reader-slice-nav span")!;
+    const total = Number(span.textContent!.split("/")[1].trim());
+    expect(total).toBeGreaterThan(1);
+    // 初始 1/总
+    expect(span.textContent).toBe(`1 / ${total}`);
+    // → 翻下一页
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(span.textContent).toBe(`2 / ${total}`);
+    // ← 翻回
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(span.textContent).toBe(`1 / ${total}`);
+  });
+
+  it("keyboard input focus does not flip pages", () => {
+    const { container } = render(<PaginatedReader html={CONTENT} mode="cover" measure={mockMeasure} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    const span = wrap.querySelector(".reader-slice-nav span")!;
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: "ArrowRight" });
+    expect(span.textContent).toMatch(/^1 \//);
+    document.body.removeChild(input);
+  });
 });

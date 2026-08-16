@@ -72,6 +72,29 @@ export default function PaginatedReader({
 
   useEffect(() => { onPageChange?.(0, total); }, [total]); // 初始上报
 
+  // 键盘翻页：←/→/空格/PgUp/PgDn（输入框聚焦时不触发）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      switch (e.key) {
+        case "ArrowRight":
+        case " ":
+        case "PageDown":
+          e.preventDefault();
+          go(page + 1);
+          break;
+        case "ArrowLeft":
+        case "PageUp":
+          e.preventDefault();
+          go(page - 1);
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [page, go, total]);
+
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - rect.left;

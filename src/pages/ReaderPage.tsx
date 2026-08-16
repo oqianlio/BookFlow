@@ -424,11 +424,22 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     }
   };
 
-  // ==== 键盘快捷键（Esc 全局关闭侧栏面板；本地书附加书签/标注快捷键） ====
+  // ==== 键盘快捷键 ====
+  // 全局：Esc 关闭侧栏、↑/↓ 切章（书源）、T 目录、S 设置、B 书签（本地+书源）
+  // 翻页：←/→/空格/PgUp/PgDn 由各阅读器内部处理（PaginatedReader/TxtReader/MdReader）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPanel(null);
-      if (!isLocal) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.key === "Escape") { setPanel(null); return; }
+      // 书源：章节切换（↑/↓）与面板快捷键
+      if (!isLocal) {
+        if (e.key === "ArrowUp") { e.preventDefault(); goChapter(-1); return; }
+        if (e.key === "ArrowDown") { e.preventDefault(); goChapter(1); return; }
+        if (e.key.toLowerCase() === "t") { setPanel((p) => (p === "toc" ? null : "toc")); return; }
+        if (e.key.toLowerCase() === "s") { setPanel((p) => (p === "settings" ? null : "settings")); return; }
+        return;
+      }
       if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         const w = window as any;
@@ -449,7 +460,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isLocal, book?.id]);
+  }, [isLocal, book?.id, sourceId, goChapter]);
 
   useEffect(() => {
     if (!isLocal) return;
