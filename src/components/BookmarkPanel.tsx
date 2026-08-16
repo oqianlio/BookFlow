@@ -5,8 +5,8 @@ export interface BookmarkItem {
   id: number; book_id: number; location: string; label: string; created_at: number;
 }
 
-export default function BookmarkPanel({ bookId, onJump, onChanged, onClose }: {
-  bookId: number; onJump: (loc: string) => void; onChanged: () => void; onClose?: () => void;
+export default function BookmarkPanel({ bookId, onJump, onChanged }: {
+  bookId: number; onJump: (loc: string) => void; onChanged: () => void;
 }) {
   const [items, setItems] = useState<BookmarkItem[]>([]);
   const refresh = useCallback(async () => {
@@ -39,10 +39,7 @@ export default function BookmarkPanel({ bookId, onJump, onChanged, onClose }: {
 
   return (
     <aside className="panel">
-      <div className="panel-head">
-        <h3>书签</h3>
-        <button className="btn-icon panel-close" onClick={() => onClose?.()} aria-label="关闭书签" title="关闭">×</button>
-      </div>
+      <h3>书签</h3>
       <button className="btn-primary" onClick={handleAdd}>添加当前书签</button>
       {items.length === 0 ? <p className="panel-empty">暂无书签</p> : (
         <ul>

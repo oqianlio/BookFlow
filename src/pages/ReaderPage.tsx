@@ -632,17 +632,14 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           {panel ? "›" : "‹"}
         </button>
         {isLocal && panel === "annotations" && (
-          <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} onClose={() => setPanel(null)} />
+          <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} />
         )}
         {isLocal && panel === "bookmarks" && (
-          <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} onClose={() => setPanel(null)} />
+          <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
         )}
         {!isLocal && panel === "toc" && (
           <div className="panel reader-toc-panel">
-            <div className="panel-head">
-              <h3>目录</h3>
-              <button className="btn-icon panel-close" onClick={() => setPanel(null)} aria-label="关闭目录" title="关闭">×</button>
-            </div>
+            <h3>目录</h3>
             {tocLoading && toc.length === 0 && <p className="panel-empty">加载中…</p>}
             {tocFailed && toc.length === 0 && (
               <div className="panel-empty">
@@ -679,10 +676,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         )}
         {panel === "settings" && (
           <div className="panel reader-settings-panel">
-            <div className="panel-head">
-              <h3>阅读设置</h3>
-              <button className="btn-icon panel-close" onClick={() => setPanel(null)} aria-label="关闭设置" title="关闭">×</button>
-            </div>
+            <h3>阅读设置</h3>
             {!isLocal && (
               <div className="settings-group">
                 <label className="settings-label">翻页模式</label>

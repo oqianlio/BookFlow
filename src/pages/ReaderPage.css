@@ -352,31 +352,10 @@
 }
 
 .panel h3 {
-  margin: 0;
+  margin: 0 0 14px;
   font-family: var(--font-read);
   font-size: 16px;
   color: var(--fg);
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
-.panel-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  font-size: 16px;
-  line-height: 1;
-  color: var(--fg-muted);
-  flex-shrink: 0;
-}
-.panel-close:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 
 /* ============ 侧边栏统一开关（‹/› 对称，无动画防"飞"感） ============ */

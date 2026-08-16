@@ -6,8 +6,8 @@ export interface AnnotationItem {
   text: string; note: string | null; color: string; created_at: number;
 }
 
-export default function AnnotationPanel({ bookId, format, onJump, onChanged, onClose }: {
-  bookId: number; format?: string; onJump: (loc: string) => void; onChanged: () => void; onClose?: () => void;
+export default function AnnotationPanel({ bookId, format, onJump, onChanged }: {
+  bookId: number; format?: string; onJump: (loc: string) => void; onChanged: () => void;
 }) {
   const [items, setItems] = useState<AnnotationItem[]>([]);
   const [text, setText] = useState("");
@@ -42,10 +42,7 @@ export default function AnnotationPanel({ bookId, format, onJump, onChanged, onC
 
   return (
     <aside className="panel">
-      <div className="panel-head">
-        <h3>标注</h3>
-        <button className="btn-icon panel-close" onClick={() => onClose?.()} aria-label="关闭标注" title="关闭">×</button>
-      </div>
+      <h3>标注</h3>
       {items.length === 0 ? <p className="panel-empty">暂无标注</p> : (
         <ul>
           {items.map((a) => (
