@@ -470,3 +470,50 @@
   小并发；检查结果从"限流误报"变为真实规则状态。
 - 下次：任何批量抓取/检查工具，先按目标主机分组交错，再谈
   并发度；"提取为空"要怀疑限流/反爬，用单源单次请求复核。
+
+### 3.41 legado @put/@get 语义用真实源验证（2026-08-16）
+- 场景：实现 `@put:`/`@get:` 变量语法。网上拿不到原版源码（网络受限），
+  改用 tmp_sources.json 里真实源（4020/爱看书网/红薯阅读）佐证：
+  `@put:{n:"[property$=book_name]@content",...}` JSON 对象多值形式、
+  `@get:{n}` 花括号键、链式 `$..bookName@put:{bookid:...}`（返回提取值、
+  put 是副作用）、URL 模板内 `bookId=@get:{bookid}` 字面替换。
+- 认知：**规则语法语义 = 规则串在真实源里的写法**。三种上下文
+  （document/element/json object）都要支持 @put 块剥离；链拆分时
+  注意 put 块内含 `@`（值规则如 `[property$=x]@content`）——不能
+  按 `@` 简单 split，要先引号感知括号匹配剥离块。
+- 坑：a) `split("@")` 后链段无 `@` 前缀（段形如 `get:{k}` 而非
+  `@get:{k}`）；b) tag. 前缀分支必须先于链式分支检查？否——`tag.h1@text@get:{k}`
+  含 `@` 应走链式，tag. 分支只能处理无 `@` 的 `tag.h1`；c) 字面量值
+  （`@put:{bookid:"999"}`）规则求值为空时需字面兜底。
+- 下次：实现 legado 语法先扫 tmp_sources.json 找真实用法；链段前缀
+  注意 split 语义；分支顺序按"含 @ 优先链式"。
+
+### 3.42 组件测试 findByText 失败先查 DOM dump 再猜（2026-08-16）
+- 场景：ReaderPage.source 测试 18 个失败，以为是引擎改动导致。
+  用 debug 测试打印 container.innerHTML 发现内容**已渲染**（`<p>第一章…`），
+  失败原因是并发编辑时源文件处于中间态（`applyInitRule is not a function`
+  导入错误）——文件被我编辑中 vitest 读到了半成品。
+- 认知：**编辑中的文件会被 vitest 读到半成品**——改多文件时先完成
+  全部编辑再跑测试；失败先看 DOM dump / 具体报错（TypeError 而非
+  断言失败 = 文件状态问题）。
+- 下次：多文件改动期间避免跑测试；报错是 `is not a function` 先查
+  导出是否齐全/文件是否写完。
+
+### 3.43 SQLite LENGTH() 按字符计而非字节（2026-08-16）
+- 场景：list_cached_books 的 bytes 断言用 Rust `str.len()`（UTF-8 字节数），
+  与 SQLite `LENGTH(content)`（字符数）不一致，中文内容测试失败。
+- 认知：SQLite LENGTH() 对 TEXT 返回**字符数**（非字节）；Rust 侧
+  验证用 `chars().count()`。
+- 下次：跨 SQL/Rust 的计数断言，明确单位（字符 vs 字节）再写。
+
+### 3.44 同一仓库并发编辑：提交前核对工作树归属（2026-08-16）
+- 场景：开发期间发现 ReaderPage.tsx/ReaderPage.css 被另一进程持续
+  修改（页面指示器 WIP + 调试日志），我的改动与其混在同一文件。
+- 认知：多 agent 同仓并行时：a) 提交前 `git status` 区分归属，
+  只 stage 自己的文件；b) 共享文件用 `git add <文件>` 精确提交，
+  避免把他人 WIP 带进提交；c) 组件测试失败可能是对方中间态导致，
+  单独跑文件确认归属。
+- 下次：开发前看工作树是否有未提交他人改动；提交粒度按文件归属
+  切割，不混提。stash 循环有丢失修改风险（stash push 指定路径 + pop
+  期间文件被外部改动会冲突），尽量少用。
+
