@@ -10,7 +10,7 @@ import BookmarkPanel from "../components/BookmarkPanel";
 import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
-import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
 import { fetchToc, type TocItem } from "../services/sourceToc";
@@ -203,14 +203,46 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     const cookieJarHost = hostOf(src.bookSourceUrl);
     const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
     console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
-    const doc = parseHtml(html);
+    let doc = parseHtml(html);
     const rules = src.ruleContent ?? {};
-    const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+    let text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+    // legado nextContentUrl = 同章节分页（如 36xs 的 6516910_1.html）：循环抓取后续页并拼接，
+    // 直到无下一页（或下一页指向目录中的下一章 = 实为"下一章"链接，不拼接）
+    let next = rules.nextContentUrl
+      ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl })
+      : "";
+    // 分页判定：分页 URL 与当前 URL 同前缀（36xs: 6516910.html → 6516910_1.html）；
+    // 下一章 URL 前缀不同（6516911.html）或与目录下一章一致 → 不拼接
+    const isSameChapterPage = (a: string, base: string) =>
+      a !== base && a.startsWith(base.replace(/\.html?$/, ""));
+    let pageGuard = 0;
+    while (next && pageGuard < 20) {
+      const nextAbs = resolveUrl(next, c.url);
+      const tocNext = tocRef.current[c.index + 1]?.url;
+      if (tocNext && nextAbs === tocNext) break; // 指向目录下一章：非分页，停止拼接
+      if (!isSameChapterPage(nextAbs, c.url)) break; // 非同章节分页（实为下一章链接）
+      pageGuard++;
+      const pageHtml = await httpGet(nextAbs, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+      doc = parseHtml(pageHtml);
+      const pageText = await extractSingle(doc, rules.content ?? "body", { baseUrl: nextAbs, result: pageHtml, sourceKey: src.bookSourceUrl });
+      if (!pageText) break; // 下一页无正文：停止
+      text += pageText;
+      const prevNext = next;
+      next = rules.nextContentUrl
+        ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: nextAbs, result: pageHtml, sourceKey: src.bookSourceUrl })
+        : "";
+      if (next && next === prevNext) break; // 死循环保护：URL 不变
+      void console.warn(`[sourcereader] 分页拼接 ${pageGuard}: ${nextAbs} → 累计 ${text.length}`);
+    }
     console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
-    const next = rules.nextContentUrl ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl }) : "";
+    // 循环后剩余的 next：若非同章节分页（实为"下一章"链接）→ 作为下一章候选；
+    // 分页 URL（同前缀）不充当下一章（下一章由目录兜底）
+    const nextChapter = next && !isSameChapterPage(resolveUrl(next, c.url), c.url)
+      ? resolveUrl(next, c.url)
+      : "";
     const urls = extractImageUrls(text, c.url);
     if (isImageChapter(text) && urls.length !== 1) {
-      return { content: "", images: urls, isManga: true, nextUrl: next };
+      return { content: "", images: urls, isManga: true, nextUrl: nextChapter };
     }
     const purified = purifyContent(text, (src as any).purify);
     // 写缓存（阅读即缓存，供后续离线）
@@ -218,7 +250,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       sourceId, bookUrl, chapterIndex: c.index, chapterUrl: c.url, chapterName: c.name,
       content: purified,
     }).catch(() => {});
-    return { content: purified, images: [], isManga: false, nextUrl: next };
+    return { content: purified, images: [], isManga: false, nextUrl: nextChapter };
   }, [sourceId, bookUrl]);
 
   // ==== 书源：会话级章节缓存（模块级，App 运行期间跨页面保留已读/预取章节）====

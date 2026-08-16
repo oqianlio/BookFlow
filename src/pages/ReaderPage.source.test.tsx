@@ -743,4 +743,29 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第 2 章");
   });
+
+  it("concatenates same-chapter paginated content (36xs 6516910.html → 6516910_1.html)", async () => {
+    // 分页正文：nextContentUrl 指向同章节下一页（同前缀）→ 拼接进当前章节，不当作下一章
+    const paginatedJson = JSON.stringify({
+      bookSourceUrl: "https://www.36xs.net", bookSourceName: "36小说网",
+      ruleContent: { content: "#content", nextContentUrl: "a#next@href" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "36小说网", url: "https://www.36xs.net", json: paginatedJson, enabled: true, last_used_at: null },
+    ]);
+    const p1 = `<html><body><div id="content"><p>第004章第一页内容。</p></div><a id="next" href="/56/56445/6516910_1.html">下一页</a></body></html>`;
+    const p2 = `<html><body><div id="content"><p>第004章第二页内容。</p></div><a id="next" href="/56/56445/6516910_2.html">下一页</a></body></html>`;
+    const p3 = `<html><body><div id="content"><p>第004章第三页内容。</p></div></body></html>`;
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://www.36xs.net/56/56445/6516910.html") return p1;
+      if (url === "https://www.36xs.net/56/56445/6516910_1.html") return p2;
+      return p3;
+    });
+    render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://www.36xs.net/56_56445/", bookTitle: "测试书", chapterIndex: 3, chapterUrl: "https://www.36xs.net/56/56445/6516910.html", chapterName: "第004章" }} onBack={() => {}} />);
+    // 三页内容全部拼接渲染（同一章节，非跳章）；content 提取为纯文本，用子串匹配
+    expect(await screen.findByText(/第004章第一页内容。/)).toBeInTheDocument();
+    expect(screen.getByText(/第004章第二页内容。/)).toBeInTheDocument();
+    expect(screen.getByText(/第004章第三页内容。/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("第004章");
+  });
 });
