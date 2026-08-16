@@ -12,6 +12,10 @@ export type ParsedRule = {
   attr?: string;
   after?: string;
   replace?: Array<[string, string]>;
+  /** regexReplace 专用：正则 / 替换串 / replaceFirst 模式（legado ##re##rep / ##re##rep###） */
+  regex?: string;
+  replacement?: string;
+  replaceFirst?: boolean;
 };
 
 export interface BookSource {
@@ -217,8 +221,18 @@ export function parseRule(rule: string): ParsedRule {
   if (s.startsWith("$.") || s.startsWith("$[")) {
     return { type: "json", value: s };
   }
+  // legado ## 替换规则（对齐原版 SourceRule：rule.split("##")）
+  //   ##re##rep       → 对节点 outerHtml 全替换
+  //   ##re##rep###    → replaceFirst：取第一个匹配的 group0 替换，无匹配返回空
   if (s.startsWith("##")) {
-    return { type: "regexReplace", value: s.slice(2) };
+    const parts = s.split("##");
+    return {
+      type: "regexReplace",
+      value: s,
+      regex: parts[1] ?? "",
+      replacement: parts[2] ?? "",
+      replaceFirst: parts.length > 3,
+    };
   }
   if (s.includes("{{")) {
     return { type: "regex", value: s };
@@ -412,9 +426,9 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     return "";
   }
   if (parsed.type === "regexReplace") {
-    const parts = rule.slice(2).split("##");
-    const re = new RegExp(parts[0], "g");
-    return (doc.body?.textContent ?? "").replace(re, parts[1] ?? "");
+    // 选择器为空：对文档（原版 jsoup doc.toString() = 完整 html）做正则提取/替换
+    const source = doc.documentElement?.outerHTML ?? "";
+    return applyRegexReplace(source, parsed);
   }
   if (parsed.type === "xpath") {
     const expr = parsed.value.trim();
@@ -583,7 +597,7 @@ export async function extractList(
       }
       return nodes.map((node) => {
         const out: Record<string, string> = {};
-        for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule, ctx?.baseUrl);
+        for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
         return out;
       });
     }
@@ -598,7 +612,7 @@ export async function extractList(
     }
     return arr.map((node) => {
       const out: Record<string, string> = {};
-      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractFromElement(node, rule, ctx?.baseUrl);
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
       return out;
     });
   }
@@ -660,10 +674,19 @@ export async function extractList(
   return nodes.map((node) => {
     const out: Record<string, string> = {};
     for (const [key, rule] of Object.entries(itemRules)) {
-      out[key] = extractFromElement(node, rule, ctx?.baseUrl);
+      out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
     }
     return out;
   });
+}
+
+/** item 字段提取 + URL 字段（bookUrl/coverUrl）相对地址解析（regexReplace 等规则产出相对路径） */
+function extractItemValue(node: Element, key: string, rule: string, baseUrl?: string): string {
+  let v = extractFromElement(node, rule, baseUrl);
+  if ((key === "bookUrl" || key === "coverUrl") && v && !ABS_URL_RE.test(v)) {
+    v = resolveUrl(v, baseUrl ?? "");
+  }
+  return v;
 }
 
 export function extractFromJsObject(obj: any, rule: string, baseUrl?: string, sourceKey?: string): string {
@@ -696,7 +719,7 @@ export function extractFromJsonObject(
   return str;
 }
 
-function extractFromElement(el: Element, rule: string, baseUrl?: string): string {
+export function extractFromElement(el: Element, rule: string, baseUrl?: string): string {
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -732,6 +755,10 @@ function extractFromElement(el: Element, rule: string, baseUrl?: string): string
       return "";
     }
   }
+  if (parsed.type === "regexReplace") {
+    // 选择器为空：对节点 outerHtml 做正则提取/替换（jsoup Element.toString() = outerHtml）
+    return applyRegexReplace(el.outerHTML, parsed);
+  }
   if (parsed.type !== "css") return "";
   if (!parsed.value) {
     // 纯属性规则（如 "@text"）：取当前节点自身
@@ -754,6 +781,26 @@ function applyReplacements(v: string, replaces?: Array<[string, string]>): strin
     try { out = out.replace(new RegExp(re, "g"), rep ?? ""); } catch { /* 非法正则保留原值 */ }
   }
   return out;
+}
+
+/**
+ * legado `##` 前缀替换规则（对齐原版 AnalyzeRule.replaceRegex）：
+ * - replaceFirst（##re##rep###）：取第一个匹配的 group0 用 replacement 替换；无匹配返回空
+ * - 否则（##re##rep）：对整个 source 全部替换
+ */
+function applyRegexReplace(source: string, parsed: ParsedRule): string {
+  if (!parsed.regex) return "";
+  try {
+    if (parsed.replaceFirst) {
+      const re = new RegExp(parsed.regex);
+      const m = re.exec(source);
+      if (!m) return "";
+      return m[0].replace(re, parsed.replacement ?? "");
+    }
+    return source.replace(new RegExp(parsed.regex, "g"), parsed.replacement ?? "");
+  } catch {
+    return "";
+  }
 }
 
 /**

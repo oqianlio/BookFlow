@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, jsonGet, extractFromJsonObject } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, jsonGet, extractFromJsonObject, extractFromElement } from "./bookSourceEngine";
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { loadJsLib } from "./jsLib";
@@ -1075,5 +1075,42 @@ describe("legado jsoup-style node API in @js:", () => {
       url: "@js:'https://ex.com' + node.selectFirst('a').attr('href')",
     }, { baseUrl: "https://ex.com" });
     expect(items[0]).toEqual({ name: "第一章", url: "https://ex.com/b/1.html" });
+  });
+});
+
+describe("legado ## regex replace rules (node outerHtml)", () => {
+  const html = `<ul><li class="bookbox" onclick="newWebView('/book/123/')"><a href="/book/123/">斗破苍穹</a></li></ul>`;
+  const doc = parseHtml(html);
+
+  it("##re##rep### replaceFirst extracts group from node outerHtml (随心看 bookUrl)", () => {
+    const node = doc.querySelector("li.bookbox")!;
+    const v = extractFromElement(node, `##="newWebView\\('([^']+)'##$1###`);
+    expect(v).toBe("/book/123/");
+  });
+
+  it("replaceFirst returns empty when no match (legado behavior)", () => {
+    const node = doc.querySelector("li.bookbox")!;
+    expect(extractFromElement(node, `##="missing\\('([^']+)'##$1###`)).toBe("");
+  });
+
+  it("##re##rep performs global replace on outerHtml", () => {
+    const node = doc.querySelector("li.bookbox")!;
+    const v = extractFromElement(node, `##bookbox##BOX`);
+    expect(v).toContain("BOX");
+    expect(v).not.toContain("bookbox");
+  });
+
+  it("extractSingle ## rule operates on full document html", async () => {
+    const out = await extractSingle(doc, `##newWebView\\('([^']+)'##$1`);
+    expect(out).toContain("/book/123/");
+  });
+
+  it("extractList resolves relative bookUrl from ## rule against baseUrl", async () => {
+    const items = await extractList(doc, ".bookbox", {
+      name: "a@text",
+      bookUrl: `##="newWebView\\('([^']+)'##$1###`,
+    }, { baseUrl: "https://m.suixkan.com" });
+    expect(items[0].name).toBe("斗破苍穹");
+    expect(items[0].bookUrl).toBe("https://m.suixkan.com/book/123/");
   });
 });
