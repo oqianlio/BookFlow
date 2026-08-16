@@ -1,5 +1,5 @@
 import { listBookSources, httpGet, mergeUserAgent } from "./api";
-import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, type BookSource } from "./bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, jsonGet, type BookSource } from "./bookSourceEngine";
 
 export interface TocItem { name: string; url: string }
 export interface SourceBookInfo { title: string; author: string; intro: string; coverUrl: string }
@@ -15,6 +15,22 @@ const TTL_MS = 10 * 60 * 1000; // 10 分钟
 
 export function clearTocCache(): void {
   cache.clear();
+}
+
+/** legado init 规则（JSON 源初始路径，如 `$.data.bookInfo`）：取子对象作为后续规则的 result。
+ *  非 JSON 或提取失败时原样返回。 */
+export function applyInitResult(init: string | undefined, result: string): string {
+  if (!init || !init.trim()) return result;
+  try {
+    const j = JSON.parse(result);
+    const path = init.replace(/^\$\.?/, "").trim();
+    if (!path) return result;
+    const v = jsonGet(j, path);
+    if (v != null) return JSON.stringify(v);
+  } catch {
+    // 非 JSON 响应（HTML 等）或路径无效：不应用 init
+  }
+  return result;
 }
 
 export async function fetchToc(opts: {
@@ -46,14 +62,16 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const bi = s.ruleBookInfo ?? {};
+  // init：legado JSON 源初始路径（如 $.data.bookInfo）——后续规则相对子对象执行
+  const biResult = applyInitResult(bi.init, html);
   // legado js 上下文 book 对象（chapterUrl 等规则可能引用 book.bookUrl/tocUrl）
   const book = { bookUrl: resolvedBookUrl, name: opts.initialTitle, tocUrl: "" };
-  const title = bi.name ? await extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl, book }) : opts.initialTitle;
-  const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
-  const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
-  const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : "";
+  const title = bi.name ? await extractSingle(doc, bi.name, { result: biResult, sourceKey: s.bookSourceUrl, book }) : opts.initialTitle;
+  const author = bi.author ? await extractSingle(doc, bi.author, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   // tocUrl 规则可能提取为空（页面无该链接）：回退到书籍页本身，避免空 URL 请求
-  const tocUrl = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
+  const tocUrl = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
   const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};
@@ -66,9 +84,11 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   let curHtml = tocHtml;
   for (let page = 0; page < 50; page++) {
     const curDoc = page === 0 ? tocDoc : parseHtml(curHtml);
+    // 每页响应独立应用 init（分页目录结构相同）
+    const pageResult = applyInitResult(rules.init, curHtml);
     const items = await extractList(curDoc, rules.chapterList ?? "", {
       name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-    }, { baseUrl: curUrl, result: curHtml, sourceKey: s.bookSourceUrl, book: tocBook });
+    }, { baseUrl: curUrl, result: pageResult, sourceKey: s.bookSourceUrl, book: tocBook });
     for (const it of items) {
       if (!it.url) continue;
       const abs = it.url.startsWith("http") ? it.url : new URL(it.url, curUrl).toString();
@@ -78,7 +98,7 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
     }
     if (!rules.nextTocUrl || page >= 49) break;
     const next = (await extractSingle(curDoc, rules.nextTocUrl, {
-      baseUrl: curUrl, result: curHtml, sourceKey: s.bookSourceUrl, book: tocBook,
+      baseUrl: curUrl, result: pageResult, sourceKey: s.bookSourceUrl, book: tocBook,
     }))?.trim();
     if (!next) break;
     const nextUrl = next.startsWith("http") ? next : new URL(next, curUrl).toString();

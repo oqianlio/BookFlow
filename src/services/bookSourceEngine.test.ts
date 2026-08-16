@@ -850,6 +850,15 @@ result = out;`;
     expect(extractFromJsonObject(item, "连载{{$..is_finished}}完结,##连载1|0完结", {})).toBe("完结,");
   });
 
+  it("extractFromJsonObject evaluates js-expression templates (松鹤庭沐 chapterUrl BookID pattern)", () => {
+    // {{baseUrl.match(/bookId=(\d+)/)[1]}} —— js 表达式模板用 baseUrl 变量
+    const item = { serialID: 1 };
+    const rule = `https://novel.html5.qq.com/be-api/content/ads-read,{"BookID":"{{baseUrl.match(/bookId=(\\d+)/)[1]}}","Seq":[{{$.serialID}}]}`;
+    const out = extractFromJsonObject(item, rule, { baseUrl: "https://bookshelf.html5.qq.com/qbread/api/book/all-chapter?bookId=1100474235" });
+    expect(out).toContain('"BookID":"1100474235"');
+    expect(out).toContain('"Seq":[1]');
+  });
+
   it("extractList js branch parses JSON.stringify'd string items (番茄聚合API pattern)", async () => {
     const doc = parseHtml("<div></div>");
     const listRule = `@js:result = [JSON.stringify({book_name:'A', author:'x'}), JSON.stringify({book_name:'B', author:'y'})];`;

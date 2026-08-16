@@ -195,10 +195,12 @@ function sliceByAccumulate(blocks: string[], pageHeightPx: number, measure: (h: 
 function sliceByBatchMeasure(blocks: string[], pageHeightPx: number, widthPx: number, styleHtml: string): string[] {
   const host = document.createElement("div");
   host.style.cssText = `position:absolute;visibility:hidden;left:0;top:0;width:${widthPx || 400}px;`;
-  host.innerHTML = `${styleHtml}<div class="m-p">${blocks.join("")}</div>`;
+  // .m-p 设 position:relative：让子块 offsetTop 相对测量容器自身（offsetParent 链稳定）
+  host.innerHTML = `${styleHtml}<div class="m-p" style="position:relative">${blocks.join("")}</div>`;
   document.body.appendChild(host);
   try {
-    const parent = host.firstElementChild as HTMLElement | null;
+    // 注意：styleHtml 注入后 host 第一个子元素是 <style>，必须取 .m-p 测量容器
+    const parent = host.querySelector(".m-p") as HTMLElement | null;
     if (!parent) return [blocks.join("")];
     const pages: string[] = [];
     let cur: string[] = [];

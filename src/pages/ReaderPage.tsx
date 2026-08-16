@@ -11,6 +11,7 @@ import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
+import { applyInitResult } from "../services/sourceToc";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
 import { fetchToc, type TocItem } from "../services/sourceToc";
@@ -205,11 +206,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
     let doc = parseHtml(html);
     const rules = src.ruleContent ?? {};
-    let text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl });
+    // ruleContent.init（legado JSON 源初始路径）：正文提取相对子对象执行
+    let contentResult = applyInitResult(rules.init, html);
+    let text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: contentResult, sourceKey: src.bookSourceUrl });
     // legado nextContentUrl = 同章节分页（如 36xs 的 6516910_1.html）：循环抓取后续页并拼接，
     // 直到无下一页（或下一页指向目录中的下一章 = 实为"下一章"链接，不拼接）
     let next = rules.nextContentUrl
-      ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: html, sourceKey: src.bookSourceUrl })
+      ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: c.url, result: contentResult, sourceKey: src.bookSourceUrl })
       : "";
     // 分页判定：分页 URL 与当前 URL 同前缀（36xs: 6516910.html → 6516910_1.html）；
     // 下一章 URL 前缀不同（6516911.html）或与目录下一章一致 → 不拼接
@@ -224,12 +227,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       pageGuard++;
       const pageHtml = await httpGet(nextAbs, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
       doc = parseHtml(pageHtml);
-      const pageText = await extractSingle(doc, rules.content ?? "body", { baseUrl: nextAbs, result: pageHtml, sourceKey: src.bookSourceUrl });
+      const pageResult = applyInitResult(rules.init, pageHtml);
+      const pageText = await extractSingle(doc, rules.content ?? "body", { baseUrl: nextAbs, result: pageResult, sourceKey: src.bookSourceUrl });
       if (!pageText) break; // 下一页无正文：停止
       text += pageText;
       const prevNext = next;
       next = rules.nextContentUrl
-        ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: nextAbs, result: pageHtml, sourceKey: src.bookSourceUrl })
+        ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: nextAbs, result: pageResult, sourceKey: src.bookSourceUrl })
         : "";
       if (next && next === prevNext) break; // 死循环保护：URL 不变
       void console.warn(`[sourcereader] 分页拼接 ${pageGuard}: ${nextAbs} → 累计 ${text.length}`);

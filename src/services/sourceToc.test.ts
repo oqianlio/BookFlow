@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as api from "./api";
-import { fetchToc, clearTocCache } from "./sourceToc";
+import { fetchToc, clearTocCache, applyInitResult } from "./sourceToc";
 
 vi.mock("./api", () => ({
   listBookSources: vi.fn(),
@@ -130,4 +130,50 @@ describe("fetchToc", () => {
     // 只请求一次（书页本身），绝不请求空 URL
     expect(api.httpGet).toHaveBeenCalledTimes(1);
     expect(api.httpGet).toHaveBeenCalledWith("https://ex.com/book/1.html", undefined, undefined, undefined, undefined, undefined, "ex.com");  });
+
+  it("applies init rule for JSON sources (南极 bookInfo pattern)", async () => {
+    // ruleBookInfo.init = $.data.bookInfo：书名/作者/tocUrl 相对子对象提取
+    const src = JSON.stringify({
+      bookSourceUrl: "https://so.html5.qq.com", bookSourceName: "南极",
+      ruleBookInfo: {
+        init: "$.data.bookInfo",
+        name: "$.resourceName",
+        tocUrl: "https://bookshelf.html5.qq.com/qbread/api/book/all-chapter?bookId={{$.resourceID}}",
+      },
+      ruleToc: { chapterList: "$.rows", chapterName: "$.serialName", chapterUrl: "$.serialID" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 5, name: "南极", url: "https://so.html5.qq.com", json: src, enabled: true, last_used_at: null },
+    ]);
+    const bookInfo = JSON.stringify({
+      data: { bookInfo: { resourceID: "1100474235", resourceName: "吞噬星空" } },
+    });
+    const allChapter = JSON.stringify({
+      rows: [{ serialID: 1, serialName: "第一章 陨石" }, { serialID: 2, serialName: "第二章 罗峰" }],
+    });
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.includes("bookInfo")) return bookInfo;
+      if (u.includes("all-chapter")) return allChapter;
+      return "{}";
+    });
+    const r = await fetchToc({ sourceId: 5, bookUrl: "https://novel.html5.qq.com/qbread/api/novel/bookInfo?resourceId=1100474235", initialTitle: "吞噬星空" });
+    expect(r.info.title).toBe("吞噬星空");
+    // tocUrl 模板 {{$.resourceID}} 在 init 后能提取到 → 请求 all-chapter API
+    expect(api.httpGet).toHaveBeenCalledWith(
+      expect.stringContaining("all-chapter?bookId=1100474235"),
+      undefined, undefined, undefined, undefined, undefined, "so.html5.qq.com",
+    );
+    expect(r.toc.map((t) => t.name)).toEqual(["第一章 陨石", "第二章 罗峰"]);
+    // 相对 URL 会按 all-chapter 基址解析
+    expect(r.toc[0].url).toContain("book/1");
+  });
+
+  it("applyInitResult returns sub-object JSON for init path", () => {
+    const result = JSON.stringify({ data: { bookInfo: { name: "x" } } });
+    expect(applyInitResult("$.data.bookInfo", result)).toBe(JSON.stringify({ name: "x" }));
+    // 非 JSON 或路径无效原样返回
+    expect(applyInitResult("$.x", "not json")).toBe("not json");
+    expect(applyInitResult(undefined, result)).toBe(result);
+  });
 });

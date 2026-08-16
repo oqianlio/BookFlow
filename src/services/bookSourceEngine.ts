@@ -454,6 +454,49 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     }
     return "";
   }
+  // `{{...}}` 模板求值（legado 三态）：
+  // 1. `{{$.xxx}}` JSON 路径 → 从 result 的 JSON 取值（如 tocUrl 的 {{$.resourceID}}）
+  // 2. `{{js 表达式}}` → evalJs 求值（如 {{baseUrl.match(/bookId=(\d+)/)[1]}}）
+  // 3. `{{regex}}` → 从文本提取（正则分支）
+  if (rule.includes("{{") && ctx?.result) {
+    // 尝试 JSON 解析：成功则按 JSON 路径模板求值
+    let jsonOk = false;
+    try {
+      JSON.parse(String(ctx.result));
+      jsonOk = true;
+    } catch {
+      jsonOk = false;
+    }
+    if (jsonOk) {
+      try {
+        const j = JSON.parse(String(ctx.result));
+        const out = rule.replace(/\{\{(.*?)\}\}/g, (_m, inner: string) => {
+          try {
+            const trimmed = String(inner).trim();
+            if (trimmed.startsWith("$")) {
+              const path = trimmed.replace(/^\$\.?/, "");
+              const v = jsonGet(j, path);
+              return v == null ? "" : String(v);
+            }
+            // js 表达式模板（如 baseUrl.match(...)）
+            const v = evalJs(trimmed, {
+              doc: emptyDoc(), result: String(ctx.result), baseUrl: ctx?.baseUrl,
+              sourceKey: ctx?.sourceKey, book: ctx?.book,
+            });
+            return v == null ? "" : String(v);
+          } catch {
+            return "";
+          }
+        });
+        return out;
+      } catch {
+        // 回退下方分支
+      }
+    } else if (rule.includes("{{$")) {
+      // result 非 JSON 但模板是 JSON 路径：走下方 regex 分支自然失败，直接返回空
+      return "";
+    }
+  }
   // 规则 `<js>...</js>` 后缀（legado：前段提取值作 result 交给 js 处理，
   // 如 nextContentUrl: `text.下一@href\n<js>...检测.../js>`）
   const jsTagIdx = rule.indexOf("<js>");
@@ -819,10 +862,19 @@ export function extractFromJsonObject(
   }
   // `{{...}}` 模板：字面文本 + 求值子规则（legado 常见于 bookUrl 拼 URL、kind 拼状态文本）
   // 如 https://x/{{$.novelId}}?a=1 或 连载{{$..is_finished}}完结,{{$..tag_views##\s##,}}
+  // 或 js 表达式 {{baseUrl.match(/bookId=(\d+)/)[1]}}（松鹤庭沐 chapterUrl）
   if (s.includes("{{") && s.includes("}}")) {
     const out = s.replace(/\{\{(.*?)\}\}/g, (_m, inner: string) => {
       try {
-        return extractFromJsonObject(obj, String(inner).trim(), ctx) ?? "";
+        const t = String(inner).trim();
+        if (t.startsWith("$") || t.startsWith("@")) {
+          return extractFromJsonObject(obj, t, ctx) ?? "";
+        }
+        // js 表达式模板：evalJs 求值（baseUrl/result/book 等变量可用）
+        const v = evalJs(t, {
+          doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book,
+        });
+        return v == null ? "" : String(v);
       } catch {
         return "";
       }
