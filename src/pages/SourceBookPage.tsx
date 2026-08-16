@@ -19,6 +19,9 @@ function formatDate(ts: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** 详情页目录默认展示的章节数（长目录折叠，参考原版） */
+export const TOC_PREVIEW = 20;
+
 export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead, onSwitchSource }: {
   sourceId: number; sourceName: string; bookUrl: string; initialTitle: string;
   onBack: () => void; onRead: (index: number, url: string, name: string) => void;
@@ -32,6 +35,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const introExpandedRef = useRef(false);
   const introRef = useRef<HTMLParagraphElement | null>(null);
   const [introClampable, setIntroClampable] = useState(false);
+  // 目录默认只列前 20 章（参考原版：长目录折叠），点「展开全部」再列全
+  const [tocExpanded, setTocExpanded] = useState(false);
 
   const toggleIntro = () => {
     introExpandedRef.current = !introExpandedRef.current;
@@ -252,13 +257,23 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         ) : toc.length === 0 ? (
           <p className="panel-empty">暂无目录</p>
         ) : (
-          <ol>
-            {toc.map((t, idx) => (
-              <li key={`${t.url}-${idx}`}>
-                <button className="btn btn-ghost" onClick={() => onRead(idx, t.url, t.name)}>{t.name}</button>
-              </li>
-            ))}
-          </ol>
+          <>
+            <ol>
+              {(tocExpanded ? toc : toc.slice(0, TOC_PREVIEW)).map((t, idx) => (
+                <li key={`${t.url}-${idx}`}>
+                  <button className="btn btn-ghost" onClick={() => onRead(idx, t.url, t.name)}>{t.name}</button>
+                </li>
+              ))}
+            </ol>
+            {toc.length > TOC_PREVIEW && (
+              <button
+                className="btn btn-ghost toc-toggle"
+                onClick={() => setTocExpanded((v) => !v)}
+              >
+                {tocExpanded ? "收起" : `展开全部 ${toc.length} 章`}
+              </button>
+            )}
+          </>
         )}
       </div>
       {showSwitch && onSwitchSource && (

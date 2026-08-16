@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import SourceBookPage from "./SourceBookPage";
+import SourceBookPage, { TOC_PREVIEW } from "./SourceBookPage";
 import * as api from "../services/api";
 import { clearTocCache } from "../services/sourceToc";
 
@@ -345,6 +345,44 @@ describe("SourceBookPage", () => {
     render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
     await screen.findByText("短简介");
     expect(screen.queryByRole("button", { name: "展开" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "收起" })).not.toBeInTheDocument();
+  });
+
+  it("collapses long toc to TOC_PREVIEW chapters with an expand-all button", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    // 30 章目录
+    const chapters = Array.from({ length: 30 }, (_, i) => `<li><a href="/c/${i + 1}.html">第 ${i + 1} 章</a></li>`).join("");
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><span class="author">刘慈欣</span><ol>${chapters}</ol></body></html>`,
+    );
+    const { container } = render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    // 默认只显示前 TOC_PREVIEW 章
+    expect(await screen.findByText("第 1 章")).toBeInTheDocument();
+    expect(screen.getByText(`第 ${TOC_PREVIEW} 章`)).toBeInTheDocument();
+    expect(screen.queryByText(`第 ${TOC_PREVIEW + 1} 章`)).not.toBeInTheDocument();
+    expect(container.querySelectorAll(".source-toc li").length).toBe(TOC_PREVIEW);
+    // 展开全部
+    fireEvent.click(screen.getByRole("button", { name: `展开全部 30 章` }));
+    expect(await screen.findByText("第 30 章")).toBeInTheDocument();
+    expect(container.querySelectorAll(".source-toc li").length).toBe(30);
+    expect(screen.getByRole("button", { name: "收起" })).toBeInTheDocument();
+    // 收起
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByText("第 30 章")).not.toBeInTheDocument();
+  });
+
+  it("does not show toc toggle for short toc", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><ol><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`,
+    );
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    await screen.findByText("第一章");
+    expect(screen.queryByRole("button", { name: /展开全部/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "收起" })).not.toBeInTheDocument();
   });
 });
