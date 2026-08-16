@@ -356,12 +356,32 @@ pub fn open_login_window(url: String, cookie_jar: String, app: tauri::AppHandle)
 }
 
 #[tauri::command]
-pub fn log_frontend(level: String, message: String) {
+pub fn log_frontend(level: String, message: String, state: State<'_, AppState>) {
     match level.as_str() {
         "error" => eprintln!("[前端 error] {}", message),
         "warn" => eprintln!("[前端 warn] {}", message),
         _ => println!("[前端 {}] {}", level, message),
     }
+    crate::logs::append_log(&state.app_data_dir, &level, &message);
+}
+
+/// 读取开发者日志（最近 limit 行），供设置页「开发者日志」面板展示
+#[tauri::command]
+pub fn read_logs(limit: usize, state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    Ok(crate::logs::read_logs(&state.app_data_dir, limit))
+}
+
+/// 清空开发者日志
+#[tauri::command]
+pub fn clear_logs(state: State<'_, AppState>) -> Result<(), String> {
+    crate::logs::clear_logs(&state.app_data_dir);
+    Ok(())
+}
+
+/// 日志文件大小（字节），供面板显示占用
+#[tauri::command]
+pub fn log_file_size(state: State<'_, AppState>) -> Result<u64, String> {
+    Ok(crate::logs::log_file_size(&state.app_data_dir))
 }
 
 #[tauri::command]

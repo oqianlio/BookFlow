@@ -9,6 +9,7 @@ import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, type FontFile
 import { injectFontFaces } from "../services/fontFiles";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
+import DeveloperLogDialog from "../components/DeveloperLogDialog";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -29,6 +30,7 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [fontBusy, setFontBusy] = useState(false);
   const [cache, setCache] = useState<CacheSummary | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showDevLog, setShowDevLog] = useState(false);
   const { showError } = useError();
 
   const refreshCache = () => {
@@ -234,11 +236,19 @@ export default function SettingsPage({ onOpenSourceManager }: {
         </div>
         <div className="settings-group">
           <div>
+            <div className="label">开发者日志</div>
+            <div className="hint">查看前端错误与警告（写于应用数据目录 logs/app.log）</div>
+          </div>
+          <button className="btn btn-soft" onClick={() => setShowDevLog(true)}>查看</button>
+        </div>
+        <div className="settings-group">
+          <div>
             <div className="label">关于</div>
             <div className="hint">枕书 · 基于 legado 3.0 规则的桌面阅读器</div>
           </div>
         </div>
       </div>
+      {showDevLog && <DeveloperLogDialog onClose={() => setShowDevLog(false)} />}
       {confirmClear && (
         <ConfirmDialog
           message={`将清除全部 ${cache?.chapter_count ?? 0} 章离线缓存（${cache ? formatBytes(cache.total_bytes) : ""}），离线阅读将失效。继续？`}

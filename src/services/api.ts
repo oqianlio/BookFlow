@@ -105,6 +105,21 @@ export function logFrontend(level: string, message: string): Promise<void> {
   return invoke("log_frontend", { level, message });
 }
 
+/** 读取开发者日志（最近 limit 行） */
+export function readLogs(limit: number): Promise<string[]> {
+  return invoke("read_logs", { limit });
+}
+
+/** 清空开发者日志 */
+export function clearLogs(): Promise<void> {
+  return invoke("clear_logs");
+}
+
+/** 日志文件大小（字节） */
+export function logFileSize(): Promise<number> {
+  return invoke("log_file_size");
+}
+
 export function mergeUserAgent(headers: Record<string, string> | undefined, userAgent: string | undefined): Record<string, string> | undefined {
   if (!userAgent) return headers;
   const hasUa = Object.keys(headers ?? {}).some((k) => k.toLowerCase() === "user-agent");

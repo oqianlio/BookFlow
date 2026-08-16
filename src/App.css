@@ -1521,6 +1521,25 @@ input[type="range"] {
 .error-dialog-message { margin: 0; padding: 12px; background: var(--surface-container-high); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12.5px; color: var(--on-surface); white-space: pre-wrap; word-break: break-all; overflow: auto; max-height: 40vh; }
 .error-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* ============ 开发者日志弹窗 ============ */
+.dev-log-dialog { width: min(720px, 94vw); }
+.dev-log-dialog h3 { color: var(--on-surface); }
+.dev-log-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dev-log-toolbar .btn.active { background: var(--primary); color: var(--on-primary); }
+.dev-log-spacer { flex: 1; }
+.dev-log-size { font-size: 12px; color: var(--on-surface-variant); }
+.dev-log-body {
+  padding: 10px; background: var(--surface-container-high);
+  border: 1px solid var(--outline-variant); border-radius: var(--radius-sm);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12px; line-height: 1.55; overflow: auto; max-height: 50vh;
+  word-break: break-all; white-space: pre-wrap;
+}
+.dev-log-line { color: var(--on-surface); }
+.dev-log-line.is-error { color: var(--error); }
+.dev-log-line.is-warn { color: #b58900; }
+.dev-log-empty { color: var(--on-surface-variant); text-align: center; padding: 24px 0; }
+
 /* ============ 动效 ============ */
 @keyframes page-in {
   from { opacity: 0; transform: translateY(8px); }

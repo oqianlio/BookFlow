@@ -30,6 +30,9 @@ vi.mock("../services/api", () => ({
   listFontFiles: vi.fn().mockResolvedValue([]),
   cacheSummary: vi.fn().mockResolvedValue({ book_count: 3, chapter_count: 120, total_bytes: 5242880 }),
   clearAllCache: vi.fn().mockResolvedValue(undefined),
+  readLogs: vi.fn().mockResolvedValue(["[2026-08-16 14:00:00] [error] test error", "[2026-08-16 14:00:01] [info] ok"]),
+  clearLogs: vi.fn().mockResolvedValue(undefined),
+  logFileSize: vi.fn().mockResolvedValue(2048),
 }));
 vi.mock("../services/fontFiles", () => ({
   injectFontFaces: vi.fn().mockResolvedValue([]),
@@ -95,5 +98,14 @@ describe("SettingsPage", () => {
     expect(screen.getByText(/将清除全部 120 章离线缓存/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(api.clearAllCache).toHaveBeenCalled();
+  });
+
+  it("opens the developer log dialog from the settings entry", async () => {
+    const api = await import("../services/api");
+    render(<SettingsPage />);
+    expect(await screen.findByText(/开发者日志/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "查看" }));
+    expect(api.readLogs).toHaveBeenCalled();
+    expect(await screen.findByText(/test error/)).toBeInTheDocument();
   });
 });
