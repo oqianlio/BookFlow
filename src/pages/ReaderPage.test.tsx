@@ -121,4 +121,21 @@ describe("ReaderPage", () => {
     const main = document.querySelector(".reader-main") as HTMLElement;
     await waitFor(() => expect(main.style.getPropertyValue("--read-font-size")).toBe("20px"));
   });
+
+  it("Esc closes the open panel first, does not exit reading", async () => {
+    const onBack = vi.fn();
+    render(<ReaderPage source={{ kind: "local", book }} onBack={onBack} />);
+    await userEvent.click(screen.getByRole("button", { name: /设置/ }));
+    expect(await screen.findByText("阅读设置")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByText("阅读设置")).not.toBeInTheDocument();
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it("Esc with no panel open exits reading", async () => {
+    const onBack = vi.fn();
+    render(<ReaderPage source={{ kind: "local", book }} onBack={onBack} />);
+    await userEvent.keyboard("{Escape}");
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
 });
