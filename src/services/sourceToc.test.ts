@@ -71,4 +71,46 @@ describe("fetchToc", () => {
     const r = await fetchToc({ sourceId: 1, bookUrl: "https://ex.com/book/1.html", initialTitle: "三体" });
     expect(r.toc.length).toBe(2);
   });
+
+  it("follows nextTocUrl pagination and merges chapters with dedup", async () => {
+    const pagedSource = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "分页",
+      ruleToc: {
+        chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href",
+        nextTocUrl: ".next@href",
+      },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 2, name: "分页", url: "https://ex.com", json: pagedSource, enabled: true, last_used_at: null },
+    ]);
+    const page1 = `<html><body><ol><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol>
+      <a class="next" href="/toc/2.html">下一页</a></body></html>`;
+    const page2 = `<html><body><ol><li><a href="/c/2.html">第二章</a></li><li><a href="/c/3.html">第三章</a></li></ol>
+      <a class="next" href="/toc/1.html">上一页</a></body></html>`;
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      const u = String(url);
+      if (u.includes("/toc/2.html")) return page2;
+      return page1;
+    });
+    const r = await fetchToc({ sourceId: 2, bookUrl: "https://ex.com/book/1.html", initialTitle: "x" });
+    expect(r.toc.map((t) => t.name)).toEqual(["第一章", "第二章", "第三章"]);
+    expect(r.toc[2].url).toBe("https://ex.com/c/3.html");
+  });
+
+  it("stops pagination when nextTocUrl extraction is empty", async () => {
+    const pagedSource = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "单页",
+      ruleToc: {
+        chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href",
+        nextTocUrl: ".next@href",
+      },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 3, name: "单页", url: "https://ex.com", json: pagedSource, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(bookHtml); // 无 .next 链接
+    const r = await fetchToc({ sourceId: 3, bookUrl: "https://ex.com/book/1.html", initialTitle: "x" });
+    expect(r.toc.length).toBe(2);
+    expect(api.httpGet).toHaveBeenCalledTimes(1);
+  });
 });

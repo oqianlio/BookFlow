@@ -889,6 +889,15 @@ function applyRegexReplace(source: string, parsed: ParsedRule): string {
  */
 export function queryIndexed(selector: string, scope: Document | Element): Element | null {
   const sel = selector.trim();
+  // legado text.xxx：元素文本等于 xxx（锚点定位，如 text.章节目录 / text.下一章）
+  if (sel.startsWith("text.")) {
+    const target = sel.slice(5).trim();
+    const all = scope.querySelectorAll("*");
+    for (const el of all) {
+      if ((el.textContent ?? "").trim() === target) return el;
+    }
+    return null;
+  }
   // legado `!` 索引：`tr!0`（第 0 个）/`tag.tr!0`（tag 前缀剥除）/`xxx!last`
   const bang = sel.match(/^(?:(?:tag\.)?)(.+?)!(\d+|last)$/);
   if (bang) {

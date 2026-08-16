@@ -1210,4 +1210,15 @@ describe("bracket index [N] / [-N] in selectors", () => {
     const d2 = parseHtml(`<a href="/x/">链接</a>`);
     expect(await extractSingle(d2, "a[href]@text")).toBe("链接");
   });
+
+  it("text.xxx anchors by element text (legado text.章节目录)", async () => {
+    const d = parseHtml(`<div class="book"><h2>书名</h2><a href="/toc.html">章节目录</a></div>`);
+    expect(await extractSingle(d, "text.章节目录@href")).toBe("/toc.html");
+    expect(await extractSingle(d, "text.不存在@href")).toBe("");
+  });
+
+  it("text.xxx works inside item rules (text.下一章)", () => {
+    const doc = parseHtml(`<div class="page"><a href="/c/2.html">下一章</a></div>`);
+    expect(extractFromElement(doc.querySelector(".page")!, "text.下一章@href")).toBe("/c/2.html");
+  });
 });

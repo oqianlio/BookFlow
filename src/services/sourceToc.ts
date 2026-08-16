@@ -57,13 +57,35 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};
   const tocBook = { ...book, name: title, author, tocUrl };
-  const items = await extractList(tocDoc, rules.chapterList ?? "", {
-    name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-  }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl, book: tocBook });
-  const toc = items.filter((i) => i.url).map((i) => ({
-    name: i.name || "未命名章节",
-    url: i.url.startsWith("http") ? i.url : new URL(i.url, tocUrl).toString(),
-  }));
+  // 目录分页（legado ruleToc.nextTocUrl）：循环抓取下一页合并，防死循环（上限 50 页 + URL 去重）
+  const toc: TocItem[] = [];
+  const seenChapter = new Set<string>();
+  const seenPage = new Set<string>([tocUrl]);
+  let curUrl = tocUrl;
+  let curHtml = tocHtml;
+  for (let page = 0; page < 50; page++) {
+    const curDoc = page === 0 ? tocDoc : parseHtml(curHtml);
+    const items = await extractList(curDoc, rules.chapterList ?? "", {
+      name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
+    }, { baseUrl: curUrl, result: curHtml, sourceKey: s.bookSourceUrl, book: tocBook });
+    for (const it of items) {
+      if (!it.url) continue;
+      const abs = it.url.startsWith("http") ? it.url : new URL(it.url, curUrl).toString();
+      if (seenChapter.has(abs)) continue;
+      seenChapter.add(abs);
+      toc.push({ name: it.name || "未命名章节", url: abs });
+    }
+    if (!rules.nextTocUrl || page >= 49) break;
+    const next = (await extractSingle(curDoc, rules.nextTocUrl, {
+      baseUrl: curUrl, result: curHtml, sourceKey: s.bookSourceUrl, book: tocBook,
+    }))?.trim();
+    if (!next) break;
+    const nextUrl = next.startsWith("http") ? next : new URL(next, curUrl).toString();
+    if (seenPage.has(nextUrl)) break; // 防循环
+    seenPage.add(nextUrl);
+    curUrl = nextUrl;
+    curHtml = await httpGet(nextUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+  }
   return {
     info: { title: title || opts.initialTitle, author, intro, coverUrl: cover },
     toc,
