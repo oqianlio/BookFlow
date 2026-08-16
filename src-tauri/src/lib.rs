@@ -57,7 +57,7 @@ pub fn run() {
             delete_book_source, set_book_source_enabled,
             get_book_source_progress, save_book_source_progress,
             open_login_window,
-            log_frontend, read_logs, clear_logs, log_file_size,
+            log_frontend, read_logs, clear_logs, log_file_size, export_diagnostics,
             add_shelf_source_book, list_shelf_source_books, remove_shelf_source_book,
             save_cached_chapter, list_cached_chapters, get_cached_chapter, delete_book_cache,
             cache_summary, clear_all_cache,

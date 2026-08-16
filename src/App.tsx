@@ -13,6 +13,7 @@ import RssPage from "./pages/RssPage";
 import RssArticlePage from "./pages/RssArticlePage";
 import type { Book } from "./services/api";
 import { ErrorProvider } from "./components/ErrorDialog";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
 
 type DetailState =
@@ -35,7 +36,9 @@ function rootArea(s: AppState): AppArea {
 export default function App() {
   return (
     <ErrorProvider>
-      <AppInner />
+      <ErrorBoundary>
+        <AppInner />
+      </ErrorBoundary>
     </ErrorProvider>
   );
 }

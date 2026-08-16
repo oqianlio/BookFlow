@@ -23,6 +23,11 @@ pub fn append_log(app_data_dir: &Path, level: &str, message: &str) {
     }
 }
 
+/// Rust 侧日志：与前端日志同文件，带 `[rust]` 来源标记（F1 统一日志）。
+pub fn rust_log(app_data_dir: &Path, level: &str, message: &str) {
+    append_log(app_data_dir, level, &format!("[rust] {message}"));
+}
+
 /// 读取日志尾部最多 limit 行（从后往前读，保持顺序）。文件不存在时返回空。
 pub fn read_logs(app_data_dir: &Path, limit: usize) -> Vec<String> {
     let path = log_file_path(app_data_dir);

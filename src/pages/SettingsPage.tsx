@@ -5,7 +5,7 @@ import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, type FontFileRow, type CacheSummary } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, exportDiagnostics, type FontFileRow, type CacheSummary } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -31,7 +31,22 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [cache, setCache] = useState<CacheSummary | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDevLog, setShowDevLog] = useState(false);
+  const [diagBusy, setDiagBusy] = useState(false);
   const { showError } = useError();
+
+  const handleExportDiagnostics = async () => {
+    if (diagBusy) return;
+    setDiagBusy(true);
+    try {
+      const text = await exportDiagnostics();
+      await navigator.clipboard.writeText(text);
+      showError("诊断信息已复制到剪贴板，可直接粘贴给开发者");
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setDiagBusy(false);
+    }
+  };
 
   const refreshCache = () => {
     void cacheSummary().then(setCache).catch(() => {});
@@ -239,7 +254,12 @@ export default function SettingsPage({ onOpenSourceManager }: {
             <div className="label">开发者日志</div>
             <div className="hint">查看前端错误与警告（写于应用数据目录 logs/app.log）</div>
           </div>
-          <button className="btn btn-soft" onClick={() => setShowDevLog(true)}>查看</button>
+          <div className="settings-group-actions">
+            <button className="btn btn-soft" onClick={() => setShowDevLog(true)}>查看</button>
+            <button className="btn btn-soft" onClick={() => void handleExportDiagnostics()} disabled={diagBusy}>
+              {diagBusy ? "导出中…" : "导出诊断"}
+            </button>
+          </div>
         </div>
         <div className="settings-group">
           <div>

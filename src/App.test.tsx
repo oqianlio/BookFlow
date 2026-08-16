@@ -32,6 +32,7 @@ vi.mock("./services/api", () => ({
   readLogs: vi.fn().mockResolvedValue([]),
   clearLogs: vi.fn().mockResolvedValue(undefined),
   logFileSize: vi.fn().mockResolvedValue(0),
+  exportDiagnostics: vi.fn().mockResolvedValue("diag"),
   listRssArticles: vi.fn().mockResolvedValue([]),
   addRssFeed: vi.fn().mockResolvedValue(1),
   deleteRssFeed: vi.fn().mockResolvedValue(undefined),

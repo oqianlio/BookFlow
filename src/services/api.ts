@@ -90,11 +90,23 @@ export async function httpGet(
   contentType?: string,
   cookieJar?: string,
 ): Promise<string> {
-  return invoke<string>("http_get", {
-    url, headers: headers ?? null, timeoutMs: timeoutMs ?? null,
-    method: method ?? null, body: body ?? null, contentType: contentType ?? null,
-    cookieJar: cookieJar ?? null,
-  });
+  const t0 = performance.now();
+  const short = url.length > 100 ? url.slice(0, 100) + "…" : url;
+  try {
+    const r = await invoke<string>("http_get", {
+      url, headers: headers ?? null, timeoutMs: timeoutMs ?? null,
+      method: method ?? null, body: body ?? null, contentType: contentType ?? null,
+      cookieJar: cookieJar ?? null,
+    });
+    const ms = Math.round(performance.now() - t0);
+    // 慢请求（>3s）记 warning，正常请求 Rust 侧已有日志，前端不重复
+    if (ms > 3000) console.warn(`[httpGet] 慢请求 ${ms}ms ${method ?? "GET"} ${short}`);
+    return r;
+  } catch (e) {
+    const ms = Math.round(performance.now() - t0);
+    console.error(`[httpGet] 失败 ${ms}ms ${method ?? "GET"} ${short}: ${String(e)}`);
+    throw e;
+  }
 }
 
 export async function openLoginWindow(url: string, cookieJar: string): Promise<void> {
@@ -118,6 +130,11 @@ export function clearLogs(): Promise<void> {
 /** 日志文件大小（字节） */
 export function logFileSize(): Promise<number> {
   return invoke("log_file_size");
+}
+
+/** 一键导出诊断信息（版本/DB/书源/缓存/最近日志），返回文本块 */
+export function exportDiagnostics(): Promise<string> {
+  return invoke("export_diagnostics");
 }
 
 export function mergeUserAgent(headers: Record<string, string> | undefined, userAgent: string | undefined): Record<string, string> | undefined {

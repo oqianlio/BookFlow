@@ -118,6 +118,11 @@ pub async fn http_get(
 ) -> Result<String, String> {
     let cookies = state.cookies.clone();
     let http_clients = state.http_clients.clone();
+    let app_data_dir = state.app_data_dir.clone();
+    let method_display = method.clone().unwrap_or_else(|| "GET".to_string()).to_uppercase();
+    let short_url = |u: &str| {
+        if u.len() <= 100 { u.to_string() } else { format!("{}…({}B)", &u[..100], u.len()) }
+    };
     tauri::async_runtime::spawn_blocking(move || {
         let t0 = std::time::Instant::now();
         let client_key = cookie_jar.clone().unwrap_or_default();
@@ -150,24 +155,39 @@ pub async fn http_get(
         let h = headers.as_ref().unwrap_or(&empty);
         let req = build_request(
             &client,
-            method.as_deref().unwrap_or("GET"),
+            &method_display,
             &url,
             h,
             body.as_deref(),
             content_type.as_deref(),
         );
-        let mut resp = req.send().map_err(|e| friendly_network_error(&e, &url))?;
+        let mut resp = req.send().map_err(|e| {
+            let msg = friendly_network_error(&e, &url);
+            crate::logs::rust_log(
+                &app_data_dir,
+                "error",
+                &format!("[net] {method_display} {} ERROR {} ({}ms)", short_url(&url), msg, t0.elapsed().as_millis()),
+            );
+            msg
+        })?;
         // reqwest 只在内存中读写 cookie，不会自动写回文件，需手动持久化
         if let Some(j) = &jar {
             j.save();
         }
-        eprintln!("[net] request took {}ms url={}", t0.elapsed().as_millis(), &url[..url.len().min(80)]);
+        let status = resp.status().as_u16();
+        let elapsed_ms = t0.elapsed().as_millis();
+        eprintln!("[net] request took {}ms url={}", elapsed_ms, &url[..url.len().min(80)]);
         // 手动读取原始字节而非 resp.bytes()/text()：
         // reqwest 0.13 在无 gzip feature 时对部分 chunked 响应会报 "error decoding response body"，
         // 而原始字节是有效的（copy_to 可正常读出）。绕过后交由 decode_body 处理。
         let mut bytes = Vec::new();
         resp.copy_to(&mut bytes)
             .map_err(|e| format!("读取响应失败: {e}"))?;
+        crate::logs::rust_log(
+            &app_data_dir,
+            "info",
+            &format!("[net] {method_display} {} {} {}ms {}B", short_url(&url), status, elapsed_ms, bytes.len()),
+        );
         decode_body(&bytes, None)
     })
     .await

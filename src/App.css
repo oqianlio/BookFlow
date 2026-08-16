@@ -1540,6 +1540,19 @@ input[type="range"] {
 .dev-log-line.is-warn { color: #b58900; }
 .dev-log-empty { color: var(--on-surface-variant); text-align: center; padding: 24px 0; }
 
+/* ============ 错误边界 ============ */
+.error-boundary { padding: 48px 24px; text-align: center; }
+.error-boundary h2 { margin: 0 0 12px; color: var(--error); }
+.error-boundary-msg {
+  margin: 0 auto 8px; max-width: 640px; padding: 12px; text-align: left;
+  background: var(--surface-container-high); border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm); font-family: ui-monospace, Consolas, monospace;
+  font-size: 12.5px; white-space: pre-wrap; word-break: break-all; overflow: auto; max-height: 30vh;
+}
+.error-boundary-hint { color: var(--on-surface-variant); font-size: 12.5px; margin: 0 0 16px; }
+.error-boundary-actions { display: flex; justify-content: center; }
+.settings-group-actions { display: flex; gap: 8px; }
+
 /* ============ 动效 ============ */
 @keyframes page-in {
   from { opacity: 0; transform: translateY(8px); }

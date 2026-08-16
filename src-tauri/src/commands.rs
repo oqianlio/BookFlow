@@ -384,6 +384,39 @@ pub fn log_file_size(state: State<'_, AppState>) -> Result<u64, String> {
     Ok(crate::logs::log_file_size(&state.app_data_dir))
 }
 
+/// 一键导出诊断信息：版本、数据目录、DB 大小、书源/缓存/书架统计、最近日志。
+/// 返回单个文本块，供开发 agent 直接读取定位问题（F5）。
+#[tauri::command]
+pub fn export_diagnostics(state: State<'_, AppState>) -> Result<String, String> {
+    let mut out = String::new();
+    out.push_str(&format!("== 枕书诊断信息 ==\n版本: {}\n", env!("CARGO_PKG_VERSION")));
+    out.push_str(&format!("数据目录: {}\n", state.app_data_dir.display()));
+    // DB 大小
+    let db_path = state.app_data_dir.join("reader.db");
+    let db_size = fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0);
+    out.push_str(&format!("DB 大小: {} B\n", db_size));
+    // 书源统计
+    let conn = state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?;
+    let total: i64 = conn.query_row("SELECT COUNT(*) FROM book_sources", [], |r| r.get(0)).unwrap_or(0);
+    let enabled: i64 = conn.query_row("SELECT COUNT(*) FROM book_sources WHERE enabled = 1", [], |r| r.get(0)).unwrap_or(0);
+    out.push_str(&format!("书源: {} 启用 / {} 总数\n", enabled, total));
+    // 书架统计
+    let shelf: i64 = conn.query_row("SELECT COUNT(*) FROM books", [], |r| r.get(0)).unwrap_or(0);
+    let shelf_src: i64 = conn.query_row("SELECT COUNT(*) FROM shelf_source_books", [], |r| r.get(0)).unwrap_or(0);
+    out.push_str(&format!("书架: {} 本地书 + {} 源书\n", shelf, shelf_src));
+    // 缓存统计
+    let cache = crate::db::cache_summary(&conn).unwrap_or(crate::db::CacheSummary { book_count: 0, chapter_count: 0, total_bytes: 0 });
+    out.push_str(&format!("章节缓存: {} 章 / {} 书 / {} B\n", cache.chapter_count, cache.book_count, cache.total_bytes));
+    drop(conn);
+    // 最近日志
+    out.push_str("\n== 最近日志 (200 行) ==\n");
+    for l in crate::logs::read_logs(&state.app_data_dir, 200) {
+        out.push_str(&l);
+        out.push('\n');
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 pub fn add_shelf_source_book(
     source_id: i64,

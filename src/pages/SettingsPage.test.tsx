@@ -33,6 +33,7 @@ vi.mock("../services/api", () => ({
   readLogs: vi.fn().mockResolvedValue(["[2026-08-16 14:00:00] [error] test error", "[2026-08-16 14:00:01] [info] ok"]),
   clearLogs: vi.fn().mockResolvedValue(undefined),
   logFileSize: vi.fn().mockResolvedValue(2048),
+  exportDiagnostics: vi.fn().mockResolvedValue("== 枕书诊断信息 ==\n版本: 0.1.0"),
 }));
 vi.mock("../services/fontFiles", () => ({
   injectFontFaces: vi.fn().mockResolvedValue([]),
@@ -107,5 +108,16 @@ describe("SettingsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "查看" }));
     expect(api.readLogs).toHaveBeenCalled();
     expect(await screen.findByText(/test error/)).toBeInTheDocument();
+  });
+
+  it("exports diagnostics to clipboard", async () => {
+    const api = await import("../services/api");
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<SettingsPage />);
+    await screen.findByText(/开发者日志/);
+    await userEvent.click(screen.getByRole("button", { name: "导出诊断" }));
+    expect(api.exportDiagnostics).toHaveBeenCalled();
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("== 枕书诊断信息 =="));
   });
 });
