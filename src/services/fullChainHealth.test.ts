@@ -154,9 +154,27 @@ describe.skipIf(!ENABLED)("full-chain source health check", () => {
     });
     const searchOk = searchResults.filter((r) => r.res.ok).map((r) => r.name);
     console.log(`\n=== 第一轮：搜索可用 ${searchOk.length}/${searchResults.length} ===`);
-    // 第二轮：仅对搜索可用的源跑目录 → 正文
+    // 第二轮：仅对搜索可用的源跑目录 → 正文（每 chunk 打印累积汇总，卡住也有数据）
     const targets = sources.filter((s) => searchOk.includes(s.name));
-    const results = await runStage(targets, "目录/正文", checkOne);
+    const results: Array<{ name: string; search: StageResult; toc: StageResult; content: StageResult }> = [];
+    const CHUNK2 = 20;
+    for (let i = 0; i < targets.length; i += CHUNK2) {
+      const chunk = targets.slice(i, i + CHUNK2);
+      console.log(`\n--- 第二轮 chunk ${i / CHUNK2 + 1}（${chunk.map((c) => c.name).join("、")}）---`);
+      const rs = await Promise.allSettled(chunk.map(checkOne));
+      const done = rs.filter((r) => r.status === "fulfilled").map((r) => (r as PromiseFulfilledResult<typeof results[number]>).value);
+      for (const r of done) {
+        results.push(r);
+        const toc = r.toc.cls === "norule" ? "-" : r.toc.ok ? `目录OK(${r.toc.detail})` : `目录FAIL(${r.toc.cls})`;
+        const content = r.content.cls === "norule" ? "-" : r.content.ok ? `正文OK(${r.content.detail})` : `正文FAIL(${r.content.cls})`;
+        console.log(`  ${r.name} | ${toc} | ${content}${!r.toc.ok && r.toc.cls !== "norule" ? " | " + r.toc.detail : ""}${!r.content.ok && r.content.cls !== "norule" ? " | " + r.content.detail : ""}`);
+      }
+      const withTocRule = results.filter((r) => r.toc.cls !== "norule");
+      const tocOk = withTocRule.filter((r) => r.toc.ok);
+      const withContentRule = results.filter((r) => r.content.cls !== "norule");
+      const contentOk = withContentRule.filter((r) => r.content.ok);
+      console.log(`进度 ${Math.min(i + CHUNK2, targets.length)}/${targets.length}：目录可用 ${tocOk.length}/${withTocRule.length}，正文可用 ${contentOk.length}/${withContentRule.length}`);
+    }
     const withTocRule = results.filter((r) => r.toc.cls !== "norule");
     const tocOk = withTocRule.filter((r) => r.toc.ok);
     const tocFail = withTocRule.filter((r) => !r.toc.ok);
