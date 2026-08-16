@@ -3,6 +3,7 @@ import { SymmetricCrypto } from "./aes";
 import { getSourceVars } from "./sourceVars";
 import { getJsLib, loadJsLib } from "./jsLib";
 import { httpGet, mergeUserAgent } from "./api";
+import iconv from "iconv-lite";
 
 export type EngineResult = string;
 
@@ -1216,7 +1217,23 @@ export function evalJs(expr: string, ctx: JsContext): any {
   }
 }
 
-export function parseSearchUrl(searchUrl: string, key: string): { url: string; method?: string; body?: string } {
+/** 按书源 charset 编码搜索关键词：gbk/gb2312 用 iconv 编码后 %XX，默认 UTF-8 */
+function encodeKeyByCharset(key: string, charset?: string): string {
+  const c = (charset ?? "utf-8").trim().toLowerCase();
+  if (c === "gbk" || c === "gb2312" || c === "gb18030") {
+    try {
+      const buf = (iconv as any).encode(key, "gbk");
+      let out = "";
+      for (const b of buf) out += "%" + b.toString(16).toUpperCase().padStart(2, "0");
+      return out;
+    } catch {
+      return encodeURIComponent(key);
+    }
+  }
+  return encodeURIComponent(key);
+}
+
+export function parseSearchUrl(searchUrl: string, key: string): { url: string; method?: string; body?: string; charset?: string } {
   const commaIdx = searchUrl.indexOf(",{");
   if (commaIdx === -1) {
     return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
@@ -1224,14 +1241,17 @@ export function parseSearchUrl(searchUrl: string, key: string): { url: string; m
   const url = searchUrl.slice(0, commaIdx);
   try {
     const opts = JSON.parse(searchUrl.slice(commaIdx + 1));
-    const body = (opts.body ?? "").replace("{{key}}", encodeURIComponent(key));
-    return { url, method: opts.method ?? "POST", body };
+    const charset = typeof opts.charset === "string" ? opts.charset : undefined;
+    const encKey = encodeKeyByCharset(key, charset);
+    const body = (opts.body ?? "").replace("{{key}}", encKey);
+    const urlWithKey = url.replace("{{key}}", encKey);
+    return { url: urlWithKey, method: opts.method ?? "POST", body, charset };
   } catch {
     return { url: searchUrl.replace("{{key}}", encodeURIComponent(key)) };
   }
 }
 
-export function resolveSearchUrl(searchUrl: string, key: string, page: number, ctx?: { sourceKey?: string; source?: any }): { url: string; method?: string; body?: string } {
+export function resolveSearchUrl(searchUrl: string, key: string, page: number, ctx?: { sourceKey?: string; source?: any }): { url: string; method?: string; body?: string; charset?: string } {
   const s = searchUrl.trim();
   if (s.startsWith("@js:")) {
     const url = String(evalJs(s.slice(4), {

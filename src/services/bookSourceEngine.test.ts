@@ -488,6 +488,20 @@ url="https://www.27jj.org/search/,"+JSON.stringify(option);`;
     expect(r.body).toBe("searchkey=斗破&submit=");
   });
 
+  it("encodes keyword with gbk charset when declared (legado searchUrl charset option)", () => {
+    // 新欲望社真实写法：searchUrl /s.php,{"charset":"gbk","method":"POST","body":"s={{key}}&type=articlename"}
+    const searchUrl = `/s.php,{"charset":"gbk","method":"POST","body":"s={{key}}&type=articlename"}`;
+    const r = resolveSearchUrl(searchUrl, "斗破苍穹", 1);
+    expect(r.charset).toBe("gbk");
+    expect(r.body).toBe("s=%B6%B7%C6%C6%B2%D4%F1%B7&type=articlename");
+  });
+
+  it("encodes keyword in url with gbk charset", () => {
+    const searchUrl = `/search?q={{key}},{"charset":"GBK"}`;
+    const r = resolveSearchUrl(searchUrl, "斗破苍穹", 1);
+    expect(r.url).toBe("/search?q=%B6%B7%C6%C6%B2%D4%F1%B7");
+  });
+
   it("jsBlock can call source.getKey()", () => {
     const r = evalJs("source.getKey()", {
       doc: emptyDoc(),
