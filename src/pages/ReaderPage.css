@@ -172,6 +172,8 @@
   padding: 24px 28px 20px;
   box-sizing: border-box;
   width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .md-paged .reader-slice-nav {
@@ -263,6 +265,8 @@
   box-sizing: border-box;
   letter-spacing: var(--read-letter-spacing, 0);
   font-weight: var(--read-bold, 400);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .txt-page p {
@@ -568,7 +572,7 @@
 }
 
 /* ============ 切片翻页（书源正文） ============ */
-.reader-slice-wrap { position: relative; height: 100%; overflow: hidden; }
+.reader-slice-wrap { position: relative; height: 100%; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .reader-page-slice {
   position: absolute; inset: 0; overflow: hidden;
   padding: 4px 10px 20px; /* 底部少量留白（页码胶囊悬浮，几乎不占空白） */
@@ -576,6 +580,8 @@
   line-height: 1.8;
   max-width: 46em;
   margin: 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .reader-page-slice > * { margin: 0 0 1.1em; }
 .reader-page-slice p { margin: 0 0 var(--para-gap, 11px); }

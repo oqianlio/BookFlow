@@ -84,7 +84,14 @@ export default function PaginatedReader({
   if (!html.trim()) return <p className="panel-empty">无内容</p>;
 
   return (
-    <div className="reader-slice-wrap" ref={wrapRef} onClick={handleClick} style={{ fontSize: fontSizePx }}>
+    <div
+      className="reader-slice-wrap"
+      ref={wrapRef}
+      onClick={handleClick}
+      // 阻止点击/拖选选中文字（翻页点击不应产生选区，影响阅读）
+      onMouseDown={(e) => e.preventDefault()}
+      style={{ fontSize: fontSizePx }}
+    >
       {pages.map((p, i) => (
         <div
           key={i}

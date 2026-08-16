@@ -110,7 +110,7 @@ export default function MdReader({ path, bookId, onError, conversion }: {
   }, [pages.length]);
 
   return (
-    <div className="md-reader md-paged" ref={wrapRef}>
+    <div className="md-reader md-paged" ref={wrapRef} onMouseDown={(e) => e.preventDefault()}>
       {error && <p className="error">{error}</p>}
       {pages.length > 0 && (
         <>
