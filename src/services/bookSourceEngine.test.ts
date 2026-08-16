@@ -1069,6 +1069,19 @@ describe("legado jsoup-style node API in @js:", () => {
     expect(evalJs("java.getByteLength('你好')", { doc: emptyDoc() })).toBe(6);
   });
 
+  it("java.getString extracts by rule from html string", () => {
+    const html = `<div class="book"><img title="封面"><a class="n" href="/b.html">书名</a></div>`;
+    expect(evalJs("java.getString('img@title', '" + html + "')", { doc: emptyDoc() })).toBe("封面");
+    expect(evalJs("java.getString('.n@text', '" + html + "')", { doc: emptyDoc() })).toBe("书名");
+    expect(evalJs("java.getString('.n@href', '" + html + "')", { doc: emptyDoc() })).toBe("/b.html");
+  });
+
+  it("java.getString uses result as default source", () => {
+    expect(evalJs("java.getString('.x@text')", {
+      doc: emptyDoc(), result: `<div class="x">来自result</div>`,
+    })).toBe("来自result");
+  });
+
   it("extractList item rule @js: uses the current node", async () => {
     const items = await extractList(doc, ".item", {
       name: "@js:node.select('a').first().text()",

@@ -1090,6 +1090,25 @@ export function evalJs(expr: string, ctx: JsContext): any {
       new SymmetricCrypto(transformation, key, iv),
     put: (k: string, v: any) => { const s = v == null ? "" : String(v); vars.set(String(k), s); return s; },
     get: (k: string) => vars.get(String(k)) ?? "",
+    // legado java.getString(rule, html?)：对 html 字符串应用 CSS/属性规则同步提取；
+    // 省略 html 时用当前 result（原版默认 content）
+    getString: (rule: string, html?: string) => {
+      try {
+        const source = html != null ? String(html) : String(ctx.result ?? "");
+        const doc = parseHtml(source);
+        const parsed = parseRule(String(rule));
+        if (parsed.type === "css") {
+          const node = parsed.value ? queryIndexed(parsed.value, doc) : doc.body;
+          return node ? nodeValue(node, parsed.attr) : "";
+        }
+        if (parsed.type === "regexReplace") {
+          return applyRegexReplace(doc.documentElement?.outerHTML ?? "", parsed);
+        }
+        return "";
+      } catch {
+        return "";
+      }
+    },
     ajax: (url: any) => { (ctx as any)._ajaxUrl = String(url ?? ""); return ""; },
     toString: (x: any) => String(x ?? ""),
     toJSONString: (x: any) => {
