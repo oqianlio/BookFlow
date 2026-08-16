@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readLocalText } from "../services/localBookCache";
+import { convertText, type Conversion } from "../services/tradSimpl";
 
 const LINES_PER_PAGE = 40;
 
-export default function TxtReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
+export default function TxtReader({ path, bookId, onError, conversion }: {
+  path: string; bookId: number; onError?: (msg: string) => void; conversion?: Conversion;
+}) {
   const [lines, setLines] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +23,10 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
     (async () => {
       try {
         const text = await readLocalText(path);
-        if (!cancelled) setLines(text.split(/\r?\n/));
+        if (cancelled) return;
+        // 简繁转换（与书源正文一致）
+        const converted = conversion && conversion !== "none" ? convertText(text, conversion) : text;
+        setLines(converted.split(/\r?\n/));
       } catch (e) {
         if (cancelled) return;
         setError(String(e));
@@ -28,7 +34,7 @@ export default function TxtReader({ path, bookId, onError }: { path: string; boo
       }
     })();
     return () => { cancelled = true; };
-  }, [path]);
+  }, [path, conversion]);
 
   const pageCount = useMemo(() => Math.max(1, Math.ceil(lines.length / LINES_PER_PAGE)), [lines]);
 

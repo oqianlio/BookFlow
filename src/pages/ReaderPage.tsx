@@ -531,8 +531,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
               )}
               {!openError && book!.format === "epub" && <EpubReader path={book!.path} bookId={book!.id} onError={setOpenError} settings={settings} />}
               {!openError && book!.format === "pdf" && <PdfReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
-              {!openError && book!.format === "md" && <MdReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
-              {!openError && book!.format === "txt" && <TxtReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
+              {!openError && book!.format === "md" && <MdReader path={book!.path} bookId={book!.id} onError={setOpenError} conversion={settings.conversion} />}
+              {!openError && book!.format === "txt" && <TxtReader path={book!.path} bookId={book!.id} onError={setOpenError} conversion={settings.conversion} />}
             </>
           ) : (
             <>

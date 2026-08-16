@@ -10,7 +10,7 @@ vi.mock("../services/api", () => ({
   saveProgress: vi.fn().mockResolvedValue(undefined),
 }));
 
-beforeEach(() => { vi.clearAllMocks(); clearLocalTextCache(); });
+beforeEach(() => { vi.clearAllMocks(); clearLocalTextCache(); vi.mocked(readFileContent).mockResolvedValue("# 标题\n\n正文 <img src=x onerror=alert(1)> 继续"); });
 
 // 模拟滚动布局尺寸，使 jsdom 下的 scrollTop 可观测
 function mockScrollGeometry(el: HTMLElement) {
@@ -26,6 +26,14 @@ describe("MdReader", () => {
     const img = container.querySelector(".md-content img");
     // DOMPurify 会移除 img 上的 onerror 事件属性
     expect(img?.getAttribute("onerror")).toBeNull();
+  });
+
+  it("applies conversion=simp to content", async () => {
+    vi.mocked(readFileContent).mockResolvedValue("# 書\n\n說話繁體");
+    const { container } = render(<MdReader path="/b.md" bookId={2} conversion="simp" />);
+    await waitFor(() => expect(container.querySelector(".md-content")?.textContent).toContain("书"));
+    expect(container.querySelector(".md-content")?.textContent).toContain("说话");
+    expect(container.querySelector(".md-content")?.textContent).not.toContain("書");
   });
 
   it("jumps to a line offset via line: prefix", async () => {

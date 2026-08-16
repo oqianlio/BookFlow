@@ -4,8 +4,11 @@ import DOMPurify from "dompurify";
 import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { readLocalText } from "../services/localBookCache";
+import { convertText, type Conversion } from "../services/tradSimpl";
 
-export default function MdReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
+export default function MdReader({ path, bookId, onError, conversion }: {
+  path: string; bookId: number; onError?: (msg: string) => void; conversion?: Conversion;
+}) {
   const [html, setHtml] = useState("");
   const [totalLines, setTotalLines] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +54,10 @@ export default function MdReader({ path, bookId, onError }: { path: string; book
         const text = await readLocalText(path);
         if (cancelled) return;
         setTotalLines(text.split(/\r?\n/).length);
+        // 简繁转换（设置面板可选，与书源正文一致）
+        const converted = conversion && conversion !== "none" ? convertText(text, conversion) : text;
         // 用户导入的 Markdown 可能含恶意 HTML：marked 输出经 DOMPurify 清洗后再注入
-        const raw = marked.parse(text) as string;
+        const raw = marked.parse(converted) as string;
         setHtml(DOMPurify.sanitize(raw));
       } catch (e) {
         if (cancelled) return;
@@ -61,7 +66,7 @@ export default function MdReader({ path, bookId, onError }: { path: string; book
       }
     })();
     return () => { cancelled = true; };
-  }, [path]);
+  }, [path, conversion]);
 
   const onScroll = () => {
     const el = containerRef.current;
