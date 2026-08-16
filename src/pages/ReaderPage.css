@@ -128,8 +128,7 @@
   flex: 1;
   display: flex;
   min-height: 0;
-  /* 顶部留出悬浮胶囊高度：恒定不变，顶栏显隐不触发切片重排 */
-  padding-top: 44px;
+  /* 工具栏悬浮（absolute）不占布局：正文顶满，无顶部空白 */
 }
 
 .reader-main {
