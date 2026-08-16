@@ -44,6 +44,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: hidden; /* 防止面板/内容撑出窗口级滚动条 */
   position: relative; /* 供悬浮底栏定位 */
 }
 

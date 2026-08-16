@@ -1,3 +1,12 @@
+/* ============ 全局隐藏滚动条（保留滚动能力，沉浸视觉） ============ */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
 /* ============ MD3 设计令牌（scheme × mode） ============ */
 :root,
 html[data-scheme="sora"] {
