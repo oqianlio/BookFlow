@@ -1180,12 +1180,6 @@ input[type="range"] {
   color: var(--primary);
   margin: 0 0 8px;
 }
-.source-toc .toc-total {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--on-surface-variant);
-  margin-left: 8px;
-}
 .explore .brand h1,
 .source-manager .brand h1 { font-size: 20px; }
 .source-book .brand h1 { font-size: 20px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1466,17 +1460,6 @@ input[type="range"] {
 .rss-feed-actions .btn {
   font-size: 11.5px;
   padding: 3px 8px;
-}
-.source-toc { max-width: 720px; margin: 0 auto; }
-.source-toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.source-toc li { background: var(--surface); border: 1px solid var(--outline-variant); border-radius: var(--radius-sm); }
-.source-toc li .btn { width: 100%; justify-content: flex-start; text-align: left; }
-.source-toc .toc-toggle {
-  width: 100%;
-  margin-top: 8px;
-  justify-content: center;
-  border-style: dashed;
-  color: var(--primary);
 }
 
 /* ============ 探索浏览页（左右分栏） ============ */
