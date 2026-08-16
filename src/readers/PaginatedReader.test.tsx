@@ -146,7 +146,7 @@ describe("PaginatedReader", () => {
     expect(onReachEnd).not.toHaveBeenCalled();
   });
 
-  it("calls onReachEnd when the user navigates to the last page", () => {
+  it("does not call onReachEnd when navigating to the last page (10/11 → 11/11 is normal flip)", () => {
     const onReachEnd = vi.fn();
     const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
     const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
@@ -154,8 +154,24 @@ describe("PaginatedReader", () => {
     const span = wrap.querySelector(".reader-slice-nav span")!;
     const total = Number(span.textContent!.split("/")[1].trim());
     expect(total).toBeGreaterThan(1);
-    // 一路翻到最后一页
+    // 一路翻到最后一页（含 10/11 → 11/11 的正常翻页）→ 不触发下一章
     for (let i = 1; i < total; i++) fireEvent.click(wrap, { clientX: 900 });
+    expect(span.textContent).toBe(`${total} / ${total}`);
+    expect(onReachEnd).not.toHaveBeenCalled();
+  });
+
+  it("calls onReachEnd only when flipping past the last page", () => {
+    const onReachEnd = vi.fn();
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" measure={mockMeasure} onReachEnd={onReachEnd} />);
+    const wrap = container.querySelector(".reader-slice-wrap")! as HTMLElement;
+    mockWrapRect(wrap);
+    const span = wrap.querySelector(".reader-slice-nav span")!;
+    const total = Number(span.textContent!.split("/")[1].trim());
+    // 翻到最后一页
+    for (let i = 1; i < total; i++) fireEvent.click(wrap, { clientX: 900 });
+    expect(onReachEnd).not.toHaveBeenCalled();
+    // 在末页再点下一页（越过末页）→ 触发下一章衔接
+    fireEvent.click(wrap, { clientX: 900 });
     expect(onReachEnd).toHaveBeenCalledTimes(1);
   });
 

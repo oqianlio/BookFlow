@@ -54,8 +54,9 @@ export default function PaginatedReader({
     const c = Math.min(Math.max(0, p), total - 1);
     setPage(c);
     onPageChange?.(c, total);
-    // 向前翻触达末页（含单页章节点击翻页区域）→ 通知上层衔接下一章
-    if (total > 0 && c === total - 1 && p > page) onReachEnd?.();
+    // 越过末页继续向前翻（p > 最后一页；含单页章节点击翻页区域）→ 通知上层衔接下一章。
+    // 注意：翻到最后一页本身（10/11 → 11/11）不触发，只有从末页再往前翻才触发
+    if (total > 0 && p > total - 1) onReachEnd?.();
     // 从首页继续向前翻（越过首页）→ 通知上层衔接上一章
     if (total > 0 && page === 0 && p < 0) onReachStart?.();
   };
