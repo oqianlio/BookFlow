@@ -389,3 +389,16 @@
   数组要带上 panel/persist/onBack。
 - 下次：改键盘行为时想清楚层级语义（面板 < 页面 < 全局），
   退出型操作前先落盘进度；测试覆盖"面板开/关"两种分支。
+
+### 3.35 详情页参考原版：头图区 + 信息标签 + 可展开简介（2026-08-16）
+- 场景：用户要求"书籍信息参考原版"（legado 详情页）。
+- 认知：legado 详情页 = 封面背景模糊头图区（前景封面+书名+作者）
+  + 状态/字数/更新时间标签行 + 可展开简介 + 操作行 + 章节列表。
+  引擎侧 ruleBookInfo 只解析了 name/author/intro/coverUrl，参考
+  原版还需 kind/wordCount/lastChapter/status/updateTime 五字段。
+- 坑：jsdom 无真实布局，`clientHeight/scrollHeight` 恒为 0 →
+  简介"是否超 3 行"的测量判断失效，展开按钮永不显示。测试用
+  `Object.defineProperty(HTMLElement.prototype, ...)` getter 按
+  class 区分 mock 尺寸，用后 delete 恢复。
+- 下次：做"参考原版"的 UI 时先列出原版信息字段清单，引擎解析
+  与 UI 展示一次到位；jsdom 测布局类判断要 mock 尺寸属性。

@@ -24,7 +24,13 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   onBack: () => void; onRead: (index: number, url: string, name: string) => void;
   onSwitchSource?: (hit: SearchHit) => void;
 }) {
-  const [info, setInfo] = useState({ title: initialTitle, author: "", intro: "", coverUrl: "" });
+  const [info, setInfo] = useState<{
+    title: string; author: string; intro: string; coverUrl: string;
+    kind?: string; wordCount?: string; lastChapter?: string; status?: string; updateTime?: string;
+  }>({ title: initialTitle, author: "", intro: "", coverUrl: "" });
+  const [introExpanded, setIntroExpanded] = useState(false);
+  const introRef = useRef<HTMLParagraphElement | null>(null);
+  const [introClampable, setIntroClampable] = useState(false);
   const [toc, setToc] = useState<TocItem[]>([]);
   const [tocLoading, setTocLoading] = useState(true);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
@@ -37,6 +43,20 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   const { showError } = useError();
 
   useEffect(() => () => { dlSignalRef.current.cancelled = true; }, []);
+
+  // 简介是否超过 3 行（决定是否显示"展开/收起"）
+  useEffect(() => {
+    const el = introRef.current;
+    if (!el || !info.intro) return;
+    el.style.webkitLineClamp = "3";
+    const clamped = el.clientHeight;
+    el.style.webkitLineClamp = "none";
+    const full = el.scrollHeight;
+    const clampable = full > clamped + 4;
+    setIntroClampable(clampable);
+    el.style.webkitLineClamp = introExpanded ? "none" : "3";
+    if (!clampable) setIntroExpanded(true); // 不满 3 行无需展开按钮
+  }, [info.intro, introExpanded]);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,41 +150,90 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
-      <div className="source-book-info">
-        {info.coverUrl ? (
-          <img
-            className="source-book-cover"
-            src={info.coverUrl}
-            alt={info.title || "封面"}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+
+      {/* 头图区：封面背景模糊 + 前景封面/书名/作者/标签（参考 legado 详情页） */}
+      <div className="source-book-hero">
+        {info.coverUrl && (
+          <div
+            className="source-book-hero-bg"
+            style={{ backgroundImage: `url(${info.coverUrl})` }}
+            aria-hidden
           />
-        ) : (
-          <div className="source-book-cover-ph" aria-hidden />
         )}
-        <div className="source-book-meta">
-          <h2 className="source-book-title">{info.title || sourceName}</h2>
-          {info.author && <span className="hit-author">{info.author}</span>}
-          {stats && stats.read_seconds > 0 && (
-            <span className="hit-author">
-              {formatReadTime(stats.read_seconds)} · 阅读 {stats.read_count} 次
-              {stats.last_read_at ? ` · 最近 ${formatDate(stats.last_read_at)}` : ""}
-            </span>
+        <div className="source-book-hero-inner">
+          {info.coverUrl ? (
+            <img
+              className="source-book-cover"
+              src={info.coverUrl}
+              alt={info.title || "封面"}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+            />
+          ) : (
+            <div className="source-book-cover-ph" aria-hidden />
           )}
-          {info.intro && <p className="source-intro">{info.intro}</p>}
-          <div className="source-book-actions">
-            <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
-            <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
-              {onShelf ? "已在书架" : "加入书架"}
-            </button>
-            {onSwitchSource && (
-              <button className="btn btn-ghost" onClick={() => setShowSwitch(true)}>换源</button>
-            )}
-            <button className="btn btn-ghost" onClick={handleDownload} disabled={dl.busy || toc.length === 0}>
-              {dl.busy ? `缓存中 ${dl.done}/${dl.total}` : dl.done === dl.total && dl.total > 0 ? `已缓存 ${dl.total} 章` : "缓存全书"}
-            </button>
+          <div className="source-book-meta">
+            <h2 className="source-book-title">{info.title || sourceName}</h2>
+            <div className="source-book-sub">
+              {info.author && <span className="source-book-author">{info.author}</span>}
+              {info.kind && <span className="source-book-kind">{info.kind}</span>}
+            </div>
+            <div className="source-book-tags">
+              {info.status && (
+                <span className={`tag status-tag${/完/.test(info.status) ? " done" : ""}`}>{info.status}</span>
+              )}
+              {info.wordCount && <span className="tag">{info.wordCount}</span>}
+              {info.updateTime && <span className="tag">更新 {info.updateTime}</span>}
+              {stats && stats.read_seconds > 0 && (
+                <span className="tag">
+                  {formatReadTime(stats.read_seconds)} · 阅读 {stats.read_count} 次
+                  {stats.last_read_at ? ` · 最近 ${formatDate(stats.last_read_at)}` : ""}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* 操作行：开始阅读 + 加入书架为主，缓存/换源为辅 */}
+      <div className="source-book-actions">
+        <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+        <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
+          {onShelf ? "已在书架" : "加入书架"}
+        </button>
+        {onSwitchSource && (
+          <button className="btn btn-ghost" onClick={() => setShowSwitch(true)}>换源</button>
+        )}
+        <button className="btn btn-ghost" onClick={handleDownload} disabled={dl.busy || toc.length === 0}>
+          {dl.busy ? `缓存中 ${dl.done}/${dl.total}` : dl.done === dl.total && dl.total > 0 ? `已缓存 ${dl.total} 章` : "缓存全书"}
+        </button>
+      </div>
+
+      {/* 简介（可展开） */}
+      {info.intro && (
+        <div className="source-book-intro">
+          <p
+            ref={introRef}
+            className={`source-intro${introExpanded ? " expanded" : ""}`}
+            style={{ WebkitLineClamp: introExpanded ? undefined : 3 }}
+          >
+            {info.intro}
+          </p>
+          {introClampable && (
+            <button className="btn btn-ghost intro-toggle" onClick={() => setIntroExpanded((v) => !v)}>
+              {introExpanded ? "收起" : "展开"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 最新章节 */}
+      {info.lastChapter && (
+        <div className="source-book-last">
+          <span className="last-label">最新章节</span>
+          <span className="last-name">{info.lastChapter}</span>
+        </div>
+      )}
+
       <div className="source-toc">
         <h2 className="home-section">目录 {toc.length > 0 && <span className="toc-total">共 {toc.length} 章</span>}</h2>
         {tocLoading ? (

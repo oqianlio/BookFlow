@@ -2,7 +2,23 @@ import { listBookSources, httpGet, mergeUserAgent } from "./api";
 import { parseBookSourceJson, parseHtml, extractSingle, extractList, hostOf, jsonGet, type BookSource } from "./bookSourceEngine";
 
 export interface TocItem { name: string; url: string }
-export interface SourceBookInfo { title: string; author: string; intro: string; coverUrl: string }
+/** 书籍信息（对应 legado ruleBookInfo 解析结果） */
+export interface SourceBookInfo {
+  title: string;
+  author: string;
+  intro: string;
+  coverUrl: string;
+  /** 分类/类型，如 "科幻"（ruleBookInfo.kind） */
+  kind?: string;
+  /** 字数（ruleBookInfo.wordCount 原始文本，如 "123.45万字"） */
+  wordCount?: string;
+  /** 最新章节名（ruleBookInfo.lastChapter） */
+  lastChapter?: string;
+  /** 连载状态（ruleBookInfo.status，如 "连载中"/"已完结"） */
+  status?: string;
+  /** 更新时间（ruleBookInfo.updateTime 原始文本） */
+  updateTime?: string;
+}
 export interface TocResult {
   info: SourceBookInfo;
   toc: TocItem[];
@@ -70,6 +86,12 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const author = bi.author ? await extractSingle(doc, bi.author, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  // 扩展信息字段（legado ruleBookInfo）：kind/wordCount/lastChapter/status/updateTime
+  const kind = bi.kind ? await extractSingle(doc, bi.kind, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const wordCount = bi.wordCount ? await extractSingle(doc, bi.wordCount, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const lastChapter = bi.lastChapter ? await extractSingle(doc, bi.lastChapter, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const status = bi.status ? await extractSingle(doc, bi.status, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
+  const updateTime = bi.updateTime ? await extractSingle(doc, bi.updateTime, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   // tocUrl 规则可能提取为空（页面无该链接）：回退到书籍页本身，避免空 URL 请求
   const tocUrl = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
   const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
@@ -108,7 +130,10 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
     curHtml = await httpGet(nextUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   }
   return {
-    info: { title: title || opts.initialTitle, author, intro, coverUrl: cover },
+    info: {
+      title: title || opts.initialTitle, author, intro, coverUrl: cover,
+      kind, wordCount, lastChapter, status, updateTime,
+    },
     toc,
     loginUrl: s.loginUrl,
   };

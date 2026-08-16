@@ -35,6 +35,34 @@ describe("fetchToc", () => {
     expect(r.toc[0].url).toBe("https://ex.com/c/1.html");
   });
 
+  it("parses extended book info fields (kind/wordCount/lastChapter/status/updateTime)", async () => {
+    const richJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+      ruleBookInfo: {
+        name: "h1@text", author: ".author@text", kind: ".kind@text",
+        wordCount: ".wc@text", lastChapter: ".lastc@text",
+        status: ".st@text", updateTime: ".upd@text",
+      },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: richJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><span class="author">刘慈欣</span>
+       <span class="kind">科幻</span><span class="wc">88.6万字</span>
+       <span class="lastc">第三部 死神永生</span><span class="st">已完结</span>
+       <span class="upd">2024-01-01</span>
+       <ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    const r = await fetchToc({ sourceId: 1, bookUrl: "https://ex.com/book/1.html", initialTitle: "三体" });
+    expect(r.info.kind).toBe("科幻");
+    expect(r.info.wordCount).toBe("88.6万字");
+    expect(r.info.lastChapter).toBe("第三部 死神永生");
+    expect(r.info.status).toBe("已完结");
+    expect(r.info.updateTime).toBe("2024-01-01");
+  });
+
   it("caches the result per source+book and does not re-request", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },

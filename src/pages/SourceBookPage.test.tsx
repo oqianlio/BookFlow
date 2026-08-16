@@ -257,4 +257,94 @@ describe("SourceBookPage", () => {
     await screen.findByText("三体");
     expect(screen.queryByText(/阅读次数/)).not.toBeInTheDocument();
   });
+
+  it("shows status/wordCount/updateTime/lastChapter tags from extended info", async () => {
+    const richJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+      ruleBookInfo: {
+        name: "h1@text", kind: ".kind@text", wordCount: ".wc@text",
+        status: ".st@text", updateTime: ".upd@text", lastChapter: ".lastc@text",
+      },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href", nextTocUrl: "" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: richJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1>
+       <span class="kind">科幻</span><span class="wc">88.6万字</span>
+       <span class="st">连载中</span><span class="upd">2024-01-01</span>
+       <span class="lastc">第三部 死神永生</span>
+       <ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    expect(await screen.findByText("连载中")).toBeInTheDocument();
+    expect(screen.getByText("88.6万字")).toBeInTheDocument();
+    expect(screen.getByText("更新 2024-01-01")).toBeInTheDocument();
+    expect(screen.getByText("科幻")).toBeInTheDocument();
+    // 最新章节行
+    expect(screen.getByText("最新章节")).toBeInTheDocument();
+    expect(screen.getByText("第三部 死神永生")).toBeInTheDocument();
+    // 连载中状态用非 done 样式（绿色）
+    const st = screen.getByText("连载中");
+    expect(st.className).toContain("status-tag");
+    expect(st.className).not.toContain("done");
+  });
+
+  it("shows 展开 toggle only for intros longer than 3 lines and collapses/expands", async () => {
+    // jsdom 无真实布局：给 .source-intro 元素 mock 行高尺寸（clamp 3 行高 vs 全文高）
+    const proto = HTMLElement.prototype;
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get(this: HTMLElement) { return this.classList.contains("source-intro") ? 60 : 0; },
+    });
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLElement) { return this.classList.contains("source-intro") ? 300 : 0; },
+    });
+    const introSourceJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+      ruleBookInfo: { name: "h1@text", intro: ".intro@text" },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href", nextTocUrl: "" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: introSourceJson, enabled: true, last_used_at: null },
+    ]);
+    const longIntro = "这是一个很长的简介。" + "这是一段很长的内容。".repeat(40);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><p class="intro">${longIntro}</p>
+       <ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    const { container } = render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    // 简介渲染且超过 3 行 → 显示展开按钮
+    const intro = await screen.findByText(new RegExp("这是一个很长的简介"));
+    expect(intro.className).toContain("source-intro");
+    const toggle = await screen.findByRole("button", { name: "展开" });
+    expect(toggle).toBeInTheDocument();
+    // 展开 → 按钮变收起
+    fireEvent.click(toggle);
+    expect(await screen.findByRole("button", { name: "收起" })).toBeInTheDocument();
+    void container;
+    delete (proto as any).clientHeight;
+    delete (proto as any).scrollHeight;
+  });
+
+  it("does not show 展开 for short intros", async () => {
+    const introSourceJson = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "示例",
+      ruleBookInfo: { name: "h1@text", intro: ".intro@text" },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text", chapterUrl: "a@href", nextTocUrl: "" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: introSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>三体</h1><p class="intro">短简介</p>
+       <ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    render(<SourceBookPage sourceId={1} sourceName="示例" bookUrl="https://ex.com/book/1.html" initialTitle="三体" onBack={() => {}} onRead={() => {}} />);
+    await screen.findByText("短简介");
+    expect(screen.queryByRole("button", { name: "展开" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "收起" })).not.toBeInTheDocument();
+  });
 });
