@@ -993,6 +993,11 @@ input[type="range"] {
 .import-confirm-existing { flex-shrink: 0; font-size: 11px; color: var(--on-surface-variant); padding: 2px 8px; border-radius: 999px; background: var(--surface-container-high); border: 1px solid var(--outline-variant); }
 .import-confirm-actions { display: flex; gap: 10px; }
 .import-msg { margin: 10px 0 0; }
+.source-verify-bar { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; flex-wrap: wrap; }
+.verify-summary { font-size: 12.5px; color: var(--on-surface-variant); }
+.verify-badge { display: inline-block; margin-top: 4px; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.verify-badge.ok { color: var(--primary); background: var(--secondary-container); }
+.verify-badge.fail { color: var(--error, #b3261e); background: var(--error-container, #f9dedc); }
 
 /* ============ 发现与搜索（书源） ============ */
 .discover-search {

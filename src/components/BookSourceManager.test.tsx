@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import BookSourceManager from "./BookSourceManager";
 import * as api from "../services/api";
 import * as imp from "../services/bookSourceImport";
+import * as verifyMod from "../services/sourceVerify";
 
 vi.mock("../services/api", () => ({
   listBookSources: vi.fn(),
@@ -24,6 +25,9 @@ vi.mock("../services/bookSourceImport", () => ({
 }));
 vi.mock("../services/sourceSubscription", () => ({
   syncSubscription: vi.fn().mockResolvedValue({ added: 2, updated: 1, removed: 0, failed: 0 }),
+}));
+vi.mock("../services/sourceVerify", () => ({
+  verifySources: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue("C:/fake/source.json"),
@@ -306,5 +310,51 @@ describe("BookSourceManager", () => {
     // 同步
     await userEvent.click(screen.getByRole("button", { name: "同步" }));
     await waitFor(() => expect(screen.getByText(/同步完成：新增 2，更新 1，失败 0/)).toBeInTheDocument());
+  });
+
+  it("batch-verifies enabled sources and shows badges + summary", async () => {
+    const verify = vi.mocked(verifyMod.verifySources);
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "好源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
+      { id: 2, name: "坏源", url: "https://b.com", json: "{}", enabled: true, last_used_at: null },
+      { id: 3, name: "停用源", url: "https://c.com", json: "{}", enabled: false, last_used_at: null },
+    ]);
+    verify.mockResolvedValue([
+      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "" },
+      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "无结果" },
+    ]);
+    render(<BookSourceManager />);
+    await screen.findByText("好源");
+    await userEvent.click(screen.getByRole("button", { name: "批量验证（启用源）" }));
+    await waitFor(() => expect(screen.getByText(/可用 1 \/ 2/)).toBeInTheDocument());
+    // 仅启用源被验证；停用源无徽标
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(verify.mock.calls[0][0].map((s: any) => s.id)).toEqual([1, 2]);
+    // 徽标
+    expect(screen.getByText("✓ 12本")).toBeInTheDocument();
+    expect(screen.getByText("无结果")).toBeInTheDocument();
+    expect(screen.getByText("停用源")).toBeInTheDocument();
+    expect(screen.queryByText("✓ 0本")).not.toBeInTheDocument();
+  });
+
+  it("deletes failed sources after verification with confirmation", async () => {
+    const verify = vi.mocked(verifyMod.verifySources);
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "好源", url: "https://a.com", json: "{}", enabled: true, last_used_at: null },
+      { id: 2, name: "坏源", url: "https://b.com", json: "{}", enabled: true, last_used_at: null },
+    ]);
+    verify.mockResolvedValue([
+      { id: 1, name: "好源", ok: true, count: 12, ms: 100, reason: "" },
+      { id: 2, name: "坏源", ok: false, count: 0, ms: 50, reason: "HTTP 403" },
+    ]);
+    render(<BookSourceManager />);
+    await screen.findByText("好源");
+    await userEvent.click(screen.getByRole("button", { name: "批量验证（启用源）" }));
+    await userEvent.click(await screen.findByRole("button", { name: "删除失败源（1）" }));
+    // 确认弹窗列出失败源名
+    expect(screen.getByText(/将删除 1 个验证失败的书源：坏源/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
+    await waitFor(() => expect(api.deleteBookSource).toHaveBeenCalledWith(2));
+    await waitFor(() => expect(screen.queryByText(/删除失败源/)).not.toBeInTheDocument());
   });
 });

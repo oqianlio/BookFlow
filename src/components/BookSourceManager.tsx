@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { deleteBookSource, listBookSources, setBookSourceEnabled, writeTextFile, listSubscriptions, addSubscription, deleteSubscription, setSubscriptionChecked, type BookSource, type SubscriptionRow } from "../services/api";
 import { commitBookSource, importBookSourceFromFile, importBookSourceFromUrl, sourceUsesJs } from "../services/bookSourceImport";
 import { syncSubscription } from "../services/sourceSubscription";
+import { verifySources, type VerifyResult } from "../services/sourceVerify";
 import { useError } from "./ErrorDialog";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -53,6 +54,61 @@ export default function BookSourceManager({ onDebug, onBack }: {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const [confirmJs, setConfirmJs] = useState<{ msg: string; proceed: () => void } | null>(null);
+
+  // ==== 批量验证 / 删除失败源 ====
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResults, setVerifyResults] = useState<Map<number, VerifyResult> | null>(null);
+  const [verifyProgress, setVerifyProgress] = useState<{ done: number; total: number } | null>(null);
+  const cancelVerifyRef = useRef(false);
+
+  const handleVerify = async () => {
+    if (verifying) return;
+    const enabled = sources.filter((s) => s.enabled);
+    if (enabled.length === 0) return;
+    setVerifying(true);
+    setVerifyResults(new Map());
+    setVerifyProgress({ done: 0, total: enabled.length });
+    cancelVerifyRef.current = false;
+    try {
+      const results = await verifySources(enabled, {
+        concurrency: 10,
+        shouldCancel: () => cancelVerifyRef.current,
+        onProgress: (done, total, r) => {
+          setVerifyProgress({ done, total });
+          setVerifyResults((prev) => { const m = new Map(prev ?? []); m.set(r.id, r); return m; });
+        },
+      });
+      setVerifyResults(new Map(results.filter(Boolean).map((r) => [r.id, r])));
+    } catch (e) {
+      showError(String(e));
+    } finally {
+      setVerifying(false);
+      setVerifyProgress(null);
+    }
+  };
+
+  const failedResults = verifyResults ? [...verifyResults.values()].filter((r) => !r.ok) : [];
+  const okCount = verifyResults ? [...verifyResults.values()].filter((r) => r.ok).length : 0;
+
+  const handleDeleteFailed = () => {
+    if (failedResults.length === 0) return;
+    const names = failedResults.slice(0, 6).map((r) => r.name).join("、");
+    setConfirmJs({
+      msg: `将删除 ${failedResults.length} 个验证失败的书源：${names}${failedResults.length > 6 ? ` 等 ${failedResults.length} 个` : ""}。此操作不可撤销，继续？`,
+      proceed: () => {
+        setConfirmJs(null);
+        void (async () => {
+          let deleted = 0;
+          for (const r of failedResults) {
+            try { await deleteBookSource(r.id); deleted++; } catch { /* 单个失败继续 */ }
+          }
+          setVerifyResults(null);
+          setImportMsg(`已删除 ${deleted} 个失败书源`);
+          await refresh();
+        })();
+      },
+    });
+  };
 
   const importSingle = async (bs: any) => {
     let existing: Set<string>;
@@ -284,6 +340,26 @@ export default function BookSourceManager({ onDebug, onBack }: {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索书源名称或网址"
           />
+          <div className="source-verify-bar">
+            <button
+              className="btn btn-ghost"
+              onClick={() => void handleVerify()}
+              disabled={verifying || sources.filter((s) => s.enabled).length === 0}
+            >
+              {verifying ? `验证中 ${verifyProgress?.done ?? 0}/${verifyProgress?.total ?? 0}…` : "批量验证（启用源）"}
+            </button>
+            {verifying && (
+              <button className="btn btn-ghost" onClick={() => { cancelVerifyRef.current = true; }}>取消</button>
+            )}
+            {!verifying && verifyResults && (
+              <>
+                <button className="btn btn-primary" onClick={handleDeleteFailed} disabled={failedResults.length === 0}>
+                  删除失败源（{failedResults.length}）
+                </button>
+                <span className="verify-summary">可用 {okCount} / {verifyResults.size}</span>
+              </>
+            )}
+          </div>
           {(() => {
             const filtered = query.trim()
               ? sources.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()) || s.url.toLowerCase().includes(query.trim().toLowerCase()))
@@ -305,6 +381,12 @@ export default function BookSourceManager({ onDebug, onBack }: {
                           <div className="source-info">
                             <span className="source-name">{s.name}</span>
                             <span className="source-url">{s.url}</span>
+                            {verifyResults?.has(s.id) && (() => {
+                              const r = verifyResults.get(s.id)!;
+                              return r.ok
+                                ? <span className="verify-badge ok" title={`${r.ms}ms`}>✓ {r.count}本</span>
+                                : <span className="verify-badge fail" title={r.reason}>{r.reason}</span>;
+                            })()}
                           </div>
                           <div className="source-actions">
                             <input
