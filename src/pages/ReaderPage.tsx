@@ -96,13 +96,23 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       if (seq !== tocSeqRef.current) return;
       setToc(r.toc);
       setAuthor(r.info.author);
+      // 开始阅读且无进度恢复：目录就绪后自动进第一章（避免停在"请从目录选择章节"）
+      if (initialChapterIndex === -1 && !chapterRef.current.url) {
+        if (r.toc[0]) {
+          const first = r.toc[0];
+          setChapter({ index: 0, url: first.url, name: first.name });
+        } else {
+          setLoading(false); // 目录为空：回到空状态（用户可从其他入口进入）
+        }
+      }
     } catch {
       if (seq !== tocSeqRef.current) return;
       setTocFailed(true);
+      if (initialChapterIndex === -1 && !chapterRef.current.url) setLoading(false);
     } finally {
       if (seq === tocSeqRef.current) setTocLoading(false);
     }
-  }, [isLocal, sourceId, bookUrl, bookTitle]);
+  }, [isLocal, sourceId, bookUrl, bookTitle, initialChapterIndex]);
 
   useEffect(() => {
     if (!isLocal) void loadToc();
@@ -374,9 +384,12 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       if (cancelled) return;
       if (p) {
         setChapter({ index: p.chapter_index, url: p.chapter_url, name: p.chapter_name });
-      } else {
-        setLoading(false);
+      } else if (tocRef.current[0]) {
+        // 无历史进度：自动从第一章开始（目录已就绪时）
+        const first = tocRef.current[0];
+        setChapter({ index: 0, url: first.url, name: first.name });
       }
+      // 目录未就绪：保持 loading，等 loadToc 完成后的兜底（见 loadToc）
     });
     return () => { cancelled = true; };
   }, [isLocal, sourceId, bookUrl, initialChapterIndex]);

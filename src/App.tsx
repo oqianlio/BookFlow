@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SideNav, { type AppArea } from "./components/SideNav";
 import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
@@ -46,6 +46,22 @@ export default function App() {
 function AppInner() {
   const [state, setState] = useState<AppState>({ area: "bookshelf" });
   const area = rootArea(state);
+
+  // 全局快捷键（所有页面生效；阅读页内部快捷键优先，此处跳过避免冲突）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.key === "Escape" && state.area === "detail") {
+        // 阅读页的 Esc 由 ReaderPage 处理（关面板）；这里只处理非阅读详情页返回
+        if (state.page === "sourceReader" || state.page === "reader") return;
+        e.preventDefault();
+        setState(state.back);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [state]);
 
   if (state.area === "detail") {
     const go = (back: AppState) => setState(back);

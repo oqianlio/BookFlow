@@ -206,6 +206,23 @@ describe("ReaderPage (source)", () => {
     expect(screen.getByRole("button", { name: "登录" })).toBeInTheDocument();
   });
 
+  it("开始阅读无进度时自动加载第一章（不显示请从目录选择章节）", async () => {
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.getBookSourceProgress).mockResolvedValue(null);
+    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+      if (url === "https://ex.com/book/1.html") return tocHtml;
+      if (url === "https://ex.com/c/1.html") return ch1;
+      if (url === "https://ex.com/c/2.html") return ch2;
+      return ch3;
+    });
+    render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/book/1.html", bookTitle: "三体", chapterIndex: -1, chapterUrl: "", chapterName: "" }} onBack={() => {}} />);
+    // 目录加载后自动进入第一章正文
+    expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
+    expect(screen.queryByText("请从目录选择章节")).not.toBeInTheDocument();
+  });
+
   it("passes the source hostname as cookieJar to chapter httpGet", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
