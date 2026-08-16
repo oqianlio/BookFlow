@@ -290,9 +290,9 @@
 
 /* ============ 侧栏面板 ============ */
 .panel {
-  width: 300px;
+  width: 264px;
   border-left: 1px solid var(--border);
-  padding: 16px;
+  padding: 14px 16px;
   overflow-y: auto;
   background: var(--surface-2);
   flex-shrink: 0;
@@ -482,12 +482,23 @@
 .reader-slice-nav button:disabled { opacity: 0.35; cursor: default; }
 .reader-slice-nav button { border: none; background: transparent; color: var(--fg); font-size: 14px; cursor: pointer; }
 
-/* ============ 阅读设置面板 ============ */
-.reader-settings-panel .settings-group { margin-bottom: 14px; }
+/* ============ 阅读设置面板（紧凑：小间距、小控件，避免占满侧栏） ============ */
+.reader-settings-panel .settings-group { margin-bottom: 10px; }
 .reader-settings-panel .settings-label {
-  display: block; margin-bottom: 6px; font-size: 12.5px; color: var(--fg-muted);
+  display: block; margin-bottom: 4px; font-size: 12px; color: var(--fg-muted);
+}
+.reader-settings-panel .range-row { gap: 8px; }
+.reader-settings-panel .range-row input[type="range"] { flex: 1; height: 20px; }
+.reader-settings-panel .range-value {
+  min-width: 30px; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums;
 }
 .reader-settings-panel .segmented { width: 100%; }
+.reader-settings-panel .segmented button {
+  padding: 4px 6px; font-size: 12.5px;
+}
+.reader-settings-panel .font-custom-input {
+  margin-top: 6px; padding: 4px 8px; font-size: 12.5px; width: 100%; box-sizing: border-box;
+}
 .bg-theme-options { display: flex; gap: 10px; }
 .bg-theme-swatch {
   width: 32px; height: 32px; border-radius: 8px; border: 2px solid transparent;

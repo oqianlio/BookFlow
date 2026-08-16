@@ -29,6 +29,8 @@ export default function PaginatedReader({
   const ty = { ...DEFAULT_TYPO, ...typography };
 
   // 排版样式：批量测量时应用到隐藏容器（与阅读区一致的字体/行距/缩进等）
+  // padding/max-width 与 .reader-page-slice 保持一致（CSS 同步修改），否则测量与渲染
+  // 尺寸不一致 → 每页内容超高需滚动
   const styleHtml = useMemo(() => {
     const css = [
       `font-size:${fontSizePx}px`,
@@ -38,12 +40,19 @@ export default function PaginatedReader({
       `font-weight:${ty.bold ? 700 : 400}`,
       `font-family:${ty.fontFamily}`,
       "white-space:normal",
+      "padding:4px 10px 76px",
+      "max-width:46em",
+      "margin:0 auto",
+      "box-sizing:border-box",
     ].join(";");
     return `<style>.m-p{${css}} .m-p p{margin:0 0 ${ty.paragraphSpacingPx}px}</style>`;
   }, [fontSizePx, lineHeight, ty.letterSpacingPx, ty.paragraphSpacingPx, ty.indentEm, ty.bold, ty.fontFamily]);
 
   useEffect(() => {
-    const h = wrapRef.current?.clientHeight || 500;
+    // 分页测量高度 = 容器高度 - slice 垂直 padding（4 顶 + 76 底），
+    // 与 .reader-page-slice 的真实可用内容高度一致，避免每页内容超高
+    const rawH = wrapRef.current?.clientHeight || 500;
+    const h = Math.max(120, rawH - 80);
     const w = wrapRef.current?.clientWidth || 400;
     setPages(sliceHtmlIntoPages(html, h, w, measure, styleHtml));
     setPage(0);
