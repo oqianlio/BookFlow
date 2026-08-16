@@ -195,3 +195,20 @@
   devUrl 和 vite server.host 必须明确一致。
 - 下次：白屏先分三层排查——连接层（netstat ESTABLISHED）、
   加载层（Edge headless dump-dom 看 root 是否渲染）、运行时层（console 报错）。
+
+### 3.18 开发者日志是调试加速器（2026-08-16）
+- 场景：实现开发者日志（前端 console/error 劫持 → log_frontend →
+  $APPDATA/logs/app.log + 设置页查看面板）。上线后用户实际操作
+  立刻暴露两个既有 bug：书源 evalJs `id is not defined`、React
+  duplicate key（半山人小说网）。
+- 认知：全局错误/警告收集 + 文件持久化 + UI 查看，让"用户操作时的
+  真实错误"可回溯，不用复现即可定位；比只看 tauri 终端强（打包后
+  无终端）。
+- 下次：日志上报链路要防循环（上报失败静默 catch，否则 rejection
+  再触发 unhandledrejection 无限递归）；新功能上线后让用户操作并
+  检查日志，常能立刻发现潜伏 bug。
+
+### 3.19 Rust 测试目录隔离（2026-08-16）
+- 场景：logs.rs 单元测试用固定 temp 目录，测试间残留导致
+  `left: 7, right: 2` 失败。
+- 下次：文件系统测试每个用例独立子目录（tag 区分），开头清理。
