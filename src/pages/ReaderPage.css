@@ -66,29 +66,26 @@
   position: relative; /* 供悬浮底栏定位 */
 }
 
-/* ============ 顶部工具栏（悬浮胶囊：不占布局，正文高度恒定避免切片重排） ============ */
+/* ============ 顶部工具栏（Legado 式全宽悬浮条：点击正文中间呼出/隐藏，滑入滑出） ============ */
 .reader-toolbar {
   position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: min(720px, calc(100% - 48px));
-  padding: 6px 10px;
-  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  box-shadow: var(--shadow-md);
+  gap: 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
   z-index: 10;
   transition: transform 0.24s ease, opacity 0.24s ease;
 }
 
 .reader-toolbar-hidden {
-  transform: translateX(-50%) translateY(-16px);
+  transform: translateY(-100%);
   opacity: 0;
   pointer-events: none;
 }
@@ -527,30 +524,29 @@
 .manga-viewer .manga-viewer-failed { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 120px; border-radius: 4px; background: #000; color: var(--fg-muted); font-size: 13px; }
 .manga-viewer .manga-viewer-notice { width: 100%; margin: 0; text-align: center; color: var(--fg-muted); font-size: 12.5px; }
 
-/* ============ 底部工具栏（书源阅读，悬浮胶囊，与顶栏同风格） ============ */
+/* ============ 底部工具栏（Legado 式全宽悬浮条：进度 + 章节切换 + 快捷入口） ============ */
 .reader-bottom-bar {
   position: absolute;
-  left: 50%;
-  bottom: 6px;
-  transform: translateX(-50%);
-  display: inline-flex;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 3px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface-2) 88%, transparent);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  flex-shrink: 0;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--surface-2) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border);
   z-index: 10;
-  transition: transform 0.22s ease, opacity 0.22s ease;
+  flex-shrink: 0;
+  transition: transform 0.24s ease, opacity 0.24s ease;
 }
 
 .reader-bottom-bar-hidden {
   opacity: 0;
-  transform: translateX(-50%) translateY(14px);
+  transform: translateY(100%);
   pointer-events: none;
 }
 
@@ -562,37 +558,44 @@
 
 .reader-progress {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 1px;
   padding: 0 6px;
-  min-width: 84px;
+  min-width: 120px;
   justify-content: center;
 }
 
-.reader-progress-bar {
-  flex: 1;
-  height: 3px;
-  border-radius: 999px;
-  background: var(--border-strong);
-  overflow: hidden;
-  min-width: 40px;
+.reader-chapter-ind {
+  font-size: 12.5px;
+  color: var(--fg);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.reader-progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-  transition: width 0.25s ease;
-}
-
-.reader-progress-text {
-  font-size: 12px;
+.reader-page-ind {
+  font-size: 11px;
   color: var(--fg-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  min-width: 34px;
-  text-align: center;
+}
+
+/* ============ 阅读设置：字号步进按钮（A− / A+） ============ */
+.font-size-row .btn-step {
+  flex-shrink: 0;
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+}
+.font-size-row .btn-step:active {
+  transform: scale(0.94);
 }
 
 /* ============ 切片翻页（书源正文） ============ */
@@ -631,6 +634,11 @@
 .reader-slice-nav button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); }
 .reader-slice-nav button:disabled { opacity: 0.35; cursor: default; }
 .reader-slice-nav button { border: none; background: transparent; color: var(--fg); font-size: 14px; cursor: pointer; }
+/* 菜单打开（底栏可见）时隐藏正文内页码胶囊，避免与底栏重叠 */
+.reader-page.menu-open .reader-slice-nav {
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* ============ 阅读设置面板（紧凑：小间距、小控件，避免占满侧栏） ============ */
 .reader-settings-panel .settings-group { margin-bottom: 10px; }

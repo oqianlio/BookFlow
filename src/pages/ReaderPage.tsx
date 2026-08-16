@@ -11,10 +11,9 @@ import TtsBar from "../components/TtsBar";
 import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIcon } from "../components/icons";
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
-import { applyInitResult } from "../services/sourceToc";
+import { applyInitRule, fetchToc, type TocItem } from "../services/sourceToc";
 import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
-import { fetchToc, type TocItem } from "../services/sourceToc";
 import { getSessionChapter, setSessionChapter } from "../services/chapterSessionCache";
 import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
@@ -72,6 +71,25 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     });
   }, []);
 
+  // ==== 章节内页码（Legado 底栏页指示）====
+  // 直接写 DOM（ref），不经 React state：避免 PaginatedReader 挂载回调触发额外重渲染，
+  // 与书源提取的异步流程产生竞态（会导致章节内容偶发渲染失败）
+  const pageIndRef = useRef<HTMLSpanElement | null>(null);
+  const onPageChange = useCallback((cur: number, total: number) => {
+    const el = pageIndRef.current;
+    if (!el) return;
+    el.textContent = `页 ${cur + 1} / ${total}`;
+    el.style.display = total > 0 ? "" : "none";
+  }, []);
+  // 换章时显式重置页码指示
+  const resetPageInd = useCallback(() => {
+    const el = pageIndRef.current;
+    if (el) {
+      el.textContent = "";
+      el.style.display = "none";
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void loadReadingSettings().then((s) => { if (!cancelled) setSettings(s); });
@@ -122,8 +140,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     prevUrlsRef.current = [];   // 从目录跳转后上一章从该章节往前
     nextUrlRef.current = "";
     setChapter({ index: idx, url, name });
+    resetPageInd();
     setPanel(null);
-  }, []);
+  }, [resetPageInd]);
 
   // ==== 书源：加入书架 ====
   const [onShelf, setOnShelf] = useState(false);
@@ -216,8 +235,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
     let doc = parseHtml(html);
     const rules = src.ruleContent ?? {};
-    // ruleContent.init（legado JSON 源初始路径）：正文提取相对子对象执行
-    let contentResult = applyInitResult(rules.init, html);
+    // ruleContent.init（legado init 规则）：JSON 路径取子对象 / @put:@get 落变量
+    // 非 @put/@get 路径同步返回，避免额外 microtask 改变渲染时序（组件测试依赖）
+    const initResult = applyInitRule(doc, rules.init, html, { sourceKey: src.bookSourceUrl, source: src, baseUrl: c.url });
+    let contentResult = typeof initResult === "string" ? initResult : await initResult;
     let text = await extractSingle(doc, rules.content ?? "body", { baseUrl: c.url, result: contentResult, sourceKey: src.bookSourceUrl });
     // legado nextContentUrl = 同章节分页（如 36xs 的 6516910_1.html）：循环抓取后续页并拼接，
     // 直到无下一页（或下一页指向目录中的下一章 = 实为"下一章"链接，不拼接）
@@ -237,7 +258,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       pageGuard++;
       const pageHtml = await httpGet(nextAbs, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
       doc = parseHtml(pageHtml);
-      const pageResult = applyInitResult(rules.init, pageHtml);
+      const initPage = applyInitRule(doc, rules.init, pageHtml, { sourceKey: src.bookSourceUrl, source: src, baseUrl: nextAbs });
+      const pageResult = typeof initPage === "string" ? initPage : await initPage;
       const pageText = await extractSingle(doc, rules.content ?? "body", { baseUrl: nextAbs, result: pageResult, sourceKey: src.bookSourceUrl });
       if (!pageText) break; // 下一页无正文：停止
       text += pageText;
@@ -420,6 +442,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   // ==== 书源：上一章/下一章 ====
   const goChapter = (delta: number) => {
     const idx = chapter.index + delta;
+    resetPageInd();
     if (delta > 0) {
       // nextContentUrl 优先；无则从目录取下一章（部分源没有 nextContentUrl 规则）
       const next = nextUrlRef.current;
@@ -517,7 +540,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   );
 
   return (
-    <div className="reader-page">
+    <div className={`reader-page${menuVisible ? " menu-open" : ""}`}>
       <header className={`reader-toolbar${menuVisible ? "" : " reader-toolbar-hidden"}`}>
         <button className="btn-icon" onClick={onBack} aria-label="返回" title="返回">
           <BackIcon size={18} />
@@ -661,7 +684,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                       bold: settings.bold,
                       fontFamily: resolveFontCss(settings.fontFamily),
                     }}
-                    onMenuToggle={() => setMenuVisible((v) => !v)}
+                                        onPageChange={onPageChange}
+
+                                        onMenuToggle={() => setMenuVisible((v) => !v)}
                     onReachEnd={() => goChapter(1)}
                     onReachStart={() => goChapter(-1)}
                   />
@@ -742,10 +767,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             )}
             <div className="settings-group">
               <label className="settings-label">字号 {settings.fontSizePx}px</label>
-              <div className="range-row">
+              <div className="range-row font-size-row">
+                <button type="button" className="btn btn-ghost btn-step" aria-label="减小字号"
+                  onClick={() => updateSetting({ fontSizePx: Math.max(14, settings.fontSizePx - 1) })}>A−</button>
                 <input type="range" min={14} max={24} value={settings.fontSizePx} aria-label="字号"
                   onChange={(e) => updateSetting({ fontSizePx: Number(e.target.value) })} />
-                <span className="range-value">{settings.fontSizePx}</span>
+                <button type="button" className="btn btn-ghost btn-step" aria-label="增大字号"
+                  onClick={() => updateSetting({ fontSizePx: Math.min(24, settings.fontSizePx + 1) })}>A+</button>
               </div>
             </div>
             <div className="settings-group">
@@ -832,10 +860,19 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       {!isLocal && (
         <footer className={`reader-bottom-bar${menuVisible ? "" : " reader-bottom-bar-hidden"}`}>
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || (prevUrlsRef.current.length === 0 && !toc[chapter.index - 1])}>上一章</button>
-          <span className="reader-progress">第 {chapter.index + 1} 章</span>
+          <span className="reader-progress">
+            <span className="reader-chapter-ind">
+              {toc.length > 0 ? `第 ${chapter.index + 1} / ${toc.length} 章` : `第 ${chapter.index + 1} 章`}
+            </span>
+            <span className="reader-page-ind" ref={pageIndRef} style={{ display: "none" }} />
+          </span>
           <button className="btn btn-ghost" onClick={() => goChapter(1)} disabled={!!loading || failed || (!nextUrlRef.current && !toc[chapter.index + 1])}>下一章</button>
         </footer>
       )}
     </div>
   );
 }
+
+
+
+
