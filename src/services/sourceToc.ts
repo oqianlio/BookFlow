@@ -86,9 +86,16 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const bs = (await listBookSources()).find((x) => x.id === opts.sourceId);
   if (!bs) throw new Error("书源不存在");
   const s: BookSource = parseBookSourceJson(bs.json);
-  if (!opts.bookUrl) throw new Error("书籍地址无效，无法打开");
-  const base = s.bookSourceUrl || opts.bookUrl;
-  const resolvedBookUrl = opts.bookUrl.startsWith("http") ? opts.bookUrl : new URL(opts.bookUrl, base).toString();
+  return fetchTocBySource(s, opts.bookUrl, opts.initialTitle);
+}
+
+/** 真实目录链路：给定已解析书源与书籍 URL，请求书籍页 → 应用 ruleBookInfo（提取 tocUrl）→
+ *  请求目录页 → 按 ruleToc 提取章节（含 nextTocUrl 分页）。
+ *  供 fetchToc（DB 书源）与健康检查（tmp_sources 书源）共用，保证检测链路与真实阅读一致。 */
+export async function fetchTocBySource(s: BookSource, bookUrl: string, initialTitle: string): Promise<TocResult> {
+  if (!bookUrl) throw new Error("书籍地址无效，无法打开");
+  const base = s.bookSourceUrl || bookUrl;
+  const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
   const cookieJarHost = hostOf(s.bookSourceUrl);
   const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const doc = parseHtml(html);
@@ -97,8 +104,8 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const initBi = applyInitRule(doc, bi.init, html, { sourceKey: s.bookSourceUrl, source: s, baseUrl: resolvedBookUrl });
   const biResult = typeof initBi === "string" ? initBi : await initBi;
   // legado js 上下文 book 对象（chapterUrl 等规则可能引用 book.bookUrl/tocUrl）
-  const book = { bookUrl: resolvedBookUrl, name: opts.initialTitle, tocUrl: "" };
-  const title = bi.name ? await extractSingle(doc, bi.name, { result: biResult, sourceKey: s.bookSourceUrl, book }) : opts.initialTitle;
+  const book = { bookUrl: resolvedBookUrl, name: initialTitle, tocUrl: "" };
+  const title = bi.name ? await extractSingle(doc, bi.name, { result: biResult, sourceKey: s.bookSourceUrl, book }) : initialTitle;
   const author = bi.author ? await extractSingle(doc, bi.author, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
@@ -109,7 +116,9 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const status = bi.status ? await extractSingle(doc, bi.status, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   const updateTime = bi.updateTime ? await extractSingle(doc, bi.updateTime, { result: biResult, sourceKey: s.bookSourceUrl, book }) : "";
   // tocUrl 规则可能提取为空（页面无该链接）：回退到书籍页本身，避免空 URL 请求
-  const tocUrl = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
+  const tocUrlRaw = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
+  // 相对 tocUrl（JSON API 源常见，如 `/qbread/...`）相对 bookSourceUrl 解析为完整 URL
+  const tocUrl = tocUrlRaw.startsWith("http") ? tocUrlRaw : new URL(tocUrlRaw, base).toString();
   const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};
@@ -148,7 +157,7 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   }
   return {
     info: {
-      title: title || opts.initialTitle, author, intro, coverUrl: cover,
+      title: title || initialTitle, author, intro, coverUrl: cover,
       kind, wordCount, lastChapter, status, updateTime,
     },
     toc,

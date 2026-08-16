@@ -860,6 +860,17 @@ result = out;`;
     expect(out).toContain('"Seq":[1]');
   });
 
+  it("extractSingle substitutes {{$..xxx}} recursive template from JSON result (南极 tocUrl pattern)", async () => {
+    // 回归：`{{$..resourceID}}` 的 `$..` 递归标记在模板替换中不能丢失（此前被剥成 `.` 导致提取为空）
+    const html = JSON.stringify({ data: { bookInfo: { resourceID: "1134522101" } } });
+    const doc = parseHtml(html);
+    const out = await extractSingle(doc, "/qbread/api/book/all-chapter?bookId={{$..resourceID}}", {
+      result: JSON.stringify({ bookInfo: { resourceID: "1134522101" } }),
+      sourceKey: "https://bookshelf.html5.qq.com/", baseUrl: "https://novel.html5.qq.com/x",
+    });
+    expect(out).toBe("/qbread/api/book/all-chapter?bookId=1134522101");
+  });
+
   it("extractList js branch parses JSON.stringify'd string items (番茄聚合API pattern)", async () => {
     const doc = parseHtml("<div></div>");
     const listRule = `@js:result = [JSON.stringify({book_name:'A', author:'x'}), JSON.stringify({book_name:'B', author:'y'})];`;

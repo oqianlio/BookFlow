@@ -6,8 +6,9 @@ import { describe, it, expect, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import * as api from "./api";
-import { parseBookSourceJson, resolveSearchUrl, extractBookList, extractList, extractSingle, resolveUrl, parseHtml, hostOf, type BookSource as Src } from "./bookSourceEngine";
+import { parseBookSourceJson, resolveSearchUrl, extractBookList, extractSingle, resolveUrl, parseHtml, hostOf, type BookSource as Src } from "./bookSourceEngine";
 import { mergeUserAgent } from "./api";
+import { fetchTocBySource } from "./sourceToc";
 
 const ENABLED = !!process.env.SOURCE_HEALTH;
 const KEYWORD = process.env.SOURCE_KEYWORD ?? "我的";
@@ -79,15 +80,11 @@ async function tocStage(src: Src, bookUrl: string): Promise<{ res: StageResult; 
   const rules = src.ruleToc ?? {};
   if (!rules.chapterList) return { res: { ok: true, cls: "norule", detail: "无目录规则" }, chUrl: "" };
   try {
-    const base = src.bookSourceUrl || bookUrl;
-    const resolved = bookUrl.startsWith("http") ? bookUrl : resolveUrl(bookUrl, base);
-    const html = await api.httpGet(resolved, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 5000, undefined, undefined, undefined, hostOf(src.bookSourceUrl));
-    const doc = parseHtml(html);
-    const items = await extractList(doc, rules.chapterList, {
-      name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-    }, { baseUrl: resolved, result: html, sourceKey: src.bookSourceUrl, source: src });
-    if (items.length === 0) return { res: { ok: false, cls: "empty", detail: "目录提取为空" }, chUrl: "" };
-    return { res: { ok: true, cls: "ok", detail: `${items.length}章` }, chUrl: items[0]?.url ?? "" };
+    // 真实链路：请求书籍页 → 应用 ruleBookInfo（提取 tocUrl）→ 请求目录页 → 提取章节
+    // （与 fetchToc 共用，保证健康检查与真实阅读一致——JSON API 源的目录在 tocUrl 接口而非 bookUrl 页面）
+    const r = await fetchTocBySource(src, bookUrl, "健康检查");
+    if (r.toc.length === 0) return { res: { ok: false, cls: "empty", detail: "目录提取为空" }, chUrl: "" };
+    return { res: { ok: true, cls: "ok", detail: `${r.toc.length}章` }, chUrl: r.toc[0]?.url ?? "" };
   } catch (e) {
     return { res: classify(e), chUrl: "" };
   }
@@ -158,7 +155,9 @@ describe.skipIf(!ENABLED)("full-chain source health check", () => {
   it("checks search → toc → content across enabled sources", async () => {
     const file = path.resolve(__dirname, "../../tmp_sources.json");
     let sources = JSON.parse(fs.readFileSync(file, "utf-8")) as Array<{ name: string; json: string }>;
-    if (NAME_FILTER) sources = sources.filter((s) => s.name.includes(NAME_FILTER));
+    // NAME_FILTER 支持逗号分隔多个名字（如 "丁丁,南极"）
+    const filters = NAME_FILTER.split(",").map((n) => n.trim()).filter(Boolean);
+    if (filters.length > 0) sources = sources.filter((s) => filters.some((n) => s.name.includes(n)));
     console.log(`\n全链路检查 ${sources.length} 个书源，关键词：${KEYWORD}\n`);
     // 第一轮：搜索
     const searchResults = await runStage(sources, "搜索", async (s) => {

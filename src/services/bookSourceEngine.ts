@@ -624,7 +624,8 @@ async function extractSingleInner(doc: Document, rule: string, ctx?: ExtractCont
           try {
             const trimmed = String(inner).trim();
             if (trimmed.startsWith("$")) {
-              const path = trimmed.replace(/^\$\.?/, "");
+              // `$..xxx` 保留递归标记（legado JsonPath 任意深度）；`$.xxx` 剥 `$.`
+              const path = trimmed.startsWith("$..") ? trimmed.slice(1) : trimmed.replace(/^\$\.?/, "");
               const v = jsonGet(j, path);
               return v == null ? "" : String(v);
             }
