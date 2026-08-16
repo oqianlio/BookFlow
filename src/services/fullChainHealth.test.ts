@@ -129,14 +129,27 @@ async function checkOne(s: { name: string; json: string }): Promise<{
   return { name: s.name, search, toc, content };
 }
 
-/** 批量跑某阶段函数，带进度 */
+/** 批量跑某阶段函数：按域名分组（同一服务商串行 + 间隔，避免触发限流误报），组间小并发 */
 async function runStage<T>(sources: Array<{ name: string; json: string }>, label: string, fn: (s: { name: string; json: string }) => Promise<T>): Promise<T[]> {
+  const groups = new Map<string, Array<{ name: string; json: string }>>();
+  for (const s of sources) {
+    let host = "unknown";
+    try { host = new URL((JSON.parse(s.json) as any).bookSourceUrl).hostname; } catch { /* 保持 unknown */ }
+    if (!groups.has(host)) groups.set(host, []);
+    groups.get(host)!.push(s);
+  }
+  const hosts = [...groups.keys()];
   const out: T[] = [];
-  const CHUNK = 30;
-  for (let i = 0; i < sources.length; i += CHUNK) {
-    const rs = await Promise.allSettled(sources.slice(i, i + CHUNK).map(fn));
-    out.push(...rs.filter((r) => r.status === "fulfilled").map((r) => (r as PromiseFulfilledResult<T>).value));
-    console.log(`${label} 进度 ${Math.min(i + CHUNK, sources.length)}/${sources.length}`);
+  const CHUNK = 10; // 最多 10 个域名并行
+  for (let i = 0; i < hosts.length; i += CHUNK) {
+    await Promise.allSettled(hosts.slice(i, i + CHUNK).map(async (host) => {
+      const list = groups.get(host)!;
+      for (const s of list) {
+        try { out.push(await fn(s)); } catch { /* 单源失败不影响组内其他 */ }
+        await new Promise((r) => setTimeout(r, 200)); // 组内 200ms 间隔
+      }
+    }));
+    console.log(`${label} 进度 ${Math.min(i + CHUNK, hosts.length)}/${hosts.length} 域名`);
   }
   return out;
 }
@@ -154,26 +167,36 @@ describe.skipIf(!ENABLED)("full-chain source health check", () => {
     });
     const searchOk = searchResults.filter((r) => r.res.ok).map((r) => r.name);
     console.log(`\n=== 第一轮：搜索可用 ${searchOk.length}/${searchResults.length} ===`);
-    // 第二轮：仅对搜索可用的源跑目录 → 正文（每 chunk 打印累积汇总，卡住也有数据）
+    // 第二轮：仅对搜索可用的源跑目录 → 正文（按域名分组串行，避免限流误报）
     const targets = sources.filter((s) => searchOk.includes(s.name));
     const results: Array<{ name: string; search: StageResult; toc: StageResult; content: StageResult }> = [];
-    const CHUNK2 = 20;
-    for (let i = 0; i < targets.length; i += CHUNK2) {
-      const chunk = targets.slice(i, i + CHUNK2);
-      console.log(`\n--- 第二轮 chunk ${i / CHUNK2 + 1}（${chunk.map((c) => c.name).join("、")}）---`);
-      const rs = await Promise.allSettled(chunk.map(checkOne));
-      const done = rs.filter((r) => r.status === "fulfilled").map((r) => (r as PromiseFulfilledResult<typeof results[number]>).value);
-      for (const r of done) {
-        results.push(r);
-        const toc = r.toc.cls === "norule" ? "-" : r.toc.ok ? `目录OK(${r.toc.detail})` : `目录FAIL(${r.toc.cls})`;
-        const content = r.content.cls === "norule" ? "-" : r.content.ok ? `正文OK(${r.content.detail})` : `正文FAIL(${r.content.cls})`;
-        console.log(`  ${r.name} | ${toc} | ${content}${!r.toc.ok && r.toc.cls !== "norule" ? " | " + r.toc.detail : ""}${!r.content.ok && r.content.cls !== "norule" ? " | " + r.content.detail : ""}`);
-      }
+    const groups2 = new Map<string, typeof targets>();
+    for (const s of targets) {
+      let host = "unknown";
+      try { host = new URL((JSON.parse(s.json) as any).bookSourceUrl).hostname; } catch { /* 保持 unknown */ }
+      if (!groups2.has(host)) groups2.set(host, []);
+      groups2.get(host)!.push(s);
+    }
+    const hosts2 = [...groups2.keys()];
+    const CHUNK2 = 10;
+    for (let i = 0; i < hosts2.length; i += CHUNK2) {
+      await Promise.allSettled(hosts2.slice(i, i + CHUNK2).map(async (host) => {
+        for (const s of groups2.get(host)!) {
+          try {
+            const r = await checkOne(s);
+            results.push(r);
+            const toc = r.toc.cls === "norule" ? "-" : r.toc.ok ? `目录OK(${r.toc.detail})` : `目录FAIL(${r.toc.cls})`;
+            const content = r.content.cls === "norule" ? "-" : r.content.ok ? `正文OK(${r.content.detail})` : `正文FAIL(${r.content.cls})`;
+            console.log(`  ${r.name} | ${toc} | ${content}${!r.toc.ok && r.toc.cls !== "norule" ? " | " + r.toc.detail : ""}${!r.content.ok && r.content.cls !== "norule" ? " | " + r.content.detail : ""}`);
+          } catch { /* checkOne 内部已分类 */ }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }));
       const withTocRule = results.filter((r) => r.toc.cls !== "norule");
       const tocOk = withTocRule.filter((r) => r.toc.ok);
       const withContentRule = results.filter((r) => r.content.cls !== "norule");
       const contentOk = withContentRule.filter((r) => r.content.ok);
-      console.log(`进度 ${Math.min(i + CHUNK2, targets.length)}/${targets.length}：目录可用 ${tocOk.length}/${withTocRule.length}，正文可用 ${contentOk.length}/${withContentRule.length}`);
+      console.log(`进度 ${Math.min(i + CHUNK2, hosts2.length)}/${hosts2.length} 域名：目录可用 ${tocOk.length}/${withTocRule.length}，正文可用 ${contentOk.length}/${withContentRule.length}`);
     }
     const withTocRule = results.filter((r) => r.toc.cls !== "norule");
     const tocOk = withTocRule.filter((r) => r.toc.ok);
