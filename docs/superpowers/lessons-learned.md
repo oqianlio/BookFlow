@@ -271,3 +271,19 @@
   返回友好错误 + 前端 httpGet 空 URL 抛错）。
 - 下次：看到"请求构建失败"先查是否空 URL（日志 GET 后无地址）；
   新规则接入时注意提取空值的回退路径。
+
+### 3.25 目录数量不对：tocUrl 规则 + text.xxx 选择器双重 bug（2026-08-16）
+- 场景：用户让自查"章节数量"。错层小说书页目录只有 3 章（第2974章
+  等最近更新）+ "查看全部章节 >>"入口，完整目录 2973 章在
+  /book/chapter/ 分页页。验证链条暴露两个 bug：
+  1. **tocUrl 规则错**：`text.查看全部章节@href`——页面文本是
+     "查看全部章节 >>"（带符号），且真实页面结构与我早期探测的
+     不同（无 id=linkIndex）→ 需用 `#allchapter a[href*="/book/chapter/"]@href`
+  2. **引擎 text.xxx 实现错**：a) 完全匹配（should be contains，
+     legado jsoup :containsOwn 语义）；b) 用 textContent 会让祖先
+     元素（html）先命中 → 必须用 ownText（直接文本子节点）
+- 认知：**验证目录完整性要数章节数**（前/中/末 + 连续编号），不能
+  只看"能打开"；text.xxx 是 legado 高频锚点规则，实现必须对齐
+  containsOwn 语义。
+- 下次：源规则修完用端到端计数验证（写临时 vitest 脚本跑真实
+  页面）；真实页面结构不稳定（A/B、登录态），探测要多抓几次。
