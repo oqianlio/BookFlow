@@ -204,7 +204,7 @@ export function parseRule(rule: string): ParsedRule {
     return { type: "xpath", value: s };
   }
   if (s.startsWith("@css:")) {
-    return parseAttrRule(s.slice(5));
+    return parseAttrRule(s.slice(5), true);
   }
   if (s.startsWith("@js:")) {
     return { type: "js", value: s.slice(4) };
@@ -258,7 +258,7 @@ function splitReplaceSuffix(s: string): { body: string; replaces: Array<[string,
   return { body, replaces };
 }
 
-function parseAttrRule(s: string): ParsedRule {
+function parseAttrRule(s: string, cssMode = false): ParsedRule {
   const { body, replaces } = splitReplaceSuffix(s);
   const replace = replaces.length ? replaces : undefined;
   if (body.startsWith("@")) {
@@ -267,6 +267,15 @@ function parseAttrRule(s: string): ParsedRule {
   }
   // legado 纯属性名（text/href/src/html 等）：对当前节点自身取值
   if (["text", "ownText", "all", "textNodes", "html", "href", "src"].includes(body)) {
+    return { type: "css", value: "", attr: body, replace };
+  }
+  // @CSS: 前缀模式（legado isCss）：裸单词 = 标签选择器（如 @css:li）
+  if (cssMode && /^[a-zA-Z][\w-]*$/.test(body)) {
+    return { type: "css", value: body, attr: "text", replace };
+  }
+  // 对齐原版 AnalyzeByJSoup：无 @CSS: 前缀的裸单词 = 属性名（onclick 等），
+  // 选择器需 . / # / tag. / @ 前缀（如 onclick##.*\\((\\d+)\\);##$1）
+  if (!cssMode && /^[a-zA-Z][\w-]*$/.test(body)) {
     return { type: "css", value: "", attr: body, replace };
   }
   const m = body.match(/^(.+?)@([a-zA-Z]+)$/);
@@ -382,6 +391,8 @@ export interface ExtractContext {
   sourceKey?: string;
   source?: any;
   cookieHost?: string;
+  /** 当前书籍信息（legado js 上下文 book：bookUrl/tocUrl/name/author 等），注入 evalJs */
+  book?: any;
 }
 
 export async function extractSingle(doc: Document, rule: string, ctx?: ExtractContext): Promise<string> {
@@ -398,7 +409,7 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
   const trimmed = rule.trimStart();
   if (jsIdx > 0 && !trimmed.startsWith("@Json:") && !trimmed.startsWith("$.") && !trimmed.startsWith("$[")) {
     const base = await extractSingle(doc, rule.slice(0, jsIdx), ctx);
-    return String(evalJs(rule.slice(jsIdx + 4), { doc, result: base, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+    return String(evalJs(rule.slice(jsIdx + 4), { doc, result: base, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
   const parsed = parseRule(rule);
   if (parsed.type === "regex") {
@@ -448,7 +459,7 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     return node ? finalize(applyReplacements(nodeValue(node, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl) : "";
   }
   if (parsed.type === "js") {
-    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
+    return evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, book: ctx?.book });
   }
   if (parsed.type === "json") {
     let j: any;
@@ -504,7 +515,7 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
         for (let i = 1; i < pre.length && cur; i++) cur = queryIndexed(pre[i], cur);
         if (!cur) return "";
         try {
-          return String(evalJs(last.slice(3), { doc, node: cur, result: "", baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+          return String(evalJs(last.slice(3), { doc, node: cur, result: "", baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
         } catch {
           return "";
         }
@@ -620,7 +631,7 @@ export async function extractList(
       }
       return nodes.map((node) => {
         const out: Record<string, string> = {};
-        for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
+        for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx);
         return out;
       });
     }
@@ -635,12 +646,12 @@ export async function extractList(
     }
     return arr.map((node) => {
       const out: Record<string, string> = {};
-      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
+      for (const [key, rule] of Object.entries(itemRules)) out[key] = extractItemValue(node, key, rule, ctx);
       return out;
     });
   }
   if (parsed.type === "js") {
-    const raw = evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey });
+    const raw = evalJs(parsed.value, { doc, baseUrl: ctx?.baseUrl, result: ctx?.result ?? "", sourceKey: ctx?.sourceKey, book: ctx?.book });
     let items: any[];
     try {
       items = Array.isArray(raw) ? raw : JSON.parse(String(raw ?? "[]"));
@@ -667,7 +678,7 @@ export async function extractList(
     return arr.map((item) => {
       const out: Record<string, string> = {};
       for (const [key, rule] of Object.entries(itemRules)) {
-        out[key] = extractFromJsonObject(item, rule, { baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey });
+        out[key] = extractFromJsonObject(item, rule, { baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book });
       }
       return out;
     });
@@ -697,17 +708,17 @@ export async function extractList(
   return nodes.map((node) => {
     const out: Record<string, string> = {};
     for (const [key, rule] of Object.entries(itemRules)) {
-      out[key] = extractItemValue(node, key, rule, ctx?.baseUrl);
+      out[key] = extractItemValue(node, key, rule, ctx);
     }
     return out;
   });
 }
 
 /** item 字段提取 + URL 字段（bookUrl/coverUrl）相对地址解析（regexReplace 等规则产出相对路径） */
-function extractItemValue(node: Element, key: string, rule: string, baseUrl?: string): string {
-  let v = extractFromElement(node, rule, baseUrl);
+function extractItemValue(node: Element, key: string, rule: string, ctx?: ExtractContext): string {
+  let v = extractFromElement(node, rule, ctx?.baseUrl, ctx?.book);
   if ((key === "bookUrl" || key === "coverUrl") && v && !ABS_URL_RE.test(v)) {
-    v = resolveUrl(v, baseUrl ?? "");
+    v = resolveUrl(v, ctx?.baseUrl ?? "");
   }
   return v;
 }
@@ -719,14 +730,14 @@ export function extractFromJsObject(obj: any, rule: string, baseUrl?: string, so
 export function extractFromJsonObject(
   obj: any,
   rule: string,
-  ctx?: { baseUrl?: string; sourceKey?: string },
+  ctx?: { baseUrl?: string; sourceKey?: string; book?: any },
 ): string {
   if (obj == null || typeof obj !== "object") return "";
   const s = rule.trim();
   if (!s) return "";
   const jsIdx = s.indexOf("@js:");
   if (jsIdx === 0) {
-    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+    return String(evalJs(s.slice(4), { doc: emptyDoc(), result: obj, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
   const pathPart = (jsIdx > 0 ? s.slice(0, jsIdx) : s).trim();
   const path = pathPart.startsWith("@Json:")
@@ -734,7 +745,7 @@ export function extractFromJsonObject(
     : pathPart.replace(/^\$\.?/, "");
   const v = jsonGet(obj, path);
   if (jsIdx > 0) {
-    return String(evalJs(s.slice(jsIdx + 4), { doc: emptyDoc(), result: v, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey }) ?? "");
+    return String(evalJs(s.slice(jsIdx + 4), { doc: emptyDoc(), result: v, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
   if (v == null) return "";
   const str = String(v);
@@ -742,7 +753,23 @@ export function extractFromJsonObject(
   return str;
 }
 
-export function extractFromElement(el: Element, rule: string, baseUrl?: string): string {
+export function extractFromElement(el: Element, rule: string, baseUrl?: string, book?: any): string {
+  // item 规则 `<js>...</js>` 后缀（legado：前段提取值作 result 交给 js 处理，
+  // 如 chapterUrl: `onclick##.*\\((\\d+)\\);##$1\n<js>…book.bookUrl…</js>`）
+  const jsIdx = rule.indexOf("<js>");
+  if (jsIdx > 0) {
+    const jsEnd = rule.indexOf("</js>", jsIdx);
+    if (jsEnd !== -1) {
+      const base = extractFromElement(el, rule.slice(0, jsIdx), baseUrl, book);
+      try {
+        return String(evalJs(rule.slice(jsIdx + 4, jsEnd), {
+          doc: el.ownerDocument ?? emptyDoc(), node: el, result: base, baseUrl, book,
+        }) ?? "");
+      } catch {
+        return "";
+      }
+    }
+  }
   const alts = splitAlternatives(rule);
   if (alts.length > 1) {
     for (const alt of alts) {
@@ -773,7 +800,7 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string):
   if (parsed.type === "js") {
     // item 规则 @js:：node = 当前列表项元素（jsoup 风格包装），支持 node.select/selectFirst/attr/text 等
     try {
-      return String(evalJs(parsed.value, { doc: el.ownerDocument ?? emptyDoc(), node: el, result: "", baseUrl }) ?? "");
+      return String(evalJs(parsed.value, { doc: el.ownerDocument ?? emptyDoc(), node: el, result: "", baseUrl, book }) ?? "");
     } catch {
       return "";
     }
@@ -806,7 +833,7 @@ export function extractFromElement(el: Element, rule: string, baseUrl?: string):
         }
         if (!cur) return "";
         try {
-          return String(evalJs(last.slice(3), { doc: el.ownerDocument ?? emptyDoc(), node: cur, result: "", baseUrl }) ?? "");
+          return String(evalJs(last.slice(3), { doc: el.ownerDocument ?? emptyDoc(), node: cur, result: "", baseUrl, book }) ?? "");
         } catch {
           return "";
         }
@@ -994,6 +1021,8 @@ export interface JsContext {
   source?: any;
   sourceKey?: string;
   cookieHost?: string;
+  /** 当前书籍信息（legado js 上下文 book） */
+  book?: any;
 }
 
 // legado 字符集名（GBK/GB2312/UTF-16…）映射到 TextDecoder 标签；编码侧仅 UTF-8 原生支持
@@ -1130,7 +1159,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
     };
     // new Function 构造时即解析语法：须在 try 内，否则书源 @js: 表达式的语法错误会冒泡导致整条规则失败
     const fn = new Function(
-      "node", "doc", "result", "src", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie",
+      "node", "doc", "result", "src", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie", "book",
       body,
     );
     const g = globalThis as Record<string, unknown>;
@@ -1145,7 +1174,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
         ctx.node ? jsoupNode(ctx.node) : null,
         jsoupDoc(ctx.doc),
         ctx.result ?? "", ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
-        source, java, ctx.baseUrl ?? "", TYPE, cookie,
+        source, java, ctx.baseUrl ?? "", TYPE, cookie, ctx.book ?? {},
       );
     } finally {
       (g as Record<string, unknown>).source = prevThisSource;

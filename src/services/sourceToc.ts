@@ -46,17 +46,20 @@ async function doFetch(opts: { sourceId: number; bookUrl: string; initialTitle: 
   const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const doc = parseHtml(html);
   const bi = s.ruleBookInfo ?? {};
-  const title = bi.name ? await extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl }) : opts.initialTitle;
-  const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl }) : "";
-  const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl }) : "";
-  const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : "";
-  const tocUrl = bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl }) : resolvedBookUrl;
+  // legado js 上下文 book 对象（chapterUrl 等规则可能引用 book.bookUrl/tocUrl）
+  const book = { bookUrl: resolvedBookUrl, name: opts.initialTitle, tocUrl: "" };
+  const title = bi.name ? await extractSingle(doc, bi.name, { result: html, sourceKey: s.bookSourceUrl, book }) : opts.initialTitle;
+  const author = bi.author ? await extractSingle(doc, bi.author, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
+  const intro = bi.intro ? await extractSingle(doc, bi.intro, { result: html, sourceKey: s.bookSourceUrl, book }) : "";
+  const cover = bi.coverUrl ? await extractSingle(doc, bi.coverUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : "";
+  const tocUrl = bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: html, sourceKey: s.bookSourceUrl, book }) : resolvedBookUrl;
   const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};
+  const tocBook = { ...book, name: title, author, tocUrl };
   const items = await extractList(tocDoc, rules.chapterList ?? "", {
     name: rules.chapterName ?? "", url: rules.chapterUrl ?? "",
-  }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl });
+  }, { baseUrl: tocUrl, result: tocHtml, sourceKey: s.bookSourceUrl, book: tocBook });
   const toc = items.filter((i) => i.url).map((i) => ({
     name: i.name || "未命名章节",
     url: i.url.startsWith("http") ? i.url : new URL(i.url, tocUrl).toString(),

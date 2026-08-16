@@ -1146,6 +1146,26 @@ describe("item-level chained rules A@B@C in extractFromElement", () => {
     expect(extractFromElement(item, ".row@js:node.selectFirst('a').attr('href')")).toBe("/a/1.html");
   });
 
+  it("evalJs injects book object (legado book.bookUrl)", () => {
+    const r = evalJs("book.bookUrl.replace('_','/') + '|' + book.name", {
+      doc: emptyDoc(),
+      book: { bookUrl: "https://ex.com/b_1.html", name: "斗破苍穹" },
+    });
+    expect(r).toBe("https://ex.com/b/1.html|斗破苍穹");
+  });
+
+  it("item rule <js> suffix processes extracted value (36小说网 chapterUrl pattern)", () => {
+    const doc = parseHtml(`<li class="item" onclick="newWebView(349642);"><a>第一章</a></li>`);
+    const item = doc.querySelector("li.item")!;
+    const rule = `onclick##.*\\((\\d+)\\);##$1
+<js>
+let burl = book.bookUrl.replace("_","/");
+burl + result + ".html"
+</js>`;
+    const v = extractFromElement(item, rule, undefined, { bookUrl: "https://www.36xs.net/14_14618/" });
+    expect(v).toBe("https://www.36xs.net/14/14618/349642.html");
+  });
+
   it("chain works inside extractList item rules", async () => {
     const listDoc = parseHtml(`<ul><li class="box"><div class="t"><a href="/b.html">斗破</a></div></li></ul>`);
     const items = await extractList(listDoc, ".box", {
