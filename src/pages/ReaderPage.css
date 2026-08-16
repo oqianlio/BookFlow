@@ -379,7 +379,7 @@
   color: var(--accent);
 }
 
-/* ============ 侧边栏入口按钮（仅面板关闭时显示，右缘贴边小把手） ============ */
+/* ============ 侧边栏统一开关（‹/› 对称，无动画防"飞"感） ============ */
 .panel-toggle {
   position: absolute;
   right: 0;
@@ -406,6 +406,13 @@
 .panel-toggle:hover {
   background: var(--accent-soft);
   color: var(--accent);
+}
+/* 面板展开：按钮瞬移到面板左缘（right 无过渡，避免"飞"） */
+.panel-toggle.open {
+  right: 264px;
+  border-radius: 0 8px 8px 0;
+  border-right: 1px solid var(--border);
+  border-left: none;
 }
 
 .panel ul {
