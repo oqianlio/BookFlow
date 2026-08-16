@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ReaderPage from "./ReaderPage";
 import * as api from "../services/api";
@@ -106,5 +106,19 @@ describe("ReaderPage", () => {
     });
     expect(main.style.background).toBeTruthy();   // activeTheme.bg（纸白）
     expect(main.getAttribute("data-bg-theme")).toBe("paper");
+  });
+
+  it("opens reading settings for local books (no page-mode group)", async () => {
+    render(<ReaderPage source={{ kind: "local", book }} onBack={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: /设置/ }));
+    expect(await screen.findByText("阅读设置")).toBeInTheDocument();
+    expect(screen.getByLabelText("字号")).toBeInTheDocument();
+    // 本地书隐藏书源专属的翻页模式
+    expect(screen.queryByRole("group", { name: "翻页模式" })).not.toBeInTheDocument();
+    // 改字号 → main 变量更新
+    await userEvent.click(screen.getByLabelText("字号"));
+    fireEvent.change(screen.getByLabelText("字号"), { target: { value: "20" } });
+    const main = document.querySelector(".reader-main") as HTMLElement;
+    await waitFor(() => expect(main.style.getPropertyValue("--read-font-size")).toBe("20px"));
   });
 });

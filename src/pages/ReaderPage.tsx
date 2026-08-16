@@ -490,16 +490,16 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
               >
                 <TocIcon size={17} />
               </button>
-              <button
-                className={`btn-icon${panel === "settings" ? " active" : ""}`}
-                onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
-                aria-label="阅读设置"
-                title="阅读设置"
-              >
-                <SettingsIcon size={17} />
-              </button>
             </>
           )}
+          <button
+            className={`btn-icon${panel === "settings" ? " active" : ""}`}
+            onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
+            aria-label="阅读设置"
+            title="阅读设置"
+          >
+            <SettingsIcon size={17} />
+          </button>
         </div>
       </header>
       <div className="reader-body">
@@ -529,7 +529,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                   <button className="btn-primary" onClick={handleRemoveBroken}>移除该书</button>
                 </div>
               )}
-              {!openError && book!.format === "epub" && <EpubReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
+              {!openError && book!.format === "epub" && <EpubReader path={book!.path} bookId={book!.id} onError={setOpenError} settings={settings} />}
               {!openError && book!.format === "pdf" && <PdfReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
               {!openError && book!.format === "md" && <MdReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
               {!openError && book!.format === "txt" && <TxtReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
@@ -615,20 +615,22 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             onClose={() => setPanel(null)}
           />
         )}
-        {!isLocal && panel === "settings" && (
+        {panel === "settings" && (
           <div className="panel reader-settings-panel">
             <h3>阅读设置</h3>
-            <div className="settings-group">
-              <label className="settings-label">翻页模式</label>
-              <div className="segmented" role="group" aria-label="翻页模式">
-                {(["scroll", "cover", "slide"] as const).map((m) => (
-                  <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
-                    onClick={() => updateSetting({ pageMode: m })}>
-                    {{ scroll: "滚动", cover: "覆盖", slide: "滑动" }[m]}
-                  </button>
-                ))}
+            {!isLocal && (
+              <div className="settings-group">
+                <label className="settings-label">翻页模式</label>
+                <div className="segmented" role="group" aria-label="翻页模式">
+                  {(["scroll", "cover", "slide"] as const).map((m) => (
+                    <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
+                      onClick={() => updateSetting({ pageMode: m })}>
+                      {{ scroll: "滚动", cover: "覆盖", slide: "滑动" }[m]}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <div className="settings-group">
               <label className="settings-label">字号 {settings.fontSizePx}px</label>
               <div className="range-row">

@@ -5,8 +5,11 @@ import { useReaderProgress } from "./useReaderProgress";
 import { useJumpTarget, useSaveOnLocationChange } from "./common";
 import { addAnnotation, deleteAnnotation, listAnnotations } from "../services/api";
 import { applyAnnotations, installSelectionHandler, removeHighlight, sanitizeXhtml, type StoredAnnotation } from "./epubAnnotation";
+import { BG_THEMES, resolveFontCss, type ReadingSettings } from "../services/readingSettings";
 
-export default function EpubReader({ path, bookId, onError }: { path: string; bookId: number; onError?: (msg: string) => void }) {
+export default function EpubReader({ path, bookId, onError, settings }: {
+  path: string; bookId: number; onError?: (msg: string) => void; settings: ReadingSettings;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<EpubBook | null>(null);
   const renditionRef = useRef<Rendition | null>(null);
@@ -137,6 +140,28 @@ export default function EpubReader({ path, bookId, onError }: { path: string; bo
       for (const a of fresh) applied.add(a.location);
     }
   }, [annotations, renditionKey]);
+
+  useEffect(() => {
+    const r = renditionRef.current;
+    if (!r) return;
+    // 阅读设置注入 epubjs iframe（外层 CSS 变量不进入 iframe）
+    const theme = BG_THEMES.find((t) => t.id === settings.bgTheme);
+    const bg = settings.bgTheme === "custom" ? settings.customBg || "#fff" : theme?.bg ?? "#fff";
+    const fg = settings.bgTheme === "custom" ? settings.customFg || "#1c1b1b" : theme?.fg ?? "#1c1b1b";
+    try {
+      r.themes.fontSize(`${settings.fontSizePx}px`);
+      r.themes.default({
+        body: {
+          color: fg,
+          background: bg,
+          "font-family": resolveFontCss(settings.fontFamily),
+          "line-height": String(settings.lineHeight),
+          "letter-spacing": `${settings.letterSpacingPx}px`,
+          "font-weight": settings.bold ? "700" : "400",
+        },
+      });
+    } catch { /* epubjs 主题注入失败忽略 */ }
+  }, [settings, renditionKey]);
 
   return (
     <div className="epub-reader">
