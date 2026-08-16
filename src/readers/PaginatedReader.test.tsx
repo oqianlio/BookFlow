@@ -35,6 +35,43 @@ describe("sliceHtmlIntoPages", () => {
   it("returns empty array for empty input", () => {
     expect(sliceHtmlIntoPages("", HEIGHT, 400, mockMeasure)).toEqual([]);
   });
+
+  it("splits unclosed <p> content via DOM fallback (common in source HTML)", () => {
+    // 未闭合 p：正则匹配不到，DOM 解析器自动补全 → 多块 → 多页
+    const long = Array.from({ length: 30 }, (_, i) => `<p>未闭合段落${i}${"字".repeat(9)}`).join("");
+    const pages = sliceHtmlIntoPages(long, HEIGHT, 400, mockMeasure);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages[0]).toContain("未闭合段落0");
+  });
+
+  it("splits <br>-separated text content via DOM fallback", () => {
+    // br 分段（"您现在阅读的是xxx小说网提供的…"式正文）
+    const long = Array.from({ length: 30 }, (_, i) => `第${i}行内容${"字".repeat(8)}<br>`).join("");
+    const pages = sliceHtmlIntoPages(long, HEIGHT, 400, mockMeasure);
+    expect(pages.length).toBeGreaterThan(1);
+  });
+
+  it("splits bare multiline text via DOM fallback", () => {
+    // 纯文本无标签、按换行分段
+    const long = Array.from({ length: 30 }, (_, i) => `纯文本第${i}段${"字".repeat(8)}`).join("\n");
+    const pages = sliceHtmlIntoPages(long, HEIGHT, 400, mockMeasure);
+    expect(pages.length).toBeGreaterThan(1);
+  });
+
+  it("keeps a single unclosed long paragraph as one overflowing page", () => {
+    // 单个未闭合 p 超长：DOM 回退仍是 1 块，保持"超页不截断"语义
+    const huge = `<p>${"长".repeat(500)}`;
+    const pages = sliceHtmlIntoPages(huge, HEIGHT, 400, mockMeasure);
+    expect(pages.length).toBe(1);
+  });
+
+  it("does not escape into double-wrapped divs for normal closed content", () => {
+    // 正常闭合多段：正则快速路径（30 块）优先，不用 DOM 回退
+    const long = Array.from({ length: 30 }, (_, i) => `<p>段落${i}${"字".repeat(9)}</p>`).join("");
+    const pages = sliceHtmlIntoPages(long, HEIGHT, 400, mockMeasure);
+    expect(pages.length).toBeGreaterThan(1);
+    for (const p of pages) expect(p.trim().startsWith("<p>")).toBe(true);
+  });
 });
 
 const CONTENT = Array.from({ length: 30 }, (_, i) => `<p>段落${i}${"字".repeat(9)}</p>`).join("");

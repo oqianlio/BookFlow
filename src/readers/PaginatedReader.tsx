@@ -112,10 +112,67 @@ export function sliceHtmlIntoPages(
 ): string[] {
   if (!html.trim()) return [];
   // 1. 拆分块级片段（p/div/h1-h6/li/pre），保留标签
-  const blocks = Array.from(html.matchAll(/<(p|div|h[1-6]|li|pre)[^>]*>[\s\S]*?<\/\1>/g)).map((m) => m[0]);
+  let blocks = Array.from(html.matchAll(/<(p|div|h[1-6]|li|pre)[^>]*>[\s\S]*?<\/\1>/g)).map((m) => m[0]);
+  // 正则匹配 ≤1 块 → 常见于未闭合标签、<br> 分段、纯文本正文（书源 HTML 常态）：
+  // 用 DOM 解析回退（HTML5 解析器自动补全未闭合标签，br/换行作段边界）
+  if (blocks.length <= 1) {
+    const domBlocks = extractBlocksByDom(html);
+    if (domBlocks.length > blocks.length) blocks = domBlocks;
+  }
   if (blocks.length === 0) return [html]; // 无块级 → 整篇一页
   if (measure) return sliceByAccumulate(blocks, pageHeightPx, measure);
   return sliceByBatchMeasure(blocks, pageHeightPx, measureWidthPx, styleHtml);
+}
+
+const BLOCK_TAGS = new Set([
+  "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "pre",
+  "table", "ul", "ol", "blockquote", "section", "article", "figure", "tr",
+]);
+
+/** DOM 解析分块：HTML5 解析器补全未闭合标签；块级元素独立成块，
+ *  文本/内联元素按 <br> 与换行断段（纯文本正文可正确分页）。 */
+function extractBlocksByDom(html: string): string[] {
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  const out: string[] = [];
+  let buf = "";
+  const flush = () => {
+    if (buf.trim()) {
+      out.push(`<div>${buf}</div>`);
+      buf = "";
+    }
+  };
+  for (const node of Array.from(host.childNodes)) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tag = el.tagName.toLowerCase();
+      if (BLOCK_TAGS.has(tag)) {
+        flush();
+        out.push(el.outerHTML);
+      } else if (tag === "br") {
+        flush(); // <br> 作段边界
+      } else {
+        buf += el.outerHTML; // 内联 span/a/b/img 等归入当前段
+      }
+    } else if (node.nodeType === Node.TEXT_NODE) {
+      // 裸文本按换行分段（纯文本正文）
+      const segs = (node.textContent ?? "")
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const seg of segs) {
+        flush();
+        buf += escapeHtml(seg);
+        flush();
+      }
+    }
+  }
+  flush();
+  return out;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 // 逐块累加测量（注入 measure 时使用，供无布局环境/测试）
