@@ -16,6 +16,24 @@
   --shadow-md: 0 6px 24px rgba(66, 55, 40, 0.1);
   --radius-sm: 8px;
   --radius-md: 14px;
+  /* 全局组件令牌对齐暖色阅读调（.btn/.btn-icon/.segmented 等随阅读页走） */
+  --primary: var(--accent);
+  --on-primary: #ffffff;
+  --secondary-container: var(--accent-soft);
+  --on-secondary-container: var(--accent);
+  --surface-container-lowest: var(--surface);
+  --surface-container-low: var(--surface-2);
+  --surface-container: var(--surface-2);
+  --surface-container-high: var(--surface-2);
+  --surface-container-highest: var(--bg-soft);
+  --outline: var(--border-strong);
+  --outline-variant: var(--border);
+  --on-surface: var(--fg);
+  --on-surface-variant: var(--fg-muted);
+  --error: var(--danger);
+  --on-error: #ffffff;
+  --error-container: #f9dedc;
+  --on-error-container: #410002;
 }
 
 /* 阅读页所有滚动容器隐藏滚动条（保持滚动能力，沉浸视觉） */
@@ -411,6 +429,12 @@
   margin-bottom: 8px;
   box-shadow: var(--shadow-sm);
   border-left: 3px solid transparent;
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.panel li:hover {
+  border-left-color: var(--accent);
+  background: var(--bg-soft);
 }
 
 .panel li p {
@@ -614,7 +638,7 @@
   display: block; margin-bottom: 4px; font-size: 12px; color: var(--fg-muted);
 }
 .reader-settings-panel .range-row { gap: 8px; }
-.reader-settings-panel .range-row input[type="range"] { flex: 1; height: 20px; }
+.reader-settings-panel .range-row input[type="range"] { flex: 1; height: 6px; }
 .reader-settings-panel .range-value {
   min-width: 30px; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums;
 }
@@ -649,9 +673,10 @@
   border: none; background: transparent; color: var(--fg);
   border-radius: var(--radius-sm); font-size: 13.5px; cursor: pointer;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background-color 0.15s ease, color 0.15s ease, padding-left 0.15s ease;
 }
-.reader-toc-panel .toc-item:hover { background: var(--surface); }
-.reader-toc-panel .toc-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.reader-toc-panel .toc-item:hover { background: var(--surface); padding-left: 14px; }
+.reader-toc-panel .toc-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; padding-left: 14px; }
 
 /* 背景主题前景色覆盖（paper 用默认 --fg，无需覆盖） */
 .reader-main[data-bg-theme="beige"] .reader-page-slice,

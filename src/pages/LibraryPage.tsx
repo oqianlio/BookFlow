@@ -132,12 +132,18 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
       </header>
       {showSearch && <SearchPanel onJump={handleSearchJump} />}
       {initialLoading ? (
-        <div className="empty">
-          <span className="loading-state"><span className="spinner" /><span>加载中…</span></span>
+        <div className="skeleton-grid" aria-label="加载中" aria-busy="true">
+          {Array.from({ length: 12 }, (_, i) => (
+            <div className="skeleton-card" key={i}>
+              <div className="skeleton-cover" />
+              <div className="skeleton-line" />
+              <div className="skeleton-line short" />
+            </div>
+          ))}
         </div>
       ) : items.length === 0 ? (
         <div className="empty">
-          <BookIcon size={56} />
+          <span className="empty-icon"><BookIcon size={34} /></span>
           <h2>书架空空如也，点击导入书籍</h2>
           <p>支持 EPUB · PDF · Markdown · TXT 四种格式；也可在「发现」中把在线书加入书架</p>
         </div>
