@@ -1295,6 +1295,17 @@ burl + result + ".html"
     expect(v).toBe("https://www.36xs.net/14/14618/349642.html");
   });
 
+  it("extractSingle <js> suffix processes extracted value (36xs nextContentUrl pattern)", async () => {
+    // nextContentUrl: `text.下一@href\n<js>检测分页 URL 才返回</js>`——前段提取值作 result 交给 js
+    const doc = parseHtml(`<div class="word_read"><a href="/56/56445/6516912_1.html">下一章</a></div>`);
+    const rule = `text.下一@href
+<js>
+/_\\d+\\.html/.test(result) ? result : ""
+</js>`;
+    const v = await extractSingle(doc, rule, { baseUrl: "https://www.36xs.net/56/56445/6516912.html", result: "", sourceKey: "x" });
+    expect(v).toBe("https://www.36xs.net/56/56445/6516912_1.html");
+  });
+
   it("chain works inside extractList item rules", async () => {
     const listDoc = parseHtml(`<ul><li class="box"><div class="t"><a href="/b.html">斗破</a></div></li></ul>`);
     const items = await extractList(listDoc, ".box", {

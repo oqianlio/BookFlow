@@ -454,6 +454,22 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
     }
     return "";
   }
+  // 规则 `<js>...</js>` 后缀（legado：前段提取值作 result 交给 js 处理，
+  // 如 nextContentUrl: `text.下一@href\n<js>...检测.../js>`）
+  const jsTagIdx = rule.indexOf("<js>");
+  if (jsTagIdx > 0) {
+    const jsTagEnd = rule.indexOf("</js>", jsTagIdx);
+    if (jsTagEnd !== -1) {
+      const base = await extractSingle(doc, rule.slice(0, jsTagIdx), ctx);
+      try {
+        return String(evalJs(rule.slice(jsTagIdx + 4, jsTagEnd), {
+          doc, result: base, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book,
+        }) ?? "");
+      } catch {
+        return "";
+      }
+    }
+  }
   // 链式 css@js:...：先按前段提取，把结果作为 result 交给 js 处理（json 混合走下方 json 分支）
   const jsIdx = rule.indexOf("@js:");
   const trimmed = rule.trimStart();
