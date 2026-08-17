@@ -1409,19 +1409,17 @@ html[data-mode="dark"] .verify-badge.warn {
 /* ===== 书籍详情：目录区（默认折叠） ===== */
 .source-book-toc {
   max-width: 720px;
-  margin: 14px auto 0;
-  background: var(--surface);
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+  margin: 16px auto 0;
+  padding: 0 16px;
 }
 .toc-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: 10px 0;
   cursor: pointer;
   user-select: none;
+  border-bottom: 1px solid var(--outline-variant);
 }
 .toc-title {
   font-size: 14px;
@@ -1439,10 +1437,10 @@ html[data-mode="dark"] .verify-badge.warn {
   padding: 0;
   max-height: 40vh;
   overflow-y: auto;
-  border-top: 1px solid var(--outline-variant);
 }
 .toc-list li {
   border-bottom: 1px solid var(--outline-variant);
+  padding: 0;
 }
 .toc-list li:last-child {
   border-bottom: none;
@@ -1451,33 +1449,36 @@ html[data-mode="dark"] .verify-badge.warn {
   width: 100%;
   justify-content: flex-start;
   text-align: left;
+  padding: 8px 0;
 }
 
 /* ===== 书籍详情：操作行 ===== */
 .source-book-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   max-width: 720px;
-  margin: 14px auto 0;
-  flex-wrap: wrap;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  justify-content: center;
 }
 .source-book-actions .btn-primary {
-  padding: 8px 28px;
+  padding: 10px 32px;
   font-size: 14px;
+  font-weight: 600;
+}
+.source-book-actions .btn-ghost {
+  padding: 10px 16px;
 }
 
 /* ===== 书籍详情：简介（可展开） ===== */
 .source-book-intro {
   max-width: 720px;
-  margin: 14px auto 0;
-  background: var(--surface);
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
+  margin: 16px auto 0;
+  padding: 0 16px;
 }
 .source-intro {
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--on-surface-variant);
   margin: 0;
   display: -webkit-box;
@@ -1486,8 +1487,8 @@ html[data-mode="dark"] .verify-badge.warn {
 }
 .source-intro.expanded { -webkit-line-clamp: none; }
 .intro-toggle {
-  margin-top: 8px;
-  padding: 2px 10px;
+  margin-top: 6px;
+  padding: 4px 12px;
   font-size: 12px;
   color: var(--primary);
 }
@@ -1495,11 +1496,13 @@ html[data-mode="dark"] .verify-badge.warn {
 /* ===== 书籍详情：最新章节 ===== */
 .source-book-last {
   max-width: 720px;
-  margin: 10px auto 0;
+  margin: 16px auto 0;
+  padding: 0 16px;
   display: flex;
   gap: 8px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--on-surface-variant);
 }
 .source-book-last .last-label {
   color: var(--on-surface-variant);
