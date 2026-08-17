@@ -78,6 +78,16 @@ describe("LibraryPage", () => {
     expect(await screen.findByText(/书架空空如也/)).toBeInTheDocument();
   });
 
+  it("toggles the full-text search panel", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText(/书架空空如也/);
+    await userEvent.click(screen.getByRole("button", { name: /全文搜索/ }));
+    expect(screen.getByPlaceholderText("搜索书名与正文")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /全文搜索/ }));
+    expect(screen.queryByPlaceholderText("搜索书名与正文")).not.toBeInTheDocument();
+  });
+
   it("renders local and source books together", async () => {
     vi.spyOn(api, "listBooks").mockResolvedValue(books);
     vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
