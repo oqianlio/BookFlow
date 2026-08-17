@@ -17,26 +17,25 @@ vi.mock("../services/api", () => ({
 describe("DiscoverPage", () => {
   beforeEach(() => resetNavCache());
 
-  it("shows explore entry for enabled sources with exploreUrl", async () => {
+  it("shows enabled sources with exploreUrl", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "有浏览", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "有浏览", exploreUrl: "分类::/x.html" }), enabled: true, last_used_at: null },
       { id: 2, name: "无浏览", url: "https://ex2.com", json: JSON.stringify({ bookSourceUrl: "https://ex2.com", bookSourceName: "无浏览" }), enabled: true, last_used_at: null },
     ]);
-    const onOpenExplore = vi.fn();
-    render(<DiscoverPage onOpenExplore={onOpenExplore} />);
-    expect(await screen.findByText(/书源频道/)).toBeInTheDocument();
-    expect(screen.getByText(/未分组/)).toBeInTheDocument();
+    render(<DiscoverPage onOpenExplore={() => {}} />);
+    expect(await screen.findByText("有浏览")).toBeInTheDocument();
+    expect(screen.queryByText("无浏览")).not.toBeInTheDocument();
   });
 
-  it("opens a group channel via onOpenGroupExplore", async () => {
+  it("renders source list and opens explore on click", async () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
-      { id: 1, name: "有浏览", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "有浏览", exploreUrl: "分类::/x.html", bookSourceGroup: "小说" }), enabled: true, last_used_at: null },
+      { id: 1, name: "有浏览", url: "https://ex.com", json: JSON.stringify({ bookSourceUrl: "https://ex.com", bookSourceName: "有浏览", exploreUrl: "分类::/x.html" }), enabled: true, last_used_at: null },
     ]);
-    const onOpenGroupExplore = vi.fn();
-    render(<DiscoverPage onOpenExplore={() => {}} onOpenGroupExplore={onOpenGroupExplore} />);
-    await screen.findByText(/书源频道/);
-    await userEvent.click(screen.getByText("小说"));
-    expect(onOpenGroupExplore).toHaveBeenCalledWith("小说", [{ id: 1, name: "有浏览" }]);
+    const onOpenExplore = vi.fn();
+    render(<DiscoverPage onOpenExplore={onOpenExplore} />);
+    await screen.findByText("有浏览");
+    await userEvent.click(screen.getByText("有浏览"));
+    expect(onOpenExplore).toHaveBeenCalledWith(1, "有浏览");
   });
 
 });

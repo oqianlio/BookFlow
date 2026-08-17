@@ -3,6 +3,8 @@ import { listBookSources } from "../services/api";
 import { parseBookSourceJson } from "../services/bookSourceEngine";
 import { type SearchHit } from "../services/searchService";
 
+export type { SearchHit } from "../services/searchService";
+
 export interface ExploreSource { id: number; name: string }
 export interface ExploreGroup { group: string; sources: ExploreSource[] }
 
@@ -26,12 +28,7 @@ export function groupExploreSources(sources: Array<{ id: number; name: string; j
     .sort((a, b) => b.sources.length - a.sources.length);
 }
 
-export interface ChannelCard {
-  group: string;
-  count: number;
-  representative: string;
-  icon: string;
-}
+export interface ChannelCard { group: string; count: number; representative: string; icon: string; }
 
 function emojiOf(name: string): string {
   const m = name.match(/\p{Extended_Pictographic}/u);
@@ -41,18 +38,12 @@ function emojiOf(name: string): string {
 
 export function toChannelCards(groups: ExploreGroup[]): ChannelCard[] {
   return groups.map((g) => ({
-    group: g.group,
-    count: g.sources.length,
-    representative: g.sources[0]?.name ?? "",
-    icon: emojiOf(g.group),
+    group: g.group, count: g.sources.length,
+    representative: g.sources[0]?.name ?? "", icon: emojiOf(g.group),
   }));
 }
 
-export interface GroupedHit {
-  title: string;
-  author: string;
-  sources: SearchHit[];
-}
+export interface GroupedHit { title: string; author: string; sources: SearchHit[]; }
 
 export function groupSearchHits(hits: SearchHit[]): GroupedHit[] {
   const map = new Map<string, GroupedHit>();
@@ -65,56 +56,46 @@ export function groupSearchHits(hits: SearchHit[]): GroupedHit[] {
   return [...map.values()];
 }
 
-export default function DiscoverPage({ onOpenExplore, onOpenGroupExplore }: {
+export default function DiscoverPage({ onOpenExplore }: {
   onOpenExplore?: (sourceId: number, sourceName: string) => void;
-  onOpenGroupExplore?: (groupName: string, sources: ExploreSource[]) => void;
 }) {
-  const [exploreSources, setExploreSources] = useState<Array<{ id: number; name: string; json: string }>>([]);
-
+  const [sources, setSources] = useState<Array<{ id: number; name: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const sources = (await listBookSources()).filter((s) => s.enabled);
-        const withExplore: Array<{ id: number; name: string; json: string }> = [];
-        for (const s of sources) {
+        const all = (await listBookSources()).filter((s) => s.enabled);
+        const withExplore: Array<{ id: number; name: string }> = [];
+        for (const s of all) {
           try {
             const src = parseBookSourceJson(s.json);
-            if (src.exploreUrl) withExplore.push({ id: s.id, name: s.name, json: s.json });
-          } catch {
-            // 单个书源 JSON 解析失败，跳过该书源
-          }
+            if (src.exploreUrl) withExplore.push({ id: s.id, name: s.name });
+          } catch { /* 跳过 */ }
         }
-        if (!cancelled) setExploreSources(withExplore);
+        if (!cancelled) setSources(withExplore);
       } catch {
-        if (!cancelled) setExploreSources([]);
+        if (!cancelled) setSources([]);
       }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  const groups = groupExploreSources(exploreSources);
-
   return (
     <div className="discover page">
       <header className="library-header"><h1>发现</h1></header>
-      {groups.length > 0 && onOpenExplore ? (
+      {sources.length > 0 && onOpenExplore ? (
         <section className="discover-channels">
           <div className="section-head">
-            <h2 className="home-section">书源频道</h2>
-            <span className="section-sub">{exploreSources.length} 个书源可浏览</span>
+            <h2 className="home-section">书源浏览</h2>
+            <span className="section-sub">{sources.length} 个书源可浏览</span>
           </div>
           <div className="channel-grid">
-            {toChannelCards(groups).map((c) => (
-              <button key={c.group} className="channel-card" onClick={() => {
-                const g = groups.find((x) => x.group === c.group);
-                if (g) onOpenGroupExplore?.(g.group, g.sources);
-              }}>
-                <span className="channel-icon">{c.icon}</span>
+            {sources.map((s) => (
+              <button key={s.id} className="channel-card" onClick={() => onOpenExplore(s.id, s.name)}>
+                <span className="channel-icon">{emojiOf(s.name)}</span>
                 <div className="channel-body">
-                  <span className="channel-name">{c.group}</span>
-                  <span className="channel-sub">{c.count} 个书源{c.representative ? ` · ${c.representative}` : ""}</span>
+                  <span className="channel-name">{s.name}</span>
                 </div>
               </button>
             ))}

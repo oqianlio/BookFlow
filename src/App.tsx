@@ -171,7 +171,6 @@ function AppInner() {
           <DiscoverPage
             key="discover"
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
-            onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: state })}
           />
         )}
         {state.area === "rss" && (
