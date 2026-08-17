@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, jsonGet, extractFromJsonObject, extractFromElement } from "./bookSourceEngine";
+import { parseHtml, extractSingle, extractList, extractFromJsObject, parseBookSourceJson, evalJs, emptyDoc, purifyContent, splitAlternatives, resolveTagIndex, resolveSearchUrl, parseExploreUrl, extractBookList, parseRule, cachedParseRule, resetRuleCache, jsonGet, extractFromJsonObject, extractFromElement } from "./bookSourceEngine";
 import { isImageChapter, extractImageUrls } from "./bookSourceEngine";
 import { md5 } from "./md5";
 import { loadJsLib } from "./jsLib";
@@ -1457,5 +1457,48 @@ describe("legado @put:/@get: 变量语法", () => {
     const doc = parseHtml(`<span id="s">值A</span>`);
     await extractSingle(doc, `@put:{v:"#s@text"}`, { sourceKey: SK });
     expect(await extractSingle(doc, "@get:{v}", { sourceKey: SK })).toBe("值A");
+  });
+});
+
+describe("cachedParseRule", () => {
+  beforeEach(() => resetRuleCache());
+
+  it("returns same result as parseRule", () => {
+    const rule = "css.h1@text##re##rep";
+    const fresh = parseRule(rule);
+    const cached = cachedParseRule(rule);
+    expect(cached).toEqual(fresh);
+  });
+
+  it("caches repeated calls (same object reference)", () => {
+    const rule = "class.book@text";
+    const r1 = cachedParseRule(rule);
+    const r2 = cachedParseRule(rule);
+    expect(r1).toBe(r2); // 同一引用
+  });
+
+  it("resetRuleCache clears the cache", () => {
+    const rule = "tag.div@text";
+    const r1 = cachedParseRule(rule);
+    resetRuleCache();
+    const r2 = cachedParseRule(rule);
+    expect(r1).not.toBe(r2); // 重新解析
+    expect(r1).toEqual(r2); // 但结果相同
+  });
+});
+
+describe("%% prev-sibling selector", () => {
+  it("selects the previous sibling element in chain", async () => {
+    // 结构：<div><span id="a">A</span><span id="b">B</span></div>
+    // %% 应返回 A（B 的前兄弟）
+    const doc = parseHtml(`<div><span id="a">A</span><span id="b">B</span></div>`);
+    const r = await extractSingle(doc, "span#b@%%", {});
+    expect(r).toBe("A");
+  });
+
+  it("returns empty when no previous sibling exists", async () => {
+    const doc = parseHtml(`<div><span id="first">only</span></div>`);
+    const r = await extractSingle(doc, "span#first@%%", {});
+    expect(r).toBe("");
   });
 });

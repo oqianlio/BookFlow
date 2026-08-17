@@ -564,3 +564,29 @@
   services/ 层（可单测），UI 层只调函数；对话框用
   plugin-dialog 的 save/open（mock 需补 save）。
 
+### 3.49 对比原版找差距：规则 AST 缓存 + CSS 扩展（2026-08-17）
+- 场景：浏览器调研原版 legado AnalyzeRule.kt 发现两个可直接借鉴的模式。
+- **规则 AST 缓存**：原版 `stringRuleCache.getOrPut(ruleStr)` 缓存已解析的规则
+  对象，避免重复 parseRule。我们每次 extractSingle/extractList 都重新调用
+  parseRule → 重复 tokenization。修复：加 `Map<string, ParsedRule>` 缓存层
+  （`cachedParseRule`），上限 5000 条。4 处内部调用全部替换，parseRule 原
+  函数保留导出给测试。
+- **`%%` 前兄弟选择器**：原版 AnalyzeByJSoup 支持 `%%`（prev-sibling），
+  `&&`（交集），`||`（并集）。我们不支持 `%%` → 某些源的 CSS 链式规则
+  提取失败。修复：在 extractSingle/extractList/extractFromJsonObject 三处链
+  处理循环中加 `if (seg === '%%') cur = cur.previousElementSibling`。
+- 认知：**对比原版时优先找"模式级"差异**（缓存策略/选择器扩展）而非逐
+  个源修规则——模式修复影响所有源，逐源修只影响一个。
+- 下次：对比原版源码先看架构模式（缓存/分发/状态管理），再看具体语法。
+  legado 仓库已清空（版权下架），有效源码在 fork `ag2s20150909/legado`。
+
+### 3.51 裸词修正必须用标签白名单（2026-08-17）
+- 场景：修复 chapterList:"body" 把裸标签词当属性的 bug → 第一版用黑名单排除
+  "text/ownText/html/href/src"，但漏了"onclick"等事件属性 → 破坏36小说网的
+  `onclick##.*\((\d+)\);##$1` 规则（onclick 被当成标签选择器）。
+- 认知：**黑名单不可靠**——HTML 属性无限多，总会有漏网的。修正基于
+  **HTML 标签名白名单**（~100 个标准标签），判断 `HTML_TAG_NAMES.has(attr)` →
+  是标签名 → 当 CSS 选择器处理；否则保持属性语义。
+- 下次：修正规则解析的"默认值"（裸词→属性/标签），用白名单比黑名单更安全；
+  任何"排除列表"都要问"列表是否完备"。
+

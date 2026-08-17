@@ -368,6 +368,23 @@ function selectNodesSafe(selector: string, scope: Document | Element): Element[]
 
 const ABS_URL_RE = /^[a-z][a-z0-9+.-]*:/i;
 
+// ====== 规则 AST 缓存（避免重复 parseRule）======
+const parsedRuleCache = new Map<string, ParsedRule>();
+
+/** 带缓存的 parseRule（内部用）：相同规则字符串只解析一次 */
+export function cachedParseRule(rule: string): ParsedRule {
+  let cached = parsedRuleCache.get(rule);
+  if (!cached) {
+    cached = parseRule(rule);
+    parsedRuleCache.set(rule, cached);
+    if (parsedRuleCache.size > 5000) parsedRuleCache.clear(); // 防缓存无限增长
+  }
+  return cached;
+}
+
+/** resetRuleCache 供测试用 */
+export function resetRuleCache(): void { parsedRuleCache.clear(); }
+
 export function resolveUrl(href: string, baseUrl: string): string {
   if (ABS_URL_RE.test(href)) return href;
   try {
@@ -671,7 +688,7 @@ async function extractSingleInner(doc: Document, rule: string, ctx?: ExtractCont
     const base = await extractSingle(doc, rule.slice(0, jsIdx), ctx);
     return String(evalJs(rule.slice(jsIdx + 4), { doc, result: base, baseUrl: ctx?.baseUrl, sourceKey: ctx?.sourceKey, book: ctx?.book }) ?? "");
   }
-  const parsed = parseRule(rule);
+  const parsed = cachedParseRule(rule);
   if (parsed.type === "regex") {
     // 匹配源字符串：优先 result（ajax/json 原始内容），否则文档文本
     const source = String(ctx?.result ?? "") || (doc.body?.textContent ?? "");
@@ -789,7 +806,13 @@ async function extractSingleInner(doc: Document, rule: string, ctx?: ExtractCont
         }
       }
       let cur: Element | null = queryIndexed(segs[0], doc);
-      for (let i = 1; i < segs.length && cur; i++) cur = queryIndexed(segs[i], cur);
+      for (let i = 1; i < segs.length && cur; i++) {
+        if (segs[i] === "%%") {
+          cur = cur.previousElementSibling; // legado 前兄弟选择器
+        } else {
+          cur = queryIndexed(segs[i], cur);
+        }
+      }
       return cur
         ? finalize(applyReplacements(nodeValue(cur, parsed.attr), parsed.replace), parsed.attr, ctx?.baseUrl)
         : "";
@@ -878,6 +901,12 @@ export async function extractList(
             next.push(...Array.from(n.querySelectorAll(chain[i].slice(4))));
             continue;
           }
+          // legado `%%` 段：取每个节点的前一个兄弟元素（prev-sibling）
+          if (chain[i] === "%%") {
+            const prev = n.previousElementSibling;
+            if (prev) next.push(prev);
+            continue;
+          }
           // legado `!N` 段（如 li!0 / tr!1）：列表语义 = 跳过前 N 个，取剩余全部（用于跳表头）
           const bang = chain[i].match(/^(?:(?:tag\.)?)(.+?)!(\d+|last)$/);
           if (bang) {
@@ -891,10 +920,15 @@ export async function extractList(
             next.push(...all.slice(startIdx));
             continue;
           }
-          // 段含类索引（如 .clearfix.1）→ 取指定第 N 个；否则取全部匹配
+          // 段含索引（如 .clearfix.1 / tag.dl.1）→ 取指定第 N 个；否则取全部匹配
           if (/\.\d+$/.test(chain[i])) {
-            const hit = queryIndexed(chain[i], n);
-            if (hit) next.push(hit);
+            // tag.X.N：先用 resolveTagIndex（能正确解析 tag.dl.1），失败再回退 queryIndexed
+            const hitTag = resolveTagIndex(chain[i], n);
+            if (hitTag) { next.push(hitTag); }
+            else {
+              const hit = queryIndexed(chain[i], n);
+              if (hit) next.push(hit);
+            }
           } else {
             const norm = normalizeSelector(chain[i]);
             try {
@@ -915,7 +949,7 @@ export async function extractList(
       });
     }
   }
-  const parsed = parseRule(listRule);
+  const parsed = cachedParseRule(listRule);
   if (parsed.type === "xpath") {
     const nodes = doc.evaluate(parsed.value, doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
     const arr: Element[] = [];
@@ -1099,6 +1133,21 @@ export function extractFromJsonObject(
   return substituteGetVars(extractFromJsonObjectInner(obj, rule, ctx), ctx?.sourceKey);
 }
 
+/** HTML 标签名白名单（用于裸词修正：chapterList:"body" 等应作标签选择器而非属性） */
+const HTML_TAG_NAMES = new Set([
+  "a","abbr","address","area","article","aside","audio","b","base","bdi","bdo",
+  "blockquote","body","br","button","canvas","caption","cite","code","col",
+  "colgroup","data","datalist","dd","del","details","dfn","dialog","div","dl",
+  "dt","em","embed","fieldset","figcaption","figure","footer","form","h1","h2",
+  "h3","h4","h5","h6","head","header","hr","html","i","iframe","img","input",
+  "ins","kbd","label","legend","li","link","main","map","mark","meta","meter",
+  "nav","noscript","object","ol","optgroup","option","output","p","param",
+  "picture","pre","progress","q","rp","rt","ruby","s","samp","section","select",
+  "small","source","span","strong","sub","summary","sup","table","tbody","td",
+  "template","textarea","tfoot","th","thead","time","title","tr","track","u",
+  "ul","var","video","wbr",
+]);
+
 function extractFromElementInner(el: Element, rule: string, baseUrl?: string, book?: any, sourceKey?: string): string {
   // `@put:{...}` 块剥离并执行（值规则相对当前元素求值），如 `a@href@put:{u:text}`
   const putBlocks = findPutBlocks(rule);
@@ -1146,7 +1195,15 @@ function extractFromElementInner(el: Element, rule: string, baseUrl?: string, bo
     }
     return "";
   }
-  const parsed = parseRule(rule);
+  let parsed = cachedParseRule(rule);
+  // 修正裸标签词：body/li/div 等纯单词被 parseAttrRule 当属性（value="" attr="word"），
+  // 应当作 CSS 标签选择器（如 chapterList:"body" = 取整个 body，不是取 body 属性）。
+  // 用 HTML 标签名白名单判断（排除 onclick/class/id 等常见属性）
+  if (parsed.type === "css" && !parsed.value && parsed.attr
+      && /^[a-zA-Z][\w-]*$/.test(parsed.attr)
+      && HTML_TAG_NAMES.has(parsed.attr.toLowerCase())) {
+    parsed = { type: "css", value: parsed.attr, attr: "text" };
+  }
   if (parsed.type === "xpath") {
     // item 规则内 XPath（如 @XPath:.//a/text() 或 .//a/@href）：相对当前节点求值
     try {
@@ -1215,7 +1272,11 @@ function extractFromElementInner(el: Element, rule: string, baseUrl?: string, bo
       let cur: Element | null = el;
       for (const seg of segs) {
         if (!cur) return "";
-        cur = queryIndexed(seg, cur);
+        if (seg === "%%") {
+          cur = cur.previousElementSibling;
+        } else {
+          cur = queryIndexed(seg, cur);
+        }
       }
       return cur
         ? finalize(applyReplacements(nodeValue(cur, parsed.attr), parsed.replace), parsed.attr, baseUrl)
@@ -1486,7 +1547,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
       try {
         const source = html != null ? String(html) : String(ctx.result ?? "");
         const doc = parseHtml(source);
-        const parsed = parseRule(String(rule));
+        const parsed = cachedParseRule(String(rule));
         if (parsed.type === "css") {
           const node = parsed.value ? queryIndexed(parsed.value, doc) : doc.body;
           return node ? nodeValue(node, parsed.attr) : "";
