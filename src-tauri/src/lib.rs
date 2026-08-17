@@ -61,7 +61,7 @@ pub fn run() {
             add_shelf_source_book, list_shelf_source_books, remove_shelf_source_book,
             save_cached_chapter, list_cached_chapters, get_cached_chapter, delete_book_cache,
             cache_summary, list_cached_books, clear_all_cache,
-            record_read, get_reading_stats,
+            record_read, get_reading_stats, get_reading_summary,
             fetch_rss_feed, add_rss_feed, refresh_rss_feed,
             list_rss_feeds, delete_rss_feed, list_rss_articles, get_rss_article,
             mark_rss_article_read, mark_rss_feed_read, rss_unread_count,

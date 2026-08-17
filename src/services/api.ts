@@ -271,6 +271,17 @@ export async function getReadingStats(sourceId: number, bookUrl: string): Promis
   return invoke<ReadingStats | null>("get_reading_stats", { sourceId, bookUrl });
 }
 
+export interface ReadingSummary {
+  total_books: number;
+  total_seconds: number;
+  today_seconds: number;
+  top_books: ReadingStats[];
+  recent_reads: ReadingStats[];
+}
+export async function getReadingSummary(limit?: number): Promise<ReadingSummary> {
+  return invoke<ReadingSummary>("get_reading_summary", { limit: limit ?? 10 });
+}
+
 export interface RssFeedPreview {
   title: string; site_url: string | null;
   articles: Array<{ guid: string; title: string; link: string | null; content: string | null; published_at: number | null }>;

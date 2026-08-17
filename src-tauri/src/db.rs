@@ -725,6 +725,65 @@ pub fn get_reading_stats(conn: &Connection, source_id: i64, book_url: &str) -> R
     }
 }
 
+/// 阅读统计汇总（仪表盘用）
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ReadingSummary {
+    /// 阅读过的书数
+    pub total_books: i64,
+    /// 总阅读秒数
+    pub total_seconds: i64,
+    /// 今日阅读秒数
+    pub today_seconds: i64,
+    /// 阅读书籍排行（按时长降序，取前 N）
+    pub top_books: Vec<ReadingStats>,
+    /// 最近阅读的书（按 last_read_at 降序，取前 N）
+    pub recent_reads: Vec<ReadingStats>,
+}
+
+pub fn get_reading_summary(conn: &Connection, limit: i64) -> Result<ReadingSummary> {
+    let t = now();
+    let today_start = t - (t % 86400); // 今天 00:00:00 的秒级时间戳
+    // 总统计
+    let mut stmt = conn.prepare(
+        "SELECT COUNT(*), COALESCE(SUM(read_seconds), 0) FROM reading_stats",
+    )?;
+    let row = stmt.query_row([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
+    let (total_books, total_seconds) = row;
+    // 今日阅读（基于 last_read_at 判断是否今天读过；更精确需 read_log 表，先简化）
+    let mut stmt2 = conn.prepare(
+        "SELECT COALESCE(SUM(read_seconds), 0) FROM reading_stats WHERE last_read_at >= ?1",
+    )?;
+    let today_seconds = stmt2.query_row(params![today_start], |r| r.get::<_, i64>(0))?;
+    // Top books by read_seconds
+    let mut stmt3 = conn.prepare(
+        "SELECT source_id, book_url, title, read_seconds, read_count, last_read_at
+         FROM reading_stats ORDER BY read_seconds DESC LIMIT ?1",
+    )?;
+    let top_books: Vec<ReadingStats> = stmt3
+        .query_map(params![limit], |r| {
+            Ok(ReadingStats {
+                source_id: r.get(0)?, book_url: r.get(1)?, title: r.get(2)?,
+                read_seconds: r.get(3)?, read_count: r.get(4)?, last_read_at: r.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    // Recent reads by last_read_at
+    let mut stmt4 = conn.prepare(
+        "SELECT source_id, book_url, title, read_seconds, read_count, last_read_at
+         FROM reading_stats WHERE last_read_at IS NOT NULL
+         ORDER BY last_read_at DESC LIMIT ?1",
+    )?;
+    let recent_reads: Vec<ReadingStats> = stmt4
+        .query_map(params![limit], |r| {
+            Ok(ReadingStats {
+                source_id: r.get(0)?, book_url: r.get(1)?, title: r.get(2)?,
+                read_seconds: r.get(3)?, read_count: r.get(4)?, last_read_at: r.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ReadingSummary { total_books, total_seconds, today_seconds, top_books, recent_reads })
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct RssFeedRow {
     pub id: i64,

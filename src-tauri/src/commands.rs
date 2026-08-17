@@ -500,6 +500,11 @@ pub fn get_reading_stats(source_id: i64, book_url: String, state: State<'_, AppS
     crate::db::get_reading_stats(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, source_id, &book_url).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn get_reading_summary(limit: Option<i64>, state: State<'_, AppState>) -> Result<crate::db::ReadingSummary, String> {
+    crate::db::get_reading_summary(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, limit.unwrap_or(10)).map_err(|e| e.to_string())
+}
+
 #[derive(serde::Serialize)]
 pub struct RssFeedPreviewOut {
     pub title: String,
