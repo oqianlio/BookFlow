@@ -38,6 +38,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     setIntroExpanded(introExpandedRef.current);
   };
   const [toc, setToc] = useState<TocItem[]>([]);
+  const [tocExpanded, setTocExpanded] = useState(false);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
@@ -205,7 +206,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         </div>
       </div>
 
-      {/* 操作行：开始阅读 + 加入书架为主，缓存/换源为辅 */}
+      {/* 操作行：开始阅读 + 加入书架为主，缓存/换源 + 更多为辅 */}
       <div className="source-book-actions">
         <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
         <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
@@ -217,6 +218,11 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         <button className="btn btn-ghost" onClick={handleDownload} disabled={dl.busy || toc.length === 0}>
           {dl.busy ? `缓存中 ${dl.done}/${dl.total}` : dl.done === dl.total && dl.total > 0 ? `已缓存 ${dl.total} 章` : "缓存全书"}
         </button>
+        <button className="btn btn-ghost" onClick={() => {
+          // 复制书籍链接
+          const url = bookUrl || window.location.href;
+          navigator.clipboard?.writeText(url).then(() => showError("链接已复制"));
+        }}>复制链接</button>
       </div>
 
       {/* 简介（可展开） */}
@@ -233,6 +239,25 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             <button className="btn btn-ghost intro-toggle" onClick={toggleIntro}>
               {introExpanded ? "收起" : "展开"}
             </button>
+          )}
+        </div>
+      )}
+
+      {/* 目录：默认折叠，只显示前几章 */}
+      {toc.length > 0 && (
+        <div className="source-book-toc">
+          <div className="toc-header" onClick={() => setTocExpanded((v) => !v)}>
+            <span className="toc-title">目录（共 {toc.length} 章）</span>
+            <span className="toc-toggle">{tocExpanded ? "收起" : "展开"}</span>
+          </div>
+          {tocExpanded && (
+            <ol className="toc-list">
+              {toc.slice(0, 50).map((t, idx) => (
+                <li key={`${t.url}-${idx}`}>
+                  <button className="btn btn-ghost" onClick={() => onRead(idx, t.url, t.name)}>{t.name}</button>
+                </li>
+              ))}
+            </ol>
           )}
         </div>
       )}

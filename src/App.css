@@ -1406,6 +1406,53 @@ html[data-mode="dark"] .verify-badge.warn {
   color: #c8e6c9;
 }
 
+/* ===== 书籍详情：目录区（默认折叠） ===== */
+.source-book-toc {
+  max-width: 720px;
+  margin: 14px auto 0;
+  background: var(--surface);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.toc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.toc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.toc-toggle {
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+}
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border-top: 1px solid var(--outline-variant);
+}
+.toc-list li {
+  border-bottom: 1px solid var(--outline-variant);
+}
+.toc-list li:last-child {
+  border-bottom: none;
+}
+.toc-list .btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
 /* ===== 书籍详情：操作行 ===== */
 .source-book-actions {
   display: flex;
