@@ -1481,8 +1481,16 @@ export interface JsContext {
   source?: any;
   sourceKey?: string;
   cookieHost?: string;
-  /** 当前书籍信息（legado js 上下文 book） */
+  /** 当前书籍信息（legado js 上下文 book：bookUrl/tocUrl/name/author 等） */
   book?: any;
+  /** legado js 上下文 chapter（当前章节对象：url/title/index） */
+  chapter?: any;
+  /** legado js 上下文 title（当前书名） */
+  title?: string;
+  /** legado js 上下文 src（当前内容 HTML） */
+  src?: string;
+  /** legado js 上下文 nextChapterUrl（下一章 URL） */
+  nextChapterUrl?: string;
 }
 
 // legado 字符集名（GBK/GB2312/UTF-16…）映射到 TextDecoder 标签；编码侧仅 UTF-8 原生支持
@@ -1656,6 +1664,7 @@ export function evalJs(expr: string, ctx: JsContext): any {
     // new Function 构造时即解析语法：须在 try 内，否则书源 @js: 表达式的语法错误会冒泡导致整条规则失败
     const fn = new Function(
       "node", "doc", "result", "src", "baseUrl", "key", "page", "source", "java", "url", "TYPE", "cookie", "book",
+      "chapter", "title", "nextChapterUrl",
       body,
     );
     const g = globalThis as Record<string, unknown>;
@@ -1665,12 +1674,14 @@ export function evalJs(expr: string, ctx: JsContext): any {
     (g as Record<string, unknown>).source = source;
     try {
       // node/doc 传入 jsoup 风格包装（附加 select/selectFirst/attr/text 等方法），兼容 legado @js: 书源
+      // legado 变量作用域：chapter→book→session(source)；@js 里可用 chapter/title/src/nextChapterUrl
       return fn.call(
         { source },
         ctx.node ? jsoupNode(ctx.node) : null,
         jsoupDoc(ctx.doc),
-        ctx.result ?? "", ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
+        ctx.result ?? "", ctx.src ?? ctx.result ?? "", ctx.baseUrl ?? "", ctx.key ?? "", ctx.page ?? 1,
         source, java, ctx.baseUrl ?? "", TYPE, cookie, ctx.book ?? {},
+        ctx.chapter ?? {}, ctx.title ?? ctx.book?.name ?? "", ctx.nextChapterUrl ?? "",
       );
     } finally {
       (g as Record<string, unknown>).source = prevThisSource;
