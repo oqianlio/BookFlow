@@ -1363,6 +1363,23 @@ html[data-mode="dark"] .verify-badge.warn {
   align-items: center;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.85);
+  flex-wrap: wrap;
+}
+.source-book-source {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
+}
+.source-book-group {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
 }
 .source-book-tags {
   display: flex;

@@ -38,6 +38,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     setIntroExpanded(introExpandedRef.current);
   };
   const [toc, setToc] = useState<TocItem[]>([]);
+  const [bookGroup, setBookGroup] = useState("");
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
@@ -71,6 +72,14 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   useEffect(() => {
     let cancelled = false;
     void getReadingStats(sourceId, bookUrl).then((s) => { if (!cancelled) setStats(s); }).catch(() => {});
+    // 提取书源分组（bookSourceGroup）用于详情页展示
+    void listBookSources().then((l) => {
+      if (cancelled) return;
+      const bs = l.find((x) => x.id === sourceId);
+      if (bs) {
+        try { setBookGroup(JSON.parse(bs.json).bookSourceGroup ?? ""); } catch { /* ignore */ }
+      }
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [sourceId, bookUrl]);
 
@@ -182,6 +191,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             <h2 className="source-book-title">{info.title || sourceName}</h2>
             <div className="source-book-sub">
               {info.author && <span className="source-book-author">{info.author}</span>}
+              <span className="source-book-source">{sourceName}</span>
+              {bookGroup && <span className="source-book-group">{bookGroup}</span>}
               {info.kind && <span className="source-book-kind">{info.kind}</span>}
             </div>
             <div className="source-book-tags">
