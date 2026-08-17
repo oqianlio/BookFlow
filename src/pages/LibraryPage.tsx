@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BookCard, { type BookCardLayout, type ShelfItem } from "../components/BookCard";
-import SearchPanel, { type SearchHit } from "../components/SearchPanel";
+
 import ConfirmDialog from "../components/ConfirmDialog";
 import GroupChips, { GroupManagerDialog, GroupPickerDialog } from "../components/GroupChips";
 import BookListPickerDialog from "../components/BookListPicker";
-import { BookIcon, GridIcon, ListIcon, SearchIcon } from "../components/icons";
+import { BookIcon, GridIcon, ListIcon } from "../components/icons";
 import {
   importFiles, listBooks, listShelfSourceBooks,
   listShelfGroups, createShelfGroup, renameShelfGroup, deleteShelfGroup,
@@ -42,7 +42,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   const [activeGroup, setActiveGroup] = useState<string>("all"); // "all" | "default" | `g:${id}`
   const [busy, setBusy] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-  const [showSearch, setShowSearch] = useState(false);
+
   const [layout, setLayout] = useState<BookCardLayout>(loadLayout);
   // 多选模式
   const [selecting, setSelecting] = useState(false);
@@ -187,13 +187,6 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   const handleOpen = (item: ShelfItem) => {
     if (item.kind === "local") onOpenBook(item.book);
     else onOpenSourceBook?.(item.sb);
-  };
-
-  const handleSearchJump = (h: SearchHit) => {
-    const book = items.find((i) => i.kind === "local" && i.book.id === h.book_id) as { kind: "local"; book: Book } | undefined;
-    if (!book) return;
-    // 定位随打开书籍的状态一并传入阅读器（EPUB 章节 href / PDF 页码 / MD/TXT 行号）
-    onOpenBook(book.book, h.location);
   };
 
   // ==== 分组过滤 ====
@@ -353,14 +346,6 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
         </div>
         <div className="library-actions">
           <button
-            className={`btn-icon${showSearch ? " active" : ""}`}
-            onClick={() => setShowSearch((s) => !s)}
-            aria-label="全文搜索"
-            title="全文搜索"
-          >
-            <SearchIcon size={17} />
-          </button>
-          <button
             className={`btn btn-ghost${selecting ? " active" : ""}`}
             onClick={() => { setSelecting((s) => !s); setSelected(new Set()); }}
             aria-label={selecting ? "退出多选" : "多选"}
@@ -395,8 +380,6 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
           onManage={() => setShowGroupManager(true)}
         />
       )}
-
-      {showSearch && <SearchPanel onJump={handleSearchJump} />}
 
       {viewMode === "shelf" ? (
         initialLoading ? (
