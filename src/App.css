@@ -1391,6 +1391,11 @@ html[data-mode="dark"] .verify-badge.warn {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.source-book-tags .kind-tag {
+  background: rgba(163, 216, 163, 0.25);
+  border-color: rgba(163, 216, 163, 0.35);
+  color: #e8f5e9;
+}
 .source-book-tags .status-tag.done {
   background: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.9);

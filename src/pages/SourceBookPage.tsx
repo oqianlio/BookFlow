@@ -183,7 +183,6 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             <div className="source-book-sub">
               {info.author && <span className="source-book-author">{info.author}</span>}
               <span className="source-book-source">{sourceName}</span>
-              {info.kind && <span className="source-book-kind">{info.kind}</span>}
             </div>
             <div className="source-book-tags">
               {info.status && (
@@ -191,6 +190,10 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
               )}
               {info.wordCount && <span className="tag">{info.wordCount}</span>}
               {info.updateTime && <span className="tag">更新 {info.updateTime}</span>}
+              {/* kind 按换行拆分为独立标签（legado kind 可返回多行，如 "科幻\n连载"） */}
+              {info.kind && info.kind.split(/\n|,/).filter((s) => s.trim()).map((t, i) => (
+                <span className="tag kind-tag" key={`kind-${i}`}>{t.trim()}</span>
+              ))}
               {stats && stats.read_seconds > 0 && (
                 <span className="tag">
                   {formatReadTime(stats.read_seconds)} · 阅读 {stats.read_count} 次
