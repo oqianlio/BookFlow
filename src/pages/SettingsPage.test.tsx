@@ -49,6 +49,7 @@ vi.mock("../services/api", () => ({
   addShelfSourceBook: vi.fn().mockResolvedValue(1),
   saveBookSourceProgress: vi.fn().mockResolvedValue(undefined),
   getSetting: vi.fn().mockResolvedValue(null),
+  getReadingSummary: vi.fn().mockResolvedValue({ total_books: 3, total_seconds: 1800, today_seconds: 300, top_books: [], recent_reads: [] }),
 }));
 vi.mock("../services/fontFiles", () => ({
   injectFontFaces: vi.fn().mockResolvedValue([]),

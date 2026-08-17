@@ -2272,3 +2272,30 @@ html[data-mode="dark"] .side-nav-item::before {
 .cache-book-meta { color: var(--on-surface-variant); font-size: 12px; white-space: nowrap; }
 .source-hint { color: var(--on-surface-variant); font-size: 12.5px; flex: 1; }
 
+/* 阅读统计列表 */
+.reading-stats-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.reading-stats-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-high);
+  font-size: 13px;
+}
+.stat-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stat-time { color: var(--on-surface-variant); font-size: 12px; white-space: nowrap; }
+

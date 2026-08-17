@@ -5,7 +5,7 @@ import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, readFileContent, writeTextFile, type FontFileRow, type CacheSummary, type CachedBook } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, readFileContent, writeTextFile, getReadingSummary, type FontFileRow, type CacheSummary, type CachedBook, type ReadingSummary } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
 import { exportBackupData, importBackupData } from "../services/backup";
 import { useError } from "../components/ErrorDialog";
@@ -38,6 +38,7 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [backupBusy, setBackupBusy] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoreText, setRestoreText] = useState<string | null>(null);
+  const [readingStats, setReadingStats] = useState<ReadingSummary | null>(null);
   const { showError } = useError();
 
   const handleExportBackup = async () => {
@@ -121,6 +122,7 @@ export default function SettingsPage({ onOpenSourceManager }: {
       if (s.customFg) setCustomFg(s.customFg);
     });
     void listFontFiles().then(setFonts).catch(() => {});
+    void getReadingSummary(10).then(setReadingStats).catch(() => {});
     refreshCache();
   }, []);
 
@@ -347,6 +349,26 @@ export default function SettingsPage({ onOpenSourceManager }: {
               从备份恢复
             </button>
           </div>
+        </div>
+        <div className="settings-group">
+          <div>
+            <div className="label">阅读统计</div>
+            <div className="hint">
+              {readingStats
+                ? `共 ${readingStats.total_books} 本 · ${Math.floor(readingStats.total_seconds / 60)} 分钟 · 今日 ${Math.floor(readingStats.today_seconds / 60)} 分钟`
+                : "加载中…"}
+            </div>
+          </div>
+          {readingStats && readingStats.top_books.length > 0 && (
+            <ul className="reading-stats-list">
+              {readingStats.top_books.map((b) => (
+                <li key={`${b.source_id}:${b.book_url}`}>
+                  <span className="stat-title">{b.title}</span>
+                  <span className="stat-time">{Math.floor(b.read_seconds / 60)} 分钟 · {b.read_count} 次</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div className="settings-group">
           <div>
