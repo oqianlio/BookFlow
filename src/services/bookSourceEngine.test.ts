@@ -1502,3 +1502,33 @@ describe("%% prev-sibling selector", () => {
     expect(r).toBe("");
   });
 });
+
+describe("java.timeFormat", () => {
+  it("formats seconds timestamp to YYYY-MM-DD HH:mm:ss", () => {
+    const ts = Math.floor(new Date("2026-08-17T12:00:00+08:00").getTime() / 1000);
+    const r = evalJs(`java.timeFormat(${ts})`, { doc: emptyDoc() });
+    expect(r).toMatch(/^2026-08-17 \d{2}:\d{2}:\d{2}$/);
+  });
+
+  it("formats milliseconds timestamp directly", () => {
+    const ms = new Date("2024-01-15T08:30:00Z").getTime();
+    const r = evalJs(`java.timeFormat(${ms})`, { doc: emptyDoc() });
+    expect(r).toContain("2024-01-15");
+  });
+
+  it("returns empty for non-numeric input", () => {
+    const r = evalJs(`java.timeFormat("not a number")`, { doc: emptyDoc() });
+    expect(r).toBe("");
+  });
+
+  it("returns empty for NaN", () => {
+    const r = evalJs(`java.timeFormat(NaN)`, { doc: emptyDoc() });
+    expect(r).toBe("");
+  });
+
+  it("supports custom format string", () => {
+    const ts = Math.floor(new Date("2026-03-05T14:05:00+08:00").getTime() / 1000);
+    const r = evalJs(`java.timeFormat(${ts}, "YYYY/MM/DD")`, { doc: emptyDoc() });
+    expect(r).toBe("2026/03/05");
+  });
+});

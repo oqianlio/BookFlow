@@ -1560,6 +1560,23 @@ export function evalJs(expr: string, ctx: JsContext): any {
         return "";
       }
     },
+    // legado java.timeFormat(timestamp)：秒级/毫秒级时间戳 → "YYYY-MM-DD HH:mm:ss"
+    // 源代码常用：java.timeFormat($.time) 或 java.timeFormat($.time * 1000)
+    timeFormat: (ts: any, fmt?: string) => {
+      const n = Number(ts);
+      if (!Number.isFinite(n)) return "";
+      const ms = n > 1e12 ? n : n * 1000; // 秒→毫秒（>1e12 视为已毫秒）
+      const d = new Date(ms);
+      if (isNaN(d.getTime())) return "";
+      const pad = (v: number) => String(v).padStart(2, "0");
+      return (fmt ?? "YYYY-MM-DD HH:mm:ss")
+        .replace("YYYY", String(d.getFullYear()))
+        .replace("MM", pad(d.getMonth() + 1))
+        .replace("DD", pad(d.getDate()))
+        .replace("HH", pad(d.getHours()))
+        .replace("mm", pad(d.getMinutes()))
+        .replace("ss", pad(d.getSeconds()));
+    },
     ajax: (url: any) => { (ctx as any)._ajaxUrl = String(url ?? ""); return ""; },
     toString: (x: any) => String(x ?? ""),
     toJSONString: (x: any) => {
