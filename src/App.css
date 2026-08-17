@@ -2272,30 +2272,79 @@ html[data-mode="dark"] .side-nav-item::before {
 .cache-book-meta { color: var(--on-surface-variant); font-size: 12px; white-space: nowrap; }
 .source-hint { color: var(--on-surface-variant); font-size: 12.5px; flex: 1; }
 
-/* 阅读统计列表 */
-.reading-stats-list {
-  list-style: none;
-  margin: 10px 0 0;
-  padding: 0;
+/* 阅读统计卡片 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.stat-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  padding: 14px 8px;
+  border-radius: var(--radius-md);
+  background: var(--primary-container);
 }
-.reading-stats-list li {
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.stat-sub {
+  font-size: 12px;
+  color: var(--primary);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--on-primary-container);
+  margin-top: 6px;
+}
+.reading-rank { display: flex; flex-direction: column; gap: 4px; }
+.rank-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+.rank-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
   background: var(--surface-container-high);
   font-size: 13px;
 }
-.stat-title {
+.rank-num {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.rank-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--on-surface);
 }
-.stat-time { color: var(--on-surface-variant); font-size: 12px; white-space: nowrap; }
+.rank-time {
+  color: var(--on-surface-variant);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 

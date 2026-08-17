@@ -350,24 +350,41 @@ export default function SettingsPage({ onOpenSourceManager }: {
             </button>
           </div>
         </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">阅读统计</div>
-            <div className="hint">
-              {readingStats
-                ? `共 ${readingStats.total_books} 本 · ${Math.floor(readingStats.total_seconds / 60)} 分钟 · 今日 ${Math.floor(readingStats.today_seconds / 60)} 分钟`
-                : "加载中…"}
-            </div>
-          </div>
-          {readingStats && readingStats.top_books.length > 0 && (
-            <ul className="reading-stats-list">
-              {readingStats.top_books.map((b) => (
-                <li key={`${b.source_id}:${b.book_url}`}>
-                  <span className="stat-title">{b.title}</span>
-                  <span className="stat-time">{Math.floor(b.read_seconds / 60)} 分钟 · {b.read_count} 次</span>
-                </li>
-              ))}
-            </ul>
+        <div className="settings-group" style={{ flexDirection: "column", alignItems: "stretch" }}>
+          <div className="label" style={{ marginBottom: 12 }}>阅读统计</div>
+          {readingStats ? (
+            <>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <span className="stat-value">{readingStats.total_books}</span>
+                  <span className="stat-label">已读书籍</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{Math.floor(readingStats.total_seconds / 3600)}</span>
+                  <span className="stat-label">总阅读时长</span>
+                  <span className="stat-sub">小时</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{Math.floor(readingStats.today_seconds / 60)}</span>
+                  <span className="stat-label">今日阅读</span>
+                  <span className="stat-sub">分钟</span>
+                </div>
+              </div>
+              {readingStats.top_books.length > 0 && (
+                <div className="reading-rank" style={{ marginTop: 14 }}>
+                  <div className="rank-label">阅读排行</div>
+                  {readingStats.top_books.map((b, i) => (
+                    <div className="rank-item" key={`${b.source_id}:${b.book_url}`}>
+                      <span className="rank-num">{i + 1}</span>
+                      <span className="rank-title">{b.title}</span>
+                      <span className="rank-time">{Math.floor(b.read_seconds / 60)} 分钟</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="hint">加载中…</div>
           )}
         </div>
         <div className="settings-group">
