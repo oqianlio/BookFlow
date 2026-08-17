@@ -1213,6 +1213,12 @@ html[data-mode="dark"] .verify-badge.warn {
   gap: 12px;
   max-width: 720px;
 }
+.discover-section {
+  margin-bottom: 16px;
+}
+.discover-section .home-section {
+  font-size: 16px;
+}
 
 .hit-card {
   display: flex;

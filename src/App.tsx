@@ -171,6 +171,11 @@ function AppInner() {
             onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
             onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: state })}
+            onJumpLocal={(hit) => {
+              // 本地书跳转：构造本地书对象进入阅读页
+              const localBook = { id: hit.book_id, title: hit.title, format: hit.format, path: "", cover_path: null, added_at: 0, last_opened_at: null };
+              setState({ area: "detail", page: "reader", book: localBook as any, jumpTo: hit.location, back: state });
+            }}
           />
         )}
         {state.area === "rss" && (

@@ -42,7 +42,7 @@ describe("DiscoverPage", () => {
     ]);
     const onOpenExplore = vi.fn();
     render(<DiscoverPage onOpenBook={() => {}} onOpenExplore={onOpenExplore} />);
-    await screen.findByPlaceholderText("输入书名，跨书源搜索");
+    await screen.findByPlaceholderText("输入书名，搜索本地书和在线书源");
     expect(await screen.findByText(/书源频道/)).toBeInTheDocument();
     expect(screen.getByText(/未分组/)).toBeInTheDocument();
   });
