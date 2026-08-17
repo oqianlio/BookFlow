@@ -4,7 +4,8 @@ import LibraryPage from "./pages/LibraryPage";
 import ReaderPage from "./pages/ReaderPage";
 import SettingsPage from "./pages/SettingsPage";
 import BookSourceManager from "./components/BookSourceManager";
-import DiscoverPage, { type SearchHit, type ExploreSource } from "./pages/DiscoverPage";
+import DiscoverPage, { type ExploreSource } from "./pages/DiscoverPage";
+import type { SearchHit } from "./services/searchService";
 import GroupExplorePage from "./pages/GroupExplorePage";
 import SourceBookPage from "./pages/SourceBookPage";
 import ExplorePage from "./pages/ExplorePage";
@@ -163,19 +164,14 @@ function AppInner() {
               sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
               chapterIndex: -1, chapterUrl: "", chapterName: "", back: state,
             })}
+            onOpenOnlineBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
           />
         )}
         {state.area === "discover" && (
           <DiscoverPage
             key="discover"
-            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
             onOpenGroupExplore={(groupName, sources) => setState({ area: "detail", page: "groupExplore", groupName, sources, back: state })}
-            onJumpLocal={(hit) => {
-              // 本地书跳转：构造本地书对象进入阅读页
-              const localBook = { id: hit.book_id, title: hit.title, format: hit.format, path: "", cover_path: null, added_at: 0, last_opened_at: null };
-              setState({ area: "detail", page: "reader", book: localBook as any, jumpTo: hit.location, back: state });
-            }}
           />
         )}
         {state.area === "rss" && (

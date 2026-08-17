@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent } from "../services/api";
 import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadJsLib } from "../services/jsLib";
-import type { SearchHit } from "./DiscoverPage";
+import type { SearchHit } from "../services/searchService";
 import { useError } from "../components/ErrorDialog";
 import { restoreExploreSnapshot, saveExploreSnapshot, takeExploreSnapshot } from "./navCache";
 

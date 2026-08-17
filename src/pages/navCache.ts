@@ -1,4 +1,4 @@
-import type { SearchHit } from "./DiscoverPage";
+import type { SearchHit } from "../services/searchService";
 
 /**
  * 页面导航会话缓存：详情页/阅读页会把浏览页卸载，返回时重新挂载会导致

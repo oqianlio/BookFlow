@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import BookCard, { type BookCardLayout, type ShelfItem } from "../components/BookCard";
-import SearchPanel, { type SearchHit } from "../components/SearchPanel";
 import ConfirmDialog from "../components/ConfirmDialog";
 import GroupChips, { GroupManagerDialog, GroupPickerDialog } from "../components/GroupChips";
 import BookListPickerDialog from "../components/BookListPicker";
 import { BookIcon, GridIcon, ListIcon, SearchIcon } from "../components/icons";
+import { searchBookSources } from "../services/searchService";
+import type { SearchHit as OnlineHit } from "../services/searchService";
 import {
   importFiles, listBooks, listShelfSourceBooks,
   listShelfGroups, createShelfGroup, renameShelfGroup, deleteShelfGroup,
@@ -32,9 +34,10 @@ function memberKey(m: ShelfMember): string {
   return `${m.item_kind}:${m.item_id}`;
 }
 
-export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
+export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnlineBook }: {
   onOpenBook: (b: Book, jumpTo?: string) => void;
   onOpenSourceBook?: (sb: ShelfSourceBook) => void;
+  onOpenOnlineBook?: (h: OnlineHit) => void;
 }) {
   const [items, setItems] = useState<ShelfItem[]>([]);
   const [groups, setGroups] = useState<ShelfGroup[]>([]);
@@ -43,6 +46,11 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
   const [busy, setBusy] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [localHits, setLocalHits] = useState<Array<{ book_id: number; title: string; format: string; text: string; location: string }>>([]);
+  const [onlineHits, setOnlineHits] = useState<OnlineHit[]>([]);
+  const [searchBusy, setSearchBusy] = useState(false);
+  const searchSeqRef = useRef(0);
   const [layout, setLayout] = useState<BookCardLayout>(loadLayout);
   // 多选模式
   const [selecting, setSelecting] = useState(false);
@@ -189,10 +197,28 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
     else onOpenSourceBook?.(item.sb);
   };
 
-  const handleSearchJump = (h: SearchHit) => {
+  const runSearch = useCallback(async (q: string) => {
+    if (!q.trim()) { setLocalHits([]); setOnlineHits([]); return; }
+    const seq = ++searchSeqRef.current;
+    setSearchBusy(true);
+    try {
+      const [local, online] = await Promise.allSettled([
+        invoke<Array<{ book_id: number; title: string; format: string; text: string; location: string }>>("search_books", { query: q }),
+        searchBookSources(q),
+      ]);
+      if (seq !== searchSeqRef.current) return;
+      setLocalHits(local.status === "fulfilled" ? local.value : []);
+      setOnlineHits(online.status === "fulfilled" ? online.value : []);
+    } catch {
+      // 旧响应被丢弃
+    } finally {
+      if (seq === searchSeqRef.current) setSearchBusy(false);
+    }
+  }, []);
+
+  const handleSearchJump = (h: { book_id: number; title: string; location: string }) => {
     const book = items.find((i) => i.kind === "local" && i.book.id === h.book_id) as { kind: "local"; book: Book } | undefined;
     if (!book) return;
-    // 定位随打开书籍的状态一并传入阅读器（EPUB 章节 href / PDF 页码 / MD/TXT 行号）
     onOpenBook(book.book, h.location);
   };
 
@@ -396,7 +422,62 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook }: {
         />
       )}
 
-      {showSearch && <SearchPanel onJump={handleSearchJump} />}
+      {showSearch && (
+        <aside className="panel search-panel">
+          <h3>搜索</h3>
+          <div className="panel-add">
+            <input aria-label="搜索关键词" value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void runSearch(searchQuery)}
+              placeholder="输入书名，搜索本地书和在线书源" />
+            <button className="btn btn-primary" onClick={() => void runSearch(searchQuery)} disabled={searchBusy || !searchQuery.trim()}>
+              {searchBusy ? "搜索中…" : "搜索"}
+            </button>
+          </div>
+          {searchBusy ? (
+            <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>搜索中…</span></span></p>
+          ) : searchQuery.trim() && localHits.length === 0 && onlineHits.length === 0 ? (
+            <p className="panel-empty">未找到相关书籍</p>
+          ) : localHits.length > 0 || onlineHits.length > 0 ? (
+            <>
+              {localHits.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div className="section-head">
+                    <h4 style={{ margin: 0, fontSize: 14 }}>本地书架</h4>
+                    <span className="section-sub">{localHits.length} 本</span>
+                  </div>
+                  {localHits.map((h) => (
+                    <div className="hit-card" key={`local-${h.book_id}`} onClick={() => handleSearchJump(h)} role="button" tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleSearchJump(h); }}>
+                      <div className="hit-info">
+                        <span className="hit-title">{h.title}</span>
+                        <span className="hit-author">{h.format.toUpperCase()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {onlineHits.length > 0 && (
+                <div>
+                  <div className="section-head">
+                    <h4 style={{ margin: 0, fontSize: 14 }}>在线书源</h4>
+                    <span className="section-sub">{onlineHits.length} 条</span>
+                  </div>
+                  {onlineHits.map((h, i) => (
+                    <div className="hit-card" key={`online-${i}`}>
+                      <div className="hit-info" onClick={() => onOpenOnlineBook?.(h)} role="button" tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === "Enter") onOpenOnlineBook?.(h); }}>
+                        <span className="hit-title">{h.title}</span>
+                        <span className="hit-author">{h.sourceName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : null}
+        </aside>
+      )}
 
       {viewMode === "shelf" ? (
         initialLoading ? (
