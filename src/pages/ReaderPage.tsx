@@ -12,7 +12,7 @@ import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIco
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import { applyInitRule, fetchToc, type TocItem } from "../services/sourceToc";
-import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, type ReadingSettings } from "../services/readingSettings";
+import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, PAGE_MARGIN_PX, type ReadingSettings } from "../services/readingSettings";
 import { convertText } from "../services/tradSimpl";
 import { getSessionChapter, setSessionChapter } from "../services/chapterSessionCache";
 import type { SearchHit } from "../services/searchService";
@@ -633,6 +633,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             ["--read-indent" as any]: `${settings.indentEm}em`,
             ["--read-bold" as any]: settings.bold ? 700 : 400,
             ["--read-fg" as any]: activeTheme.fg,
+            ["--read-text-align" as any]: settings.textAlign,
+            ["--read-page-margin" as any]: `${PAGE_MARGIN_PX[settings.pageMargin]}px`,
           }}
           onClickCapture={(e) => {
             // 面板开着：点正文任意处关闭（capture 先于翻页处理，避免同一次点击关面板又翻页）
@@ -854,6 +856,26 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                   onClick={() => updateSetting({ conversion: "trad" })}>繁体</button>
               </div>
             </div>
+            <div className="settings-group">
+              <label className="settings-label">对齐</label>
+              <div className="segmented" role="group" aria-label="对齐">
+                <button type="button" className={settings.textAlign === "left" ? "active" : ""}
+                  onClick={() => updateSetting({ textAlign: "left" })}>左对齐</button>
+                <button type="button" className={settings.textAlign === "justify" ? "active" : ""}
+                  onClick={() => updateSetting({ textAlign: "justify" })}>两端</button>
+              </div>
+            </div>
+            <div className="settings-group">
+              <label className="settings-label">页边距</label>
+              <div className="segmented" role="group" aria-label="页边距">
+                <button type="button" className={settings.pageMargin === "narrow" ? "active" : ""}
+                  onClick={() => updateSetting({ pageMargin: "narrow" })}>窄</button>
+                <button type="button" className={settings.pageMargin === "medium" ? "active" : ""}
+                  onClick={() => updateSetting({ pageMargin: "medium" })}>中</button>
+                <button type="button" className={settings.pageMargin === "wide" ? "active" : ""}
+                  onClick={() => updateSetting({ pageMargin: "wide" })}>宽</button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -862,7 +884,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           <button className="btn btn-ghost" onClick={() => goChapter(-1)} disabled={loading || (prevUrlsRef.current.length === 0 && !toc[chapter.index - 1])}>上一章</button>
           <span className="reader-progress">
             <span className="reader-chapter-ind">
-              {toc.length > 0 ? `第 ${chapter.index + 1} / ${toc.length} 章` : `第 ${chapter.index + 1} 章`}
+              {`第 ${chapter.index + 1} 章`}
             </span>
             <span className="reader-page-ind" ref={pageIndRef} style={{ display: "none" }} />
           </span>
