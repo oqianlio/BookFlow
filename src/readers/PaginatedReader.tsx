@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 
-export type PageMode = "cover" | "slide";
+export type PageMode = "cover" | "slide" | "scroll";
 
 export interface TypographyStyle {
   letterSpacingPx: number;
@@ -13,7 +13,7 @@ export interface TypographyStyle {
 const DEFAULT_TYPO: TypographyStyle = { letterSpacingPx: 0, paragraphSpacingPx: 11, indentEm: 0, bold: false, fontFamily: "serif" };
 
 export default function PaginatedReader({
-  html, mode = "cover", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd, onReachStart,
+  html, mode = "cover", fontSizePx = 18, lineHeight = 1.8, typography, onPageChange, measure, onMenuToggle, onReachEnd, onReachStart, onIndicator,
 }: {
   html: string; mode?: PageMode; fontSizePx?: number; lineHeight?: number;
   typography?: TypographyStyle;
@@ -22,11 +22,14 @@ export default function PaginatedReader({
   onMenuToggle?: () => void;
   onReachEnd?: () => void;
   onReachStart?: () => void;
+  /** 滚动模式进度指示（如 "42%"；null 隐藏） */
+  onIndicator?: (text: string | null) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pages, setPages] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const ty = { ...DEFAULT_TYPO, ...typography };
+  const isScroll = mode === "scroll";
 
   // 排版样式：批量测量时应用到隐藏容器（与阅读区一致的字体/行距/缩进等）
   // padding/max-width 与 .reader-page-slice 保持一致（CSS 同步修改），否则测量与渲染
@@ -49,6 +52,7 @@ export default function PaginatedReader({
   }, [fontSizePx, lineHeight, ty.letterSpacingPx, ty.paragraphSpacingPx, ty.indentEm, ty.bold, ty.fontFamily]);
 
   useEffect(() => {
+    if (isScroll) return; // 滚动模式不分页
     // 分页测量高度 = 容器高度 - slice 垂直 padding（4 顶 + 20 底），
     // 与 .reader-page-slice 的真实可用内容高度一致，避免每页内容超高
     const rawH = wrapRef.current?.clientHeight || 500;
@@ -56,7 +60,52 @@ export default function PaginatedReader({
     const w = wrapRef.current?.clientWidth || 400;
     setPages(sliceHtmlIntoPages(html, h, w, measure, styleHtml));
     setPage(0);
-  }, [html, measure, styleHtml]);
+  }, [html, measure, styleHtml, isScroll]);
+
+  // ==== 滚动模式 ====
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const reachedEndRef = useRef(false);
+  const lastStartAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!isScroll) return;
+    reachedEndRef.current = false;
+    onIndicator?.("0%");
+    scrollRef.current?.scrollTo?.({ top: 0 });
+    return () => onIndicator?.(null);
+  }, [html, isScroll, onIndicator]);
+
+  const handleScroll = () => {
+    if (!isScroll) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const max = el.scrollHeight - el.clientHeight;
+    const pct = max > 0 ? Math.min(100, Math.round((el.scrollTop / max) * 100)) : 100;
+    onIndicator?.(`${pct}%`);
+    // 接近底部 → 衔接下一章（每次换章只触发一次）
+    if (max - el.scrollTop < 48) {
+      if (!reachedEndRef.current) {
+        reachedEndRef.current = true;
+        onReachEnd?.();
+      }
+    } else if (reachedEndRef.current && max - el.scrollTop >= 48) {
+      reachedEndRef.current = false;
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!isScroll) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    // 顶部继续向上滚 → 衔接上一章（节流防连触）
+    if (e.deltaY < 0 && el.scrollTop <= 0) {
+      const now = Date.now();
+      if (now - lastStartAtRef.current > 800) {
+        lastStartAtRef.current = now;
+        onReachStart?.();
+      }
+    }
+  };
 
   const total = pages.length;
   const go = (p: number) => {
@@ -70,10 +119,11 @@ export default function PaginatedReader({
     if (total > 0 && page === 0 && p < 0) onReachStart?.();
   };
 
-  useEffect(() => { onPageChange?.(0, total); }, [total]); // 初始上报
+  useEffect(() => { if (!isScroll) onPageChange?.(0, total); }, [total, isScroll]); // 初始上报（滚动模式无页码）
 
-  // 键盘翻页：←/→/空格/PgUp/PgDn（输入框聚焦时不触发）
+  // 键盘翻页：←/→/空格/PgUp/PgDn（输入框聚焦时不触发；滚动模式交给浏览器原生滚动）
   useEffect(() => {
+    if (isScroll) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
@@ -93,18 +143,51 @@ export default function PaginatedReader({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [page, go, total]);
+  }, [page, go, total, isScroll]);
 
   const handleClick = (e: MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = e.clientX - rect.left;
     const third = rect.width / 3;
+    if (isScroll) {
+      // 滚动模式：点击不翻页，中区呼出菜单
+      if (x >= third && x <= third * 2) onMenuToggle?.();
+      return;
+    }
     if (x < third) go(page - 1);
     else if (x > third * 2) go(page + 1);
     else onMenuToggle?.();  // 中区 → 呼出菜单（由 ReaderPage 传入）
   };
 
   if (!html.trim()) return <p className="panel-empty">无内容</p>;
+
+  // 滚动模式：整章连续滚动渲染，无分页
+  if (isScroll) {
+    return (
+      <div
+        className="reader-scroll-wrap"
+        ref={scrollRef}
+        onClick={handleClick}
+        onMouseDown={(e) => e.preventDefault()}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+        style={{ fontSize: fontSizePx }}
+      >
+        <div
+          className="reader-page-slice scroll active"
+          style={{
+            lineHeight,
+            letterSpacing: `${ty.letterSpacingPx}px`,
+            textIndent: `${ty.indentEm}em`,
+            fontWeight: ty.bold ? 700 : 400,
+            fontFamily: ty.fontFamily,
+            ["--para-gap" as any]: `${ty.paragraphSpacingPx}px`,
+          }}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

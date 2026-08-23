@@ -89,6 +89,14 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       el.style.display = "none";
     }
   }, []);
+  // 滚动模式进度（百分比文本直接写入同一指示器）
+  const onIndicator = useCallback((text: string | null) => {
+    const el = pageIndRef.current;
+    if (!el) return;
+    if (text == null) { el.style.display = "none"; return; }
+    el.textContent = text;
+    el.style.display = "";
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -686,9 +694,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                       bold: settings.bold,
                       fontFamily: resolveFontCss(settings.fontFamily),
                     }}
-                                        onPageChange={onPageChange}
-
-                                        onMenuToggle={() => setMenuVisible((v) => !v)}
+                    onPageChange={onPageChange}
+                    onIndicator={onIndicator}
+                    onMenuToggle={() => setMenuVisible((v) => !v)}
                     onReachEnd={() => goChapter(1)}
                     onReachStart={() => goChapter(-1)}
                   />
@@ -758,10 +766,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
               <div className="settings-group">
                 <label className="settings-label">翻页模式</label>
                 <div className="segmented" role="group" aria-label="翻页模式">
-                  {(["cover", "slide"] as const).map((m) => (
+                  {(["cover", "slide", "scroll"] as const).map((m) => (
                     <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
                       onClick={() => updateSetting({ pageMode: m })}>
-                      {{ cover: "覆盖", slide: "滑动" }[m]}
+                      {{ cover: "覆盖", slide: "滑动", scroll: "滚动" }[m]}
                     </button>
                   ))}
                 </div>

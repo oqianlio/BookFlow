@@ -619,6 +619,21 @@
 .reader-page-slice p { margin: 0 0 var(--para-gap, 11px); }
 .reader-page-slice > *:last-child { margin-bottom: 0; }
 .reader-page-slice.slide { transition: transform 0.3s ease; }
+
+/* ============ 滚动模式（书源正文连续滚动） ============ */
+.reader-scroll-wrap {
+  height: 100%;
+  overflow-y: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  scrollbar-width: thin;
+}
+/* 滚动模式下 slice 不再 absolute inset，改为文档流 */
+.reader-scroll-wrap .reader-page-slice {
+  position: static;
+  overflow: visible;
+  padding: 12px 10px 48px;
+}
 .reader-slice-nav {
   position: absolute; bottom: 6px; right: 10px; display: flex; gap: 4px; align-items: center;
   background: color-mix(in srgb, var(--surface-2) 80%, transparent);

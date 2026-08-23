@@ -1,7 +1,7 @@
 import { getSetting, setSetting } from "./api";
 import type { Conversion } from "./tradSimpl";
 
-export type PageMode = "cover" | "slide";
+export type PageMode = "cover" | "slide" | "scroll";
 export type TextAlign = "left" | "justify";
 export type PageMargin = "narrow" | "medium" | "wide";
 
@@ -63,7 +63,7 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   pageMargin: "medium",
 };
 
-const PAGE_MODES: PageMode[] = ["cover", "slide"];
+const PAGE_MODES: PageMode[] = ["cover", "slide", "scroll"];
 const CONVERSIONS: Conversion[] = ["none", "simp", "trad"];
 const TEXT_ALIGNS: TextAlign[] = ["left", "justify"];
 const PAGE_MARGINS: PageMargin[] = ["narrow", "medium", "wide"];

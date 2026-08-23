@@ -246,3 +246,70 @@ describe("PaginatedReader", () => {
     document.body.removeChild(input);
   });
 });
+
+describe("PaginatedReader 滚动模式", () => {
+  const CONTENT = Array.from({ length: 10 }, (_, i) => `<p>滚动段落${i}${"字".repeat(20)}</p>`).join("");
+
+  it("renders the full chapter without pagination", () => {
+    const { container } = render(<PaginatedReader html={CONTENT} mode="scroll" />);
+    // 无分页切片、无页码导航
+    expect(container.querySelectorAll(".reader-page-slice").length).toBe(1);
+    expect(container.querySelector(".reader-slice-nav")).toBeNull();
+    // 全部段落都在 DOM 中（连续渲染）
+    expect(container.textContent).toContain("滚动段落0");
+    expect(container.textContent).toContain("滚动段落9");
+  });
+
+  it("reports scroll percent via onIndicator and fires onReachEnd at bottom once", () => {
+    const onIndicator = vi.fn();
+    const onReachEnd = vi.fn();
+    const { container } = render(
+      <PaginatedReader html={CONTENT} mode="scroll" onIndicator={onIndicator} onReachEnd={onReachEnd} />
+    );
+    const wrap = container.querySelector(".reader-scroll-wrap")! as HTMLElement;
+    // jsdom 无布局：手动 stub 尺寸
+    Object.defineProperty(wrap, "scrollHeight", { value: 2000, configurable: true });
+    Object.defineProperty(wrap, "clientHeight", { value: 500, configurable: true });
+    Object.defineProperty(wrap, "scrollTop", { value: 0, writable: true, configurable: true });
+    fireEvent.scroll(wrap);
+    expect(onIndicator).toHaveBeenLastCalledWith("0%");
+    // 滚到底部附近 → 触发下一章衔接
+    Object.defineProperty(wrap, "scrollTop", { value: 1980, writable: true, configurable: true });
+    fireEvent.scroll(wrap);
+    expect(onReachEnd).toHaveBeenCalledTimes(1);
+    expect(onIndicator).toHaveBeenLastCalledWith("100%");
+    // 继续滚动不重复触发
+    fireEvent.scroll(wrap);
+    expect(onReachEnd).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking side zones does not flip pages; center toggles menu", () => {
+    const onMenuToggle = vi.fn();
+    const onReachEnd = vi.fn();
+    const onReachStart = vi.fn();
+    const { container } = render(
+      <PaginatedReader html={CONTENT} mode="scroll" onMenuToggle={onMenuToggle} onReachEnd={onReachEnd} onReachStart={onReachStart} />
+    );
+    const wrap = container.querySelector(".reader-scroll-wrap")! as HTMLElement;
+    Object.defineProperty(wrap, "clientWidth", { value: 900, configurable: true });
+    Object.defineProperty(wrap, "getBoundingClientRect", {
+      value: () => ({ left: 0, width: 900 }) as DOMRect,
+      configurable: true,
+    });
+    fireEvent.click(wrap, { clientX: 100 }); // 左区：无翻页
+    fireEvent.click(wrap, { clientX: 800 }); // 右区：无翻页
+    expect(onReachEnd).not.toHaveBeenCalled();
+    expect(onReachStart).not.toHaveBeenCalled();
+    fireEvent.click(wrap, { clientX: 450 }); // 中区：菜单
+    expect(onMenuToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it("keyboard paging keys are ignored in scroll mode (native scroll)", () => {
+    const onPageChange = vi.fn();
+    render(<PaginatedReader html={CONTENT} mode="scroll" onPageChange={onPageChange} />);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "PageDown" });
+    // 分页回调从未被调用（无分页行为）
+    expect(onPageChange).not.toHaveBeenCalled();
+  });
+});
