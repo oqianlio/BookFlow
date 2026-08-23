@@ -31,7 +31,7 @@ describe("TxtReader", () => {
   it("publishes current page as __readerLocation", async () => {
     render(<TxtReader path="/b.txt" bookId={1} />);
     await screen.findByText(/1 \/ 2/);
-    expect((window as any).__readerLocation).toBe("0");
+    await waitFor(() => expect((window as any).__readerLocation).toBe("0"));
   });
 
   it("applies a jump received before content loads once the page count is known", async () => {

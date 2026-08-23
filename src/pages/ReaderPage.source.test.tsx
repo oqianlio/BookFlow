@@ -750,6 +750,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     const { container } = render(<ReaderPage source={{ kind: "source", sourceId: 1, bookUrl: "https://ex.com/b/1.html", bookTitle: "漫画", chapterIndex: 0, chapterUrl: "https://ex.com/c/1.html", chapterName: "第1话" }} onBack={() => {}} />);
     expect(await screen.findByAltText("图片 2")).toBeInTheDocument();
     // 最后一张图进入视口 → 自动进入下一话
+    await waitFor(() => expect(MockIntersectionObserver.instances.length).toBeGreaterThan(0));
     const obs = MockIntersectionObserver.instances[MockIntersectionObserver.instances.length - 1];
     obs.trigger(true);
     await waitFor(() => {

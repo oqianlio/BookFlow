@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import PdfReader from "./PdfReader";
 
 const { getDocumentMock } = vi.hoisted(() => {
@@ -55,6 +55,6 @@ describe("PdfReader", () => {
   it("publishes current page as __readerLocation", async () => {
     render(<PdfReader path="/b.pdf" bookId={1} />);
     await screen.findByText(/1 \/ 3/);
-    expect((window as any).__readerLocation).toBe("1");
+    await waitFor(() => expect((window as any).__readerLocation).toBe("1"));
   });
 });
