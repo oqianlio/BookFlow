@@ -254,6 +254,14 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
     if has_kind == 0 {
         conn.execute_batch("ALTER TABLE shelf_source_books ADD COLUMN kind TEXT")?;
     }
+    // 迁移：在线书简介（ruleBookInfo.intro，书架列表显示）
+    let has_intro: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('shelf_source_books') WHERE name = 'intro'",
+        [], |r| r.get(0),
+    )?;
+    if has_intro == 0 {
+        conn.execute_batch("ALTER TABLE shelf_source_books ADD COLUMN intro TEXT")?;
+    }
     Ok(conn)
 }
 
@@ -522,12 +530,12 @@ pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<
     Ok(())
 }
 
-/// 记录目录检查结果：total_chapters 与是否发现新章节（NEW 红点），并保存分类标签。
-/// total_chapters/kind 传 NULL 时保留原值（COALESCE），便于备份恢复等部分写入场景。
-pub fn set_shelf_source_toc_info(conn: &Connection, id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>) -> Result<()> {
+/// 记录目录检查结果：total_chapters 与是否发现新章节（NEW 红点），并保存分类标签/简介。
+/// total_chapters/kind/intro 传 NULL 时保留原值（COALESCE），便于备份恢复等部分写入场景。
+pub fn set_shelf_source_toc_info(conn: &Connection, id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>, intro: Option<String>) -> Result<()> {
     conn.execute(
-        "UPDATE shelf_source_books SET total_chapters = COALESCE(?1, total_chapters), has_update = ?2, kind = COALESCE(?3, kind) WHERE id = ?4",
-        params![total_chapters, if has_update { 1 } else { 0 }, kind, id],
+        "UPDATE shelf_source_books SET total_chapters = COALESCE(?1, total_chapters), has_update = ?2, kind = COALESCE(?3, kind), intro = COALESCE(?4, intro) WHERE id = ?5",
+        params![total_chapters, if has_update { 1 } else { 0 }, kind, intro, id],
     )?;
     Ok(())
 }
@@ -551,6 +559,8 @@ pub struct ShelfSourceBook {
     pub has_update: bool,
     #[serde(default)]
     pub kind: Option<String>,
+    #[serde(default)]
+    pub intro: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -580,7 +590,7 @@ pub fn add_shelf_source_book(conn: &Connection, b: &NewShelfSourceBook) -> Resul
 
 pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>> {
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.source_id, bs.name, s.book_url, s.title, s.author, s.cover_url, s.added_at, s.last_opened_at, s.sort_order, s.total_chapters, s.has_update, s.kind
+        "SELECT s.id, s.source_id, bs.name, s.book_url, s.title, s.author, s.cover_url, s.added_at, s.last_opened_at, s.sort_order, s.total_chapters, s.has_update, s.kind, s.intro
          FROM shelf_source_books s JOIN book_sources bs ON bs.id = s.source_id
          ORDER BY COALESCE(s.last_opened_at, s.added_at) DESC",
     )?;
@@ -593,6 +603,7 @@ pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>
             total_chapters: r.get(10)?,
             has_update: r.get::<_, i64>(11)? != 0,
             kind: r.get(12)?,
+            intro: r.get(13)?,
         })
     })?;
     rows.collect()

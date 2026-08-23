@@ -4,7 +4,7 @@ import BookCard, { formatLabel as formatLabelSafe, type BookCardLayout, type She
 import ConfirmDialog from "../components/ConfirmDialog";
 import GroupChips, { GroupManagerDialog, GroupPickerDialog } from "../components/GroupChips";
 import BookListPickerDialog from "../components/BookListPicker";
-import { BookIcon, GridIcon, ListIcon, SearchIcon, CompactIcon, SortIcon, RefreshIcon } from "../components/icons";
+import { BookIcon, GridIcon, ListIcon, SearchIcon, CompactIcon, SortIcon, RefreshIcon, FilterIcon } from "../components/icons";
 import { searchBookSources } from "../services/searchService";
 import type { SearchHit as OnlineHit } from "../services/searchService";
 import { clearTocCache, fetchToc } from "../services/sourceToc";
@@ -115,6 +115,9 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
     setGroupCollage(v);
     localStorage.setItem("library.groupCollage", v ? "1" : "0");
   };
+  // legado shelf searchKey：书架内快速过滤（书名/作者/来源）
+  const [showShelfFilter, setShowShelfFilter] = useState(false);
+  const [shelfFilter, setShelfFilter] = useState("");
   // 多选模式
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -158,10 +161,10 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
         if (it.kind !== "source") continue;
         try {
           const r = await fetchToc({ sourceId: it.sb.source_id, bookUrl: it.sb.book_url, initialTitle: it.sb.title });
-          // legado hasUpdate：本次检查到的章节数多于上次记录 → NEW 标记；kind 同步保存
+          // legado hasUpdate：本次检查到的章节数多于上次记录 → NEW 标记；kind/intro 同步保存
           const prev = it.sb.total_chapters;
           const grew = prev != null && r.toc.length > prev;
-          await setShelfSourceTocInfo(it.sb.id, r.toc.length, grew, r.info.kind || undefined).catch(() => {});
+          await setShelfSourceTocInfo(it.sb.id, r.toc.length, grew, r.info.kind || undefined, r.info.intro || undefined).catch(() => {});
         } catch { /* 单本失败继续 */ }
       }
       setRefreshingToc(false);
@@ -401,9 +404,23 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   }, [items, activeGroup, groups, groupMembers]);
 
   const visibleItems = filteredItems();
+  // 书架内过滤：书名/作者/来源名包含关键字（不区分大小写）
+  const filterText = shelfFilter.trim().toLowerCase();
+  const filteredVisible = useMemo(() => {
+    if (!filterText) return visibleItems;
+    return visibleItems.filter((i) => {
+      const title = (i.kind === "local" ? i.book.title : i.sb.title).toLowerCase();
+      if (title.includes(filterText)) return true;
+      if (i.kind === "source") {
+        if ((i.sb.author ?? "").toLowerCase().includes(filterText)) return true;
+        if ((i.sb.source_name ?? "").toLowerCase().includes(filterText)) return true;
+      }
+      return false;
+    });
+  }, [visibleItems, filterText]);
   const sortedVisible = useMemo(
-    () => sortShelfItems(visibleItems, sort.mode, sort.desc),
-    [visibleItems, sort.mode, sort.desc]
+    () => sortShelfItems(filteredVisible, sort.mode, sort.desc),
+    [filteredVisible, sort.mode, sort.desc]
   );
 
   // ==== 手动排序拖拽（legado 手动排序模式）====
@@ -593,6 +610,14 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
             {selecting ? "完成" : "多选"}
           </button>
           <button
+            className={`btn-icon${showShelfFilter ? " active" : ""}`}
+            onClick={() => { setShowShelfFilter((v) => !v); setShelfFilter(""); }}
+            aria-label="过滤书架"
+            title="过滤书架（按书名/作者/来源）"
+          >
+            <FilterIcon size={17} />
+          </button>
+          <button
             className={`btn-icon${refreshingToc ? " active" : ""}`}
             onClick={handleRefreshToc}
             disabled={refreshingToc}
@@ -682,6 +707,23 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
         />
       )}
 
+      {viewMode === "shelf" && showShelfFilter && (
+        <div className="shelf-filter-row">
+          <input
+            autoFocus
+            aria-label="过滤书架"
+            placeholder="按书名 / 作者 / 来源过滤当前书架"
+            value={shelfFilter}
+            onChange={(e) => setShelfFilter(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") { setShelfFilter(""); setShowShelfFilter(false); } }}
+          />
+          {shelfFilter && (
+            <button className="btn-icon" aria-label="清除过滤" onClick={() => setShelfFilter("")}>×</button>
+          )}
+          <span className="shelf-filter-count">{filteredVisible.length} 本</span>
+        </div>
+      )}
+
       {showSearch && (
         <aside className="panel search-panel">
           <h3>搜索</h3>
@@ -755,6 +797,11 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
             <span className="empty-icon"><BookIcon size={34} /></span>
             <h2>{activeGroup === "all" ? "书架空空如也，点击导入书籍" : "该分组暂无书籍"}</h2>
             <p>支持 EPUB · PDF · Markdown · TXT 四种格式；也可在「发现」中把在线书加入书架</p>
+          </div>
+        ) : filteredVisible.length === 0 ? (
+          <div className="empty">
+            <h2>没有匹配「{shelfFilter}」的书籍</h2>
+            <p>试试其他关键字，或清除过滤条件</p>
           </div>
         ) : (
           <>

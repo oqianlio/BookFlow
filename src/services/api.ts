@@ -213,6 +213,7 @@ export interface ShelfSourceBook {
   total_chapters?: number | null;
   has_update?: boolean;
   kind?: string | null;
+  intro?: string | null;
 }
 
 export async function addShelfSourceBook(a: { sourceId: number; bookUrl: string; title: string; author?: string; coverUrl?: string }): Promise<number> {
@@ -404,9 +405,9 @@ export async function removeShelfItems(items: ShelfMember[]): Promise<number[]> 
 export async function reorderShelfItems(items: ShelfMember[]): Promise<void> {
   await invoke("reorder_shelf_items", { items });
 }
-/** 记录目录检查结果（NEW 红点 + 分类标签）；totalChapters/kind 传 null 保留原值 */
-export async function setShelfSourceTocInfo(id: number, totalChapters: number | null, hasUpdate: boolean, kind?: string | null): Promise<void> {
-  await invoke("set_shelf_source_toc_info", { id, totalChapters, hasUpdate, kind: kind ?? null });
+/** 记录目录检查结果（NEW 红点 + 分类标签/简介）；null 参数保留原值 */
+export async function setShelfSourceTocInfo(id: number, totalChapters: number | null, hasUpdate: boolean, kind?: string | null, intro?: string | null): Promise<void> {
+  await invoke("set_shelf_source_toc_info", { id, totalChapters, hasUpdate, kind: kind ?? null, intro: intro ?? null });
 }
 
 export interface BookList {

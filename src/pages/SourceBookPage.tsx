@@ -182,15 +182,14 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 
   return (
     <div className="source-book page">
-      <header className="library-header">
-        <div className="brand" /> {/* 源名字已移除 */}
+      <header className="library-header source-book-header">
+        <button className="btn btn-ghost" onClick={onBack}>‹ 返回</button>
         <div className="library-actions">
           {loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
-          <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
 
-      {/* 头图区 */}
+      {/* 头图区：封面 + 标题 + 标签 + 次要信息 */}
       <div className="source-book-hero">
         {info.coverUrl ? (
           <img
@@ -200,25 +199,68 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
         ) : (
-          <div className="source-book-cover-ph" aria-hidden />
+          <div className="source-book-cover-ph" aria-hidden>{(info.title || sourceName).trim().charAt(0)}</div>
         )}
         <div className="source-book-meta">
           <h2 className="source-book-title">{info.title || sourceName}</h2>
-          <div className="source-info-list">
-            {info.author && <div className="source-info-item clickable" onClick={() => onSearchAuthor?.(info.author.replace(/^作者[：:]\s*/, ""))}><span className="source-info-lbl">作者</span><span className="source-info-val link">{info.author.replace(/^作者[：:]\s*/, "")}</span></div>}
-            <div className="source-info-item clickable" onClick={() => onEditSource?.(sourceId, sourceName)}><span className="source-info-lbl">来源</span><span className="source-info-val source-name link">{sourceName}</span></div>
-            {latestChapter && <div className="source-info-item"><span className="source-info-lbl">最新</span><span className="source-info-val latest-chapter">{latestChapter}</span></div>}
-            {shelfGroups.length > 0 && <div className="source-info-item"><span className="source-info-lbl">分组</span><div className="source-info-tags">{shelfGroups.map((g, i) => (<span className="source-info-tag" key={`shelf-${i}`}>{g}</span>))}{onShelf && <button className="source-info-tag-add" onClick={openGroupDialog}>+</button>}</div></div>}
-            {!onShelf && <div className="source-info-item"><span className="source-info-lbl">分组</span><span className="source-info-hint">加入书架后可管理</span></div>}
-            {onShelf && shelfGroups.length === 0 && <div className="source-info-item"><span className="source-info-lbl">分组</span><button className="source-info-tag-add" onClick={openGroupDialog}>+ 添加分组</button></div>}
-            {toc.length > 0 && <div className="source-info-item clickable" onClick={() => setShowTocDialog(true)}><span className="source-info-lbl">目录</span><span className="source-info-val link">{toc.length} 章 ▾</span></div>}
-            {groups.length > 0 && <div className="source-info-item"><span className="source-info-lbl">分类</span><div className="source-info-tags">{groups.map((t, i) => (<span className="source-info-tag kind" key={`kind-${i}`}>{t}</span>))}</div></div>}
-            {info.status && <div className="source-info-item"><span className="source-info-lbl">状态</span><span className={`source-info-val status ${/完/.test(info.status) ? "done" : "serial"}`}>{info.status}</span></div>}
-            {info.wordCount && <div className="source-info-item"><span className="source-info-lbl">字数</span><span className="source-info-val">{info.wordCount}</span></div>}
-            {info.updateTime && <div className="source-info-item"><span className="source-info-lbl">更新</span><span className="source-info-val">{info.updateTime}</span></div>}
+          {info.author && (
+            <button
+              type="button"
+              className="source-book-author"
+              onClick={() => onSearchAuthor?.(info.author.replace(/^作者[：:]\s*/, ""))}
+              title="搜索该作者的作品"
+            >
+              {info.author.replace(/^作者[：:]\s*/, "")}
+            </button>
+          )}
+          {(info.status || groups.length > 0) && (
+            <div className="source-book-tags">
+              {info.status && <span className={`source-tag status ${/完/.test(info.status) ? "done" : "serial"}`}>{info.status}</span>}
+              {groups.slice(0, 4).map((t, i) => (<span className="source-tag" key={`kind-${i}`}>{t}</span>))}
+            </div>
+          )}
+          <div className="source-book-submeta">
+            <button type="button" className="submeta-source" onClick={() => onEditSource?.(sourceId, sourceName)} title="编辑书源">{sourceName}</button>
+            {info.wordCount && <span className="submeta-dot" aria-hidden />}
+            {info.wordCount && <span>{info.wordCount}</span>}
+            {info.updateTime && <span className="submeta-dot" aria-hidden />}
+            {info.updateTime && <><span className="submeta-lbl">更新</span><span>{info.updateTime}</span></>}
           </div>
+          {onShelf ? (
+            shelfGroups.length > 0 ? (
+              <div className="source-book-tags shelf-groups">
+                {shelfGroups.map((g, i) => (<span className="source-tag group" key={`shelf-${i}`}>{g}</span>))}
+                <button type="button" className="source-tag-add" onClick={openGroupDialog}>+</button>
+              </div>
+            ) : (
+              <button type="button" className="source-tag-add solo" onClick={openGroupDialog}>+ 添加分组</button>
+            )
+          ) : (
+            <span className="shelf-hint">加入书架后可管理分组</span>
+          )}
         </div>
       </div>
+
+      {/* 目录卡片 */}
+      {(toc.length > 0 || latestChapter) && (
+        <button
+          type="button"
+          className={`source-book-catalog${toc.length === 0 ? " disabled" : ""}`}
+          onClick={() => toc.length > 0 && setShowTocDialog(true)}
+          disabled={toc.length === 0}
+        >
+          <span className="catalog-count">
+            目录{toc.length > 0 ? ` · ${toc.length} 章` : ""}
+          </span>
+          {latestChapter && (
+            <span className="catalog-latest">
+              <span className="catalog-latest-label">最新</span>
+              <span className="catalog-latest-name">{latestChapter}</span>
+            </span>
+          )}
+          {toc.length > 0 && <span className="catalog-chevron" aria-hidden>›</span>}
+        </button>
+      )}
 
       {/* 简介 */}
       {info.intro && (
@@ -231,7 +273,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
             {info.intro}
           </p>
           {introClampable && (
-            <button className="btn btn-ghost intro-toggle" onClick={toggleIntro}>
+            <button className="intro-toggle" onClick={toggleIntro}>
               {introExpanded ? "收起" : "展开"}
             </button>
           )}

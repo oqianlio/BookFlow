@@ -101,8 +101,8 @@ export async function importBackupData(text: string): Promise<{ sources: number;
       newId = await addShelfSourceBook({ sourceId: b.source_id, bookUrl: b.book_url, title: b.title, author: b.author ?? "", coverUrl: b.cover_url ?? "" });
       shelf++;
     } catch { /* 去重失败跳过 */ }
-    if (newId != null && (b.total_chapters != null || b.kind)) {
-      await setShelfSourceTocInfo(newId, b.total_chapters ?? null, !!b.has_update, b.kind ?? undefined).catch(() => { /* 单本失败跳过 */ });
+    if (newId != null && (b.total_chapters != null || b.kind || b.intro)) {
+      await setShelfSourceTocInfo(newId, b.total_chapters ?? null, !!b.has_update, b.kind ?? undefined, b.intro ?? undefined).catch(() => { /* 单本失败跳过 */ });
     }
     const p = d.sourceProgress.find((x) => x.bookUrl === b.book_url && x.sourceId === b.source_id);
     if (p) {

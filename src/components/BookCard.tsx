@@ -149,6 +149,10 @@ function BookCard({ item, onOpen, onRemove, onInfo, layout = "grid", selectable 
   const kindTags = item.kind === "source" && item.sb.kind
     ? item.sb.kind.split(/[,，、]+/).map((s) => s.trim()).filter(Boolean).slice(0, 4)
     : [];
+  // 简介（ruleBookInfo.intro，列表单行截断）
+  const intro = item.kind === "source"
+    ? (item.sb.intro ?? "").replace(/<[^>]*>/g, "").trim()
+    : "";
 
   const dndProps = draggable ? {
     draggable: true,
@@ -184,6 +188,7 @@ function BookCard({ item, onOpen, onRemove, onInfo, layout = "grid", selectable 
               {kindTags.map((t) => <span key={t} className="md3-tag">{t}</span>)}
             </div>
           )}
+          {intro && <p className="md3-intro" title={intro}>{intro}</p>}
           <div className="md3-meta-row">
             {timeStr && <span className="md3-time">{timeStr}</span>}
             {percent != null && percent > 0 && <span className="md3-percent">{percent}%</span>}

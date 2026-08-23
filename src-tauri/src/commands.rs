@@ -823,8 +823,8 @@ pub fn reorder_shelf_items(items: Vec<ShelfMemberInput>, state: State<'_, AppSta
 }
 
 #[tauri::command]
-pub fn set_shelf_source_toc_info(id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>, state: State<'_, AppState>) -> Result<(), String> {
-    crate::db::set_shelf_source_toc_info(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, total_chapters, has_update, kind).map_err(|e| e.to_string())
+pub fn set_shelf_source_toc_info(id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>, intro: Option<String>, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::set_shelf_source_toc_info(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, total_chapters, has_update, kind, intro).map_err(|e| e.to_string())
 }
 
 fn friendly_unique_error(e: impl ToString) -> String {

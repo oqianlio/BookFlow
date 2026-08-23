@@ -157,7 +157,7 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("球状闪电");
     await userEvent.click(screen.getByRole("button", { name: "更新目录" }));
-    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 2, true, undefined));
+    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 2, true, undefined, undefined));
   });
 
   it("shows the new-chapter dot for source books with updates", async () => {
@@ -166,6 +166,31 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("球状闪电");
     expect(document.querySelector(".md3-dot-new")).toBeInTheDocument();
+  });
+
+  it("filters shelf books by title keyword", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    await userEvent.click(screen.getByRole("button", { name: "过滤书架" }));
+    const input = screen.getByPlaceholderText(/按书名 \/ 作者 \/ 来源过滤/);
+    await userEvent.type(input, "三体");
+    // 只剩匹配的书
+    expect(screen.getByText("三体")).toBeInTheDocument();
+    expect(screen.queryByText("算法导论")).not.toBeInTheDocument();
+    // 过滤行显示计数
+    expect(await screen.findByText("1 本")).toBeInTheDocument();
+  });
+
+  it("shows book intro line for source books in list mode", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([
+      { ...shelfSource, intro: "这是一个关于三体文明的故事" },
+    ]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    expect(await screen.findByText(/关于三体文明的故事/)).toBeInTheDocument();
   });
 
   it("switches between grid and list layouts and persists the choice", async () => {
@@ -236,7 +261,7 @@ describe("LibraryPage", () => {
     await screen.findByText("球状闪电");
     // 更新目录时 kind 透传到后端（total_chapters 未记录 → null 保留原值）
     await userEvent.click(screen.getByRole("button", { name: "更新目录" }));
-    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 0, false, "科幻,末日"));
+    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 0, false, "科幻,末日", undefined));
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
     // 标签行显示分类
     expect(await screen.findByText("科幻")).toBeInTheDocument();
