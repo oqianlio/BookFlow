@@ -3,6 +3,7 @@
 import {
   listBookSources, addBookSource, updateBookSource, getSourceByUrl,
   listShelfSourceBooks, addShelfSourceBook, getBookSourceProgress, saveBookSourceProgress,
+  setShelfSourceTocInfo,
   getSetting, setSetting,
   type ShelfSourceBook,
 } from "./api";
@@ -91,14 +92,18 @@ export async function importBackupData(text: string): Promise<{ sources: number;
       }
     } catch { /* 单个书源失败跳过 */ }
   }
-  // 2. 书架在线书 + 进度
+  // 2. 书架在线书 + 进度 + 目录信息（章节数/更新标记/分类）
   let shelf = 0;
   let progress = 0;
   for (const b of d.shelfSourceBooks) {
+    let newId: number | null = null;
     try {
-      await addShelfSourceBook({ sourceId: b.source_id, bookUrl: b.book_url, title: b.title, author: b.author ?? "", coverUrl: b.cover_url ?? "" });
+      newId = await addShelfSourceBook({ sourceId: b.source_id, bookUrl: b.book_url, title: b.title, author: b.author ?? "", coverUrl: b.cover_url ?? "" });
       shelf++;
     } catch { /* 去重失败跳过 */ }
+    if (newId != null && (b.total_chapters != null || b.kind)) {
+      await setShelfSourceTocInfo(newId, b.total_chapters ?? null, !!b.has_update, b.kind ?? undefined).catch(() => { /* 单本失败跳过 */ });
+    }
     const p = d.sourceProgress.find((x) => x.bookUrl === b.book_url && x.sourceId === b.source_id);
     if (p) {
       try {

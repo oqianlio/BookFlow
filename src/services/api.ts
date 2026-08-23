@@ -10,6 +10,7 @@ export interface Book {
   cover_path: string | null;
   added_at: number;
   last_opened_at: number | null;
+  sort_order?: number | null;
 }
 
 export function coverUrl(path: string | null): string | undefined {
@@ -208,6 +209,10 @@ export interface ShelfSourceBook {
   id: number; source_id: number; source_name: string; book_url: string;
   title: string; author: string | null; cover_url: string | null;
   added_at: number; last_opened_at: number | null;
+  sort_order?: number | null;
+  total_chapters?: number | null;
+  has_update?: boolean;
+  kind?: string | null;
 }
 
 export async function addShelfSourceBook(a: { sourceId: number; bookUrl: string; title: string; author?: string; coverUrl?: string }): Promise<number> {
@@ -394,6 +399,14 @@ export async function listShelfGroupMembers(groupId: number): Promise<ShelfMembe
 /** 批量移除书架条目（混合 local/source）；返回被删的本地书 id */
 export async function removeShelfItems(items: ShelfMember[]): Promise<number[]> {
   return invoke<number[]>("remove_shelf_items", { items });
+}
+/** 手动排序：按传入顺序持久化 sort_order */
+export async function reorderShelfItems(items: ShelfMember[]): Promise<void> {
+  await invoke("reorder_shelf_items", { items });
+}
+/** 记录目录检查结果（NEW 红点 + 分类标签）；totalChapters/kind 传 null 保留原值 */
+export async function setShelfSourceTocInfo(id: number, totalChapters: number | null, hasUpdate: boolean, kind?: string | null): Promise<void> {
+  await invoke("set_shelf_source_toc_info", { id, totalChapters, hasUpdate, kind: kind ?? null });
 }
 
 export interface BookList {

@@ -10,6 +10,8 @@ pub struct Book {
     pub cover_path: Option<String>,
     pub added_at: i64,
     pub last_opened_at: Option<i64>,
+    #[serde(default)]
+    pub sort_order: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -137,8 +139,7 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             added_at INTEGER NOT NULL,
             last_opened_at INTEGER,
             UNIQUE(source_id, book_url)
-        );
-        CREATE TABLE IF NOT EXISTS chapter_cache (
+        );        CREATE TABLE IF NOT EXISTS chapter_cache (
             source_id INTEGER NOT NULL,
             book_url TEXT NOT NULL,
             chapter_index INTEGER NOT NULL,
@@ -220,6 +221,39 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
     if has_is_read == 0 {
         conn.execute_batch("ALTER TABLE rss_articles ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")?;
     }
+    // 迁移：手动排序列（NULL = 未手动排序）
+    for table in ["books", "shelf_source_books"] {
+        let has_sort_order: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'sort_order'"),
+            [], |r| r.get(0),
+        )?;
+        if has_sort_order == 0 {
+            conn.execute_batch(&format!("ALTER TABLE {table} ADD COLUMN sort_order INTEGER"))?;
+        }
+    }
+    // 迁移：在线书章节更新追踪（NEW 红点）
+    let has_total_chapters: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('shelf_source_books') WHERE name = 'total_chapters'",
+        [], |r| r.get(0),
+    )?;
+    if has_total_chapters == 0 {
+        conn.execute_batch("ALTER TABLE shelf_source_books ADD COLUMN total_chapters INTEGER")?;
+    }
+    let has_has_update: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('shelf_source_books') WHERE name = 'has_update'",
+        [], |r| r.get(0),
+    )?;
+    if has_has_update == 0 {
+        conn.execute_batch("ALTER TABLE shelf_source_books ADD COLUMN has_update INTEGER NOT NULL DEFAULT 0")?;
+    }
+    // 迁移：在线书分类标签（ruleBookInfo.kind，如 "科幻,都市"）
+    let has_kind: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('shelf_source_books') WHERE name = 'kind'",
+        [], |r| r.get(0),
+    )?;
+    if has_kind == 0 {
+        conn.execute_batch("ALTER TABLE shelf_source_books ADD COLUMN kind TEXT")?;
+    }
     Ok(conn)
 }
 
@@ -237,14 +271,14 @@ pub fn upsert_book(conn: &Connection, book: &NewBook) -> Result<i64> {
 
 pub fn list_books(conn: &Connection) -> Result<Vec<Book>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, format, path, cover_path, added_at, last_opened_at
+        "SELECT id, title, format, path, cover_path, added_at, last_opened_at, sort_order
          FROM books ORDER BY COALESCE(last_opened_at, added_at) DESC",
     )?;
     let rows = stmt.query_map([], |r| {
         Ok(Book {
             id: r.get(0)?, title: r.get(1)?, format: r.get(2)?,
             path: r.get(3)?, cover_path: r.get(4)?, added_at: r.get(5)?,
-            last_opened_at: r.get(6)?,
+            last_opened_at: r.get(6)?, sort_order: r.get(7)?,
         })
     })?;
     rows.collect()
@@ -252,7 +286,7 @@ pub fn list_books(conn: &Connection) -> Result<Vec<Book>> {
 
 pub fn get_book(conn: &Connection, id: i64) -> Result<Option<Book>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, format, path, cover_path, added_at, last_opened_at
+        "SELECT id, title, format, path, cover_path, added_at, last_opened_at, sort_order
          FROM books WHERE id = ?1",
     )?;
     let mut rows = stmt.query([id])?;
@@ -260,7 +294,7 @@ pub fn get_book(conn: &Connection, id: i64) -> Result<Option<Book>> {
         Ok(Some(Book {
             id: r.get(0)?, title: r.get(1)?, format: r.get(2)?,
             path: r.get(3)?, cover_path: r.get(4)?, added_at: r.get(5)?,
-            last_opened_at: r.get(6)?,
+            last_opened_at: r.get(6)?, sort_order: r.get(7)?,
         }))
     } else {
         Ok(None)
@@ -479,12 +513,22 @@ pub fn save_source_progress(conn: &Connection, p: &NewSourceProgress) -> Result<
            chapter_url=excluded.chapter_url, chapter_name=excluded.chapter_name, percent=excluded.percent, updated_at=excluded.updated_at",
         params![p.source_id, p.book_url, p.title, p.chapter_index, p.chapter_url, p.chapter_name, p.percent, now],
     )?;
-    // 书架联动：书在架时更新打开时间（不在架则无操作）
+    // 书架联动：书在架时更新打开时间并清除更新标记（不在架则无操作）
     tx.execute(
-        "UPDATE shelf_source_books SET last_opened_at = ?1 WHERE source_id = ?2 AND book_url = ?3",
+        "UPDATE shelf_source_books SET last_opened_at = ?1, has_update = 0 WHERE source_id = ?2 AND book_url = ?3",
         params![now, p.source_id, p.book_url],
     )?;
     tx.commit()?;
+    Ok(())
+}
+
+/// 记录目录检查结果：total_chapters 与是否发现新章节（NEW 红点），并保存分类标签。
+/// total_chapters/kind 传 NULL 时保留原值（COALESCE），便于备份恢复等部分写入场景。
+pub fn set_shelf_source_toc_info(conn: &Connection, id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>) -> Result<()> {
+    conn.execute(
+        "UPDATE shelf_source_books SET total_chapters = COALESCE(?1, total_chapters), has_update = ?2, kind = COALESCE(?3, kind) WHERE id = ?4",
+        params![total_chapters, if has_update { 1 } else { 0 }, kind, id],
+    )?;
     Ok(())
 }
 
@@ -499,6 +543,14 @@ pub struct ShelfSourceBook {
     pub cover_url: Option<String>,
     pub added_at: i64,
     pub last_opened_at: Option<i64>,
+    #[serde(default)]
+    pub sort_order: Option<i64>,
+    #[serde(default)]
+    pub total_chapters: Option<i64>,
+    #[serde(default)]
+    pub has_update: bool,
+    #[serde(default)]
+    pub kind: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -528,7 +580,7 @@ pub fn add_shelf_source_book(conn: &Connection, b: &NewShelfSourceBook) -> Resul
 
 pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>> {
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.source_id, bs.name, s.book_url, s.title, s.author, s.cover_url, s.added_at, s.last_opened_at
+        "SELECT s.id, s.source_id, bs.name, s.book_url, s.title, s.author, s.cover_url, s.added_at, s.last_opened_at, s.sort_order, s.total_chapters, s.has_update, s.kind
          FROM shelf_source_books s JOIN book_sources bs ON bs.id = s.source_id
          ORDER BY COALESCE(s.last_opened_at, s.added_at) DESC",
     )?;
@@ -537,6 +589,10 @@ pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>
             id: r.get(0)?, source_id: r.get(1)?, source_name: r.get(2)?,
             book_url: r.get(3)?, title: r.get(4)?, author: r.get(5)?,
             cover_url: r.get(6)?, added_at: r.get(7)?, last_opened_at: r.get(8)?,
+            sort_order: r.get(9)?,
+            total_chapters: r.get(10)?,
+            has_update: r.get::<_, i64>(11)? != 0,
+            kind: r.get(12)?,
         })
     })?;
     rows.collect()
@@ -544,6 +600,30 @@ pub fn list_shelf_source_books(conn: &Connection) -> Result<Vec<ShelfSourceBook>
 
 pub fn remove_shelf_source_book(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("DELETE FROM shelf_source_books WHERE id = ?1", [id])?;
+    Ok(())
+}
+
+/// 手动排序：按传入顺序写 sort_order（0..n），未列出的书保持不变
+pub fn reorder_shelf_items(conn: &Connection, items: &[ShelfMember]) -> Result<()> {
+    let tx = conn.unchecked_transaction()?;
+    for (i, m) in items.iter().enumerate() {
+        match m.item_kind.as_str() {
+            "local" => {
+                tx.execute(
+                    "UPDATE books SET sort_order = ?1 WHERE id = ?2",
+                    params![i as i64, m.item_id],
+                )?;
+            }
+            "source" => {
+                tx.execute(
+                    "UPDATE shelf_source_books SET sort_order = ?1 WHERE id = ?2",
+                    params![i as i64, m.item_id],
+                )?;
+            }
+            _ => {}
+        }
+    }
+    tx.commit()?;
     Ok(())
 }
 

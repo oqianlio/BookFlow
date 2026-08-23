@@ -816,6 +816,17 @@ pub fn remove_shelf_items(items: Vec<ShelfMemberInput>, state: State<'_, AppStat
     Ok(deleted)
 }
 
+#[tauri::command]
+pub fn reorder_shelf_items(items: Vec<ShelfMemberInput>, state: State<'_, AppState>) -> Result<(), String> {
+    let ms: Vec<crate::db::ShelfMember> = items.into_iter().map(|m| crate::db::ShelfMember { item_kind: m.item_kind, item_id: m.item_id }).collect();
+    crate::db::reorder_shelf_items(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &ms).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn set_shelf_source_toc_info(id: i64, total_chapters: Option<i64>, has_update: bool, kind: Option<String>, state: State<'_, AppState>) -> Result<(), String> {
+    crate::db::set_shelf_source_toc_info(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, total_chapters, has_update, kind).map_err(|e| e.to_string())
+}
+
 fn friendly_unique_error(e: impl ToString) -> String {
     let s = e.to_string();
     if s.contains("UNIQUE") || s.contains("constraint") { "分组名称已存在".to_string() } else { s }

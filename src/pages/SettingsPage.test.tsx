@@ -112,7 +112,7 @@ describe("SettingsPage", () => {
     const api = await import("../services/api");
     render(<SettingsPage />);
     expect(await screen.findByText(/已缓存 120 章 \/ 3 本书 \/ 5.0 MB/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "清除全部缓存" }));
+    await userEvent.click(screen.getByRole("button", { name: "清除" }));
     expect(screen.getByText(/将清除全部 120 章离线缓存/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(api.clearAllCache).toHaveBeenCalled();
@@ -141,8 +141,8 @@ describe("SettingsPage", () => {
   it("renders the backup & restore group with export and restore buttons", async () => {
     render(<SettingsPage />);
     expect(await screen.findByText(/备份与恢复/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "导出备份" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "从备份恢复" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "恢复" })).toBeInTheDocument();
   });
 
   it("export backup writes a JSON file via the save dialog", async () => {
@@ -154,7 +154,7 @@ describe("SettingsPage", () => {
     ]);
     render(<SettingsPage />);
     await screen.findByText(/备份与恢复/);
-    await userEvent.click(screen.getByRole("button", { name: "导出备份" }));
+    await userEvent.click(screen.getByRole("button", { name: "导出" }));
     expect(api.writeTextFile).toHaveBeenCalledWith("C:/backups/zhanshu.json", expect.stringContaining("https://a.com"));
   });
 });

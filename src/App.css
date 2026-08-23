@@ -653,10 +653,42 @@ button {
   z-index: 1;
 }
 
+/* 类型角标：左上（本地/在线） */
+.md3-badge-type {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+/* NEW 红点：右上角上方（有新章节） */
+.md3-dot-new {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--error, #d32f2f);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7);
+  z-index: 2;
+}
+
+/* 阅读进度：右下 */
 .md3-badge-tip {
   position: absolute;
   bottom: 4px;
-  left: 4px;
+  right: 4px;
   min-width: 24px;
   height: 16px;
   padding: 0 4px;
@@ -668,6 +700,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
 }
 
 .md3-title-grid {
@@ -799,6 +832,103 @@ button {
   background: var(--surface-container-highest);
 }
 
+/* 网格卡片菜单按钮：悬浮封面右上角 */
+.md3-menu-btn-grid {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.md3-menu-btn-grid:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+/* 列表模式进度百分比 */
+.md3-percent {
+  flex-shrink: 0;
+  color: var(--primary);
+}
+
+/* 列表模式分类标签行 */
+.md3-tags-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.md3-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* 排序菜单 */
+.sort-wrap {
+  position: relative;
+}
+
+.sort-wrap .menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+}
+
+.sort-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 120;
+}
+
+.card-menu-item.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.sort-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--outline-variant);
+}
+
+/* 网格标题叠加封面（gridStyle=1） */
+.md3-title-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 14px 6px 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.7));
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  z-index: 1;
+}
+
 /* ============ MD3 书架紧凑视图 ============ */
 .book-grid-compact {
   display: grid;
@@ -854,27 +984,68 @@ button {
   outline-offset: 2px;
 }
 
-/* 选择框 */
-.select-box {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--outline);
-  background: var(--surface-container-lowest);
+/* 手动排序拖拽指示 */
+.md3-card.drag-over {
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+  opacity: 0.85;
+}
+
+/* 分组封面拼贴卡片（legado 文件夹模式） */
+.group-collage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.group-collage-grid {
+  width: 100%;
+  aspect-ratio: 5 / 7;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-container-high);
+}
+
+.gc-img,
+.gc-ph {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 2;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.select-box.on {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--on-primary);
+.gc-ph {
+  background: linear-gradient(135deg, var(--surface-container-highest), var(--surface-container));
+  color: var(--on-surface-variant);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.group-collage-name {
+  margin: 6px 4px 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-collage-count {
+  margin: 0 4px;
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
 }
 
 /* 占位符颜色 */
@@ -1313,7 +1484,7 @@ html[data-mode="dark"] .verify-badge.warn {
   box-shadow: var(--shadow-sm);
   transform: translateY(-2px);
 }
-.channel-card:active { transform: translateY(0); scale(0.98); }
+.channel-card:active { transform: translateY(0) scale(0.98); }
 .channel-icon {
   width: 42px; height: 42px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -1689,12 +1860,26 @@ html[data-mode="dark"] .verify-badge.warn {
   color: var(--on-secondary-container);
   border-color: var(--secondary);
 }
+
+.source-btn-dl {
+  flex: 1;
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  border: 1px solid var(--outline);
   transition: all 0.2s ease;
 }
-.source-btn-shelf:hover {
-  background: var(--secondary-container);
-  color: var(--on-secondary-container);
-  border-color: var(--secondary);
+.source-btn-dl:hover {
+  background: var(--tertiary-container);
+  color: var(--on-tertiary-container);
+  border-color: var(--tertiary);
+}
+.source-btn-dl:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .group-dialog {
@@ -2579,25 +2764,6 @@ html[data-mode="dark"] .side-nav-item::before {
 .book-list-create input { width: 100%; box-sizing: border-box; }
 
 /* ============ 多选模式 ============ */
-.book-card { position: relative; }
-.select-box {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 5;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  pointer-events: none;
-}
-.select-box.on { background: var(--primary); border-color: var(--primary); }
-.book-card.selected .book-cover-wrap { outline: 2px solid var(--primary); outline-offset: -2px; }
 .batch-bar {
   position: fixed;
   left: 50%;
@@ -2623,52 +2789,32 @@ html[data-mode="dark"] .side-nav-item::before {
 }
 .batch-count { font-size: 13px; color: var(--on-surface-variant); padding: 0 6px; }
 
-/* ============ 卡片菜单 ============ */
-.book-menu {
-  position: absolute;
-  right: 6px;
-  bottom: 6px;
-  z-index: 4;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease;
+/* 批量下载进度浮窗 */
+.batch-dl-float {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface-container-high);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--outline-variant);
+  z-index: 95;
 }
-.book-card:hover .book-menu,
-.book-card:focus-within .book-menu { opacity: 1; }
-.book-info-btn {
-  position: absolute;
-  right: 6px;
-  bottom: 32px;
-  z-index: 4;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+.batch-dl-label {
   font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease, background-color 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: var(--on-surface);
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.book-card:hover .book-info-btn,
-.book-card:focus-within .book-info-btn { opacity: 1; }
-.book-info-btn:hover { background: var(--primary); }
+
+/* ============ 卡片菜单 ============ */
 .card-menu {
   position: fixed;
   z-index: 120;

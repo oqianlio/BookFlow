@@ -164,7 +164,6 @@ export default function SettingsPage({ onOpenSourceManager }: {
       await injectFontFaces();
       const list = await listFontFiles();
       setFonts(list);
-      // 设为当前阅读字体
       const s = await loadReadingSettings();
       await saveReadingSettings({ ...s, fontFamily: row.name });
     } catch (e) {
@@ -182,7 +181,6 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const toggleMode = (mode: Theme["mode"]) => {
     const next = { ...getTheme(), mode };
     setThemeState(next);
-    // 记录用户手动选择的模式（护眼定时窗口外恢复用）
     localStorage.setItem("reader.manualMode", mode);
     void setTheme(next);
   };
@@ -204,207 +202,249 @@ export default function SettingsPage({ onOpenSourceManager }: {
   return (
     <div className="my page">
       <header className="library-header"><h1>我的</h1></header>
-      <div className="my-form">
-        <div className="settings-group">
-          <div>
-            <div className="label">主题方案</div>
-            <div className="hint">选择配色方案</div>
+      <div className="settings-cards">
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">外观</h2>
+          <div className="settings-card-body">
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">主题方案</div>
+                <div className="hint">选择配色方案</div>
+              </div>
+              <div className="segmented" role="group" aria-label="主题方案">
+                {SCHEMES.map((s) => (
+                  <button key={s} type="button" className={theme.scheme === s ? "active" : ""} onClick={() => selectScheme(s)}>
+                    {SCHEME_NAMES[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">明暗模式</div>
+                <div className="hint">适应夜间阅读环境</div>
+              </div>
+              <div className="segmented" role="group" aria-label="明暗模式">
+                <button type="button" className={theme.mode === "light" ? "active" : ""} onClick={() => toggleMode("light")}>白天</button>
+                <button type="button" className={theme.mode === "dark" ? "active" : ""} onClick={() => toggleMode("dark")}>夜间</button>
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">护眼定时</div>
+                <div className="hint">设定时间段内自动切换到夜间模式</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div className="segmented" role="group" aria-label="护眼定时">
+                  <button type="button" className={!eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: false })}>关</button>
+                  <button type="button" className={eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: true })}>开</button>
+                </div>
+                {eyeCare.enabled && (
+                  <div className="time-range">
+                    <input type="time" aria-label="护眼开始时间" value={eyeCare.start} onChange={(e) => updateEyeCare({ start: e.target.value })} />
+                    <span>至</span>
+                    <input type="time" aria-label="护眼结束时间" value={eyeCare.end} onChange={(e) => updateEyeCare({ end: e.target.value })} />
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">自定义主题</div>
+                <div className="hint">设置阅读背景与文字颜色，应用到阅读区</div>
+              </div>
+              <div className="custom-theme-row">
+                <label className="custom-theme-item">
+                  <span>背景</span>
+                  <input type="color" aria-label="自定义背景色" value={customBg} onChange={(e) => setCustomBg(e.target.value)} />
+                </label>
+                <label className="custom-theme-item">
+                  <span>文字</span>
+                  <input type="color" aria-label="自定义文字色" value={customFg} onChange={(e) => setCustomFg(e.target.value)} />
+                </label>
+                <button className="btn btn-soft" onClick={() => void applyCustomTheme()}>应用</button>
+              </div>
+            </div>
           </div>
-          <div className="segmented" role="group" aria-label="主题方案">
-            {SCHEMES.map((s) => (
-              <button key={s} type="button" className={theme.scheme === s ? "active" : ""} onClick={() => selectScheme(s)}>
-                {SCHEME_NAMES[s]}
+        </section>
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">阅读</h2>
+          <div className="settings-card-body">
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">字号</div>
+                <div className="hint">调节阅读正文大小</div>
+              </div>
+              <div className="range-row">
+                <input type="range" min={12} max={32} value={fontSize} aria-label="字号"
+                  onChange={(e) => { const n = +e.target.value; setFontSizeState(n); void setFontSize(n); }} />
+                <span className="range-value">{fontSize}px</span>
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">字体文件</div>
+                <div className="hint">导入本地字体（ttf/otf/woff2），导入后自动设为阅读字体</div>
+              </div>
+              <button className="btn btn-soft" onClick={() => void handleImportFont()} disabled={fontBusy}>
+                {fontBusy ? "导入中…" : "导入字体"}
               </button>
-            ))}
-          </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">明暗模式</div>
-            <div className="hint">适应夜间阅读环境</div>
-          </div>
-          <div className="segmented" role="group" aria-label="明暗模式">
-            <button type="button" className={theme.mode === "light" ? "active" : ""} onClick={() => toggleMode("light")}>白天</button>
-            <button type="button" className={theme.mode === "dark" ? "active" : ""} onClick={() => toggleMode("dark")}>夜间</button>
-          </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">护眼定时</div>
-            <div className="hint">设定时间段内自动切换到夜间模式</div>
-          </div>
-          <div className="segmented" role="group" aria-label="护眼定时">
-            <button type="button" className={!eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: false })}>关</button>
-            <button type="button" className={eyeCare.enabled ? "active" : ""} onClick={() => updateEyeCare({ enabled: true })}>开</button>
-          </div>
-          {eyeCare.enabled && (
-            <div className="time-range">
-              <input type="time" aria-label="护眼开始时间" value={eyeCare.start} onChange={(e) => updateEyeCare({ start: e.target.value })} />
-              <span>至</span>
-              <input type="time" aria-label="护眼结束时间" value={eyeCare.end} onChange={(e) => updateEyeCare({ end: e.target.value })} />
             </div>
-          )}
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">自定义主题</div>
-            <div className="hint">设置阅读背景与文字颜色，应用到阅读区</div>
-          </div>
-          <div className="custom-theme-row">
-            <label className="custom-theme-item">
-              <span>背景</span>
-              <input type="color" aria-label="自定义背景色" value={customBg} onChange={(e) => setCustomBg(e.target.value)} />
-            </label>
-            <label className="custom-theme-item">
-              <span>文字</span>
-              <input type="color" aria-label="自定义文字色" value={customFg} onChange={(e) => setCustomFg(e.target.value)} />
-            </label>
-            <button className="btn btn-soft" onClick={() => void applyCustomTheme()}>应用</button>
-          </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">字体文件</div>
-            <div className="hint">导入本地字体（ttf/otf/woff2），导入后自动设为阅读字体</div>
-          </div>
-          <div className="font-files-row">
-            <button className="btn btn-soft" onClick={() => void handleImportFont()} disabled={fontBusy}>
-              {fontBusy ? "导入中…" : "导入字体"}
-            </button>
-          </div>
-          {fonts.length > 0 && (
-            <ul className="font-files-list">
-              {fonts.map((f) => (
-                <li key={f.file}><span className="font-file-name">{f.name}</span></li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">字号</div>
-            <div className="hint">调节阅读正文大小</div>
-          </div>
-          <div className="range-row">
-            <input type="range" min={12} max={32} value={fontSize} aria-label="字号"
-              onChange={(e) => { const n = +e.target.value; setFontSizeState(n); void setFontSize(n); }} />
-            <span className="range-value">{fontSize}px</span>
-          </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">朗读语速</div>
-            <div className="hint">调节 TTS 朗读速度</div>
-          </div>
-          <div className="range-row">
-            <input type="range" min={0.5} max={2} step={0.1} value={rate} aria-label="朗读语速"
-              onChange={(e) => { const n = +e.target.value; setRateState(n); void setTtsRate(n); }} />
-            <span className="range-value">{rate.toFixed(1)}x</span>
-          </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">书源管理</div>
-            <div className="hint">管理书源列表，支持分组、导入、调试</div>
-          </div>
-          {onOpenSourceManager && <button className="btn btn-soft" onClick={onOpenSourceManager}>打开</button>}
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">章节缓存</div>
-            <div className="hint">
-              {cache ? `已缓存 ${cache.chapter_count} 章 / ${cache.book_count} 本书 / ${formatBytes(cache.total_bytes)}` : "加载中…"}
+            {fonts.length > 0 && (
+              <div className="settings-row settings-row-full">
+                <ul className="font-files-list">
+                  {fonts.map((f) => (
+                    <li key={f.file}><span className="font-file-name">{f.name}</span></li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">朗读语速</div>
+                <div className="hint">调节 TTS 朗读速度</div>
+              </div>
+              <div className="range-row">
+                <input type="range" min={0.5} max={2} step={0.1} value={rate} aria-label="朗读语速"
+                  onChange={(e) => { const n = +e.target.value; setRateState(n); void setTtsRate(n); }} />
+                <span className="range-value">{rate.toFixed(1)}x</span>
+              </div>
             </div>
           </div>
-          <div className="settings-group-actions">
-            <button className="btn btn-soft" onClick={() => setShowCachedBooks((s) => !s)} disabled={!cache || cache.book_count === 0}>
-              {showCachedBooks ? "收起明细" : "查看明细"}
-            </button>
-            <button className="btn btn-soft" onClick={confirmClearCache} disabled={!cache || cache.chapter_count === 0}>
-              清除全部缓存
-            </button>
+        </section>
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">书源</h2>
+          <div className="settings-card-body">
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">书源管理</div>
+                <div className="hint">管理书源列表，支持分组、导入、调试</div>
+              </div>
+              {onOpenSourceManager && <button className="btn btn-soft" onClick={onOpenSourceManager}>打开</button>}
+            </div>
           </div>
-          {showCachedBooks && cachedBooks.length > 0 && (
-            <ul className="cache-books-list">
-              {cachedBooks.map((b) => (
-                <li key={`${b.source_id}:${b.book_url}`}>
-                  <span className="cache-book-title" title={b.book_url}>{b.title}</span>
-                  <span className="cache-book-meta">{b.chapter_count} 章 · {formatBytes(b.bytes)}</span>
-                  <button className="btn btn-ghost" onClick={() => void handleDeleteBookCache(b)}>清除</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">备份与恢复</div>
-            <div className="hint">导出/导入书源、书架、阅读进度与设置（本地 JSON 文件）</div>
-          </div>
-          <div className="settings-group-actions">
-            <button className="btn btn-soft" onClick={() => void handleExportBackup()} disabled={backupBusy}>
-              {backupBusy ? "处理中…" : "导出备份"}
-            </button>
-            <button className="btn btn-soft" onClick={() => void pickRestore()} disabled={backupBusy}>
-              从备份恢复
-            </button>
-          </div>
-        </div>
-        <div className="settings-group" style={{ flexDirection: "column", alignItems: "stretch" }}>
-          <div className="label" style={{ marginBottom: 12 }}>阅读统计</div>
-          {readingStats ? (
-            <>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <span className="stat-value">{readingStats.total_books}</span>
-                  <span className="stat-label">已读书籍</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-value">{Math.floor(readingStats.total_seconds / 3600)}</span>
-                  <span className="stat-label">总阅读时长</span>
-                  <span className="stat-sub">小时</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-value">{Math.floor(readingStats.today_seconds / 60)}</span>
-                  <span className="stat-label">今日阅读</span>
-                  <span className="stat-sub">分钟</span>
+        </section>
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">数据</h2>
+          <div className="settings-card-body">
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">章节缓存</div>
+                <div className="hint">
+                  {cache ? `已缓存 ${cache.chapter_count} 章 / ${cache.book_count} 本书 / ${formatBytes(cache.total_bytes)}` : "加载中…"}
                 </div>
               </div>
-              {readingStats.top_books.length > 0 && (
-                <div className="reading-rank" style={{ marginTop: 14 }}>
-                  <div className="rank-label">阅读排行</div>
-                  {readingStats.top_books.map((b, i) => (
-                    <div className="rank-item" key={`${b.source_id}:${b.book_url}`}>
-                      <span className="rank-num">{i + 1}</span>
-                      <span className="rank-title">{b.title}</span>
-                      <span className="rank-time">{Math.floor(b.read_seconds / 60)} 分钟</span>
-                    </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-soft" onClick={() => setShowCachedBooks((s) => !s)} disabled={!cache || cache.book_count === 0}>
+                  {showCachedBooks ? "收起" : "明细"}
+                </button>
+                <button className="btn btn-soft" onClick={confirmClearCache} disabled={!cache || cache.chapter_count === 0}>
+                  清除
+                </button>
+              </div>
+            </div>
+            {showCachedBooks && cachedBooks.length > 0 && (
+              <div className="settings-row settings-row-full">
+                <ul className="cache-books-list">
+                  {cachedBooks.map((b) => (
+                    <li key={`${b.source_id}:${b.book_url}`}>
+                      <span className="cache-book-title" title={b.book_url}>{b.title}</span>
+                      <span className="cache-book-meta">{b.chapter_count} 章 · {formatBytes(b.bytes)}</span>
+                      <button className="btn btn-ghost" onClick={() => void handleDeleteBookCache(b)}>清除</button>
+                    </li>
                   ))}
+                </ul>
+              </div>
+            )}
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">备份与恢复</div>
+                <div className="hint">导出/导入书源、书架、阅读进度与设置</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-soft" onClick={() => void handleExportBackup()} disabled={backupBusy}>
+                  {backupBusy ? "处理中…" : "导出"}
+                </button>
+                <button className="btn btn-soft" onClick={() => void pickRestore()} disabled={backupBusy}>
+                  恢复
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">统计</h2>
+          <div className="settings-card-body">
+            {readingStats ? (
+              <>
+                <div className="settings-row settings-row-full">
+                  <div className="stats-grid">
+                    <div className="stat-card">
+                      <span className="stat-value">{readingStats.total_books}</span>
+                      <span className="stat-label">已读书籍</span>
+                    </div>
+                    <div className="stat-card">
+                      <span className="stat-value">{Math.floor(readingStats.total_seconds / 3600)}</span>
+                      <span className="stat-label">总阅读时长</span>
+                      <span className="stat-sub">小时</span>
+                    </div>
+                    <div className="stat-card">
+                      <span className="stat-value">{Math.floor(readingStats.today_seconds / 60)}</span>
+                      <span className="stat-label">今日阅读</span>
+                      <span className="stat-sub">分钟</span>
+                    </div>
+                  </div>
                 </div>
-              )}
-            </>
-          ) : (
-            <div className="hint">加载中…</div>
-          )}
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">开发者日志</div>
-            <div className="hint">查看前端错误与警告（写于应用数据目录 logs/app.log）</div>
+                {readingStats.top_books.length > 0 && (
+                  <div className="settings-row settings-row-full">
+                    <div className="reading-rank">
+                      <div className="rank-label">阅读排行</div>
+                      {readingStats.top_books.map((b, i) => (
+                        <div className="rank-item" key={`${b.source_id}:${b.book_url}`}>
+                          <span className="rank-num">{i + 1}</span>
+                          <span className="rank-title">{b.title}</span>
+                          <span className="rank-time">{Math.floor(b.read_seconds / 60)} 分钟</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="settings-row"><div className="hint">加载中…</div></div>
+            )}
           </div>
-          <div className="settings-group-actions">
-            <button className="btn btn-soft" onClick={() => setShowDevLog(true)}>查看</button>
-            <button className="btn btn-soft" onClick={() => void handleExportDiagnostics()} disabled={diagBusy}>
-              {diagBusy ? "导出中…" : "导出诊断"}
-            </button>
+        </section>
+
+        <section className="settings-card">
+          <h2 className="settings-card-title">其他</h2>
+          <div className="settings-card-body">
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">开发者日志</div>
+                <div className="hint">查看前端错误与警告</div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-soft" onClick={() => setShowDevLog(true)}>查看</button>
+                <button className="btn btn-soft" onClick={() => void handleExportDiagnostics()} disabled={diagBusy}>
+                  {diagBusy ? "导出中…" : "导出诊断"}
+                </button>
+              </div>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">关于</div>
+                <div className="hint">枕书 · 基于 legado 3.0 规则的桌面阅读器</div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="settings-group">
-          <div>
-            <div className="label">关于</div>
-            <div className="hint">枕书 · 基于 legado 3.0 规则的桌面阅读器</div>
-          </div>
-        </div>
+        </section>
+
       </div>
       {showDevLog && <DeveloperLogDialog onClose={() => setShowDevLog(false)} />}
       {confirmClear && (

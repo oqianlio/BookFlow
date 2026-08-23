@@ -2,6 +2,8 @@ import { getSetting, setSetting } from "./api";
 import type { Conversion } from "./tradSimpl";
 
 export type PageMode = "cover" | "slide";
+export type TextAlign = "left" | "justify";
+export type PageMargin = "narrow" | "medium" | "wide";
 
 export interface ReadingSettings {
   pageMode: PageMode;
@@ -16,13 +18,19 @@ export interface ReadingSettings {
   conversion: Conversion;
   customBg: string;
   customFg: string;
+  textAlign: TextAlign;
+  pageMargin: PageMargin;
 }
 
 export const BG_THEMES: Array<{ id: string; name: string; bg: string; fg: string }> = [
   { id: "paper", name: "纸白", bg: "#ffffff", fg: "#1c1b1b" },
   { id: "beige", name: "纸黄", bg: "#f5e9d0", fg: "#2b2b2b" },
   { id: "green", name: "护眼绿", bg: "#cde8cd", fg: "#1f1f1f" },
+  { id: "warmgray", name: "暖灰", bg: "#e8e4de", fg: "#2b2823" },
+  { id: "lightblue", name: "淡蓝", bg: "#dce8f0", fg: "#1c2833" },
+  { id: "pink", name: "粉彩", bg: "#f0e4e8", fg: "#2b1f23" },
   { id: "night", name: "夜间", bg: "#141313", fg: "#e5e2e1" },
+  { id: "pureblack", name: "纯黑", bg: "#000000", fg: "#d4d4d4" },
 ];
 
 export const FONT_PRESETS: Array<{ id: string; name: string; css: string }> = [
@@ -51,10 +59,14 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   conversion: "none",
   customBg: "",
   customFg: "",
+  textAlign: "left",
+  pageMargin: "medium",
 };
 
 const PAGE_MODES: PageMode[] = ["cover", "slide"];
 const CONVERSIONS: Conversion[] = ["none", "simp", "trad"];
+const TEXT_ALIGNS: TextAlign[] = ["left", "justify"];
+const PAGE_MARGINS: PageMargin[] = ["narrow", "medium", "wide"];
 const FONT_MIN = 14;
 const FONT_MAX = 24;
 const LINE_MIN = 1.4;
@@ -66,6 +78,12 @@ const PARA_MAX = 24;
 const INDENT_MIN = 0;
 const INDENT_MAX = 2;
 
+export const PAGE_MARGIN_PX: Record<PageMargin, number> = {
+  narrow: 16,
+  medium: 28,
+  wide: 40,
+};
+
 function numInRange(raw: string | null, min: number, max: number, fallback: number): number {
   if (raw === null) return fallback;
   const v = Number(raw);
@@ -74,7 +92,7 @@ function numInRange(raw: string | null, min: number, max: number, fallback: numb
 
 export async function loadReadingSettings(): Promise<ReadingSettings> {
   try {
-    const [mode, size, line, bg, ls, ps, ind, bld, fam, conv, cb, cf] = await Promise.all([
+    const [mode, size, line, bg, ls, ps, ind, bld, fam, conv, cb, cf, ta, pm] = await Promise.all([
       getSetting("reading.pageMode"),
       getSetting("reading.fontSizePx"),
       getSetting("reading.lineHeight"),
@@ -87,12 +105,20 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       getSetting("reading.conversion"),
       getSetting("reading.customBg"),
       getSetting("reading.customFg"),
+      getSetting("reading.textAlign"),
+      getSetting("reading.pageMargin"),
     ]);
     const pageMode = PAGE_MODES.includes(mode as PageMode)
       ? (mode as PageMode)
       : DEFAULT_READING_SETTINGS.pageMode;
     const isKnown = BG_THEMES.some((t) => t.id === bg) || bg === "custom";
     const bgTheme = isKnown && bg ? bg : DEFAULT_READING_SETTINGS.bgTheme;
+    const textAlign = TEXT_ALIGNS.includes(ta as TextAlign)
+      ? (ta as TextAlign)
+      : DEFAULT_READING_SETTINGS.textAlign;
+    const pageMargin = PAGE_MARGINS.includes(pm as PageMargin)
+      ? (pm as PageMargin)
+      : DEFAULT_READING_SETTINGS.pageMargin;
     return {
       pageMode,
       fontSizePx: numInRange(size, FONT_MIN, FONT_MAX, DEFAULT_READING_SETTINGS.fontSizePx),
@@ -106,6 +132,8 @@ export async function loadReadingSettings(): Promise<ReadingSettings> {
       conversion: CONVERSIONS.includes(conv as Conversion) ? conv as Conversion : DEFAULT_READING_SETTINGS.conversion,
       customBg: cb && cb.trim() ? cb : DEFAULT_READING_SETTINGS.customBg,
       customFg: cf && cf.trim() ? cf : DEFAULT_READING_SETTINGS.customFg,
+      textAlign,
+      pageMargin,
     };
   } catch {
     return { ...DEFAULT_READING_SETTINGS };
@@ -126,5 +154,7 @@ export async function saveReadingSettings(s: ReadingSettings): Promise<void> {
     setSetting("reading.conversion", s.conversion),
     setSetting("reading.customBg", s.customBg),
     setSetting("reading.customFg", s.customFg),
+    setSetting("reading.textAlign", s.textAlign),
+    setSetting("reading.pageMargin", s.pageMargin),
   ]);
 }

@@ -55,8 +55,8 @@ describe("readingSettings", () => {
     expect(api.setSetting).toHaveBeenCalledWith("reading.bgTheme", "night");
   });
 
-  it("exposes four preset background themes", () => {
-    expect(BG_THEMES.map((t) => t.id)).toEqual(["paper", "beige", "green", "night"]);
+  it("exposes eight preset background themes", () => {
+    expect(BG_THEMES.map((t) => t.id)).toEqual(["paper", "beige", "green", "warmgray", "lightblue", "pink", "night", "pureblack"]);
   });
 
   it("includes typography defaults", async () => {

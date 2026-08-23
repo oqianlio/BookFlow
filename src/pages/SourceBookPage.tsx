@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources, getReadingStats, type ReadingStats } from "../services/api";
+import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources, listShelfGroups, listShelfGroupMembers, addShelfGroupMembers, removeShelfGroupMembers, type ShelfGroup } from "../services/api";
 import { parseBookSourceJson } from "../services/bookSourceEngine";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import { downloadBook } from "../services/chapterCache";
@@ -7,22 +7,12 @@ import type { SearchHit } from "../services/searchService";
 import SwitchSourcePanel from "../components/SwitchSourcePanel";
 import { useError } from "../components/ErrorDialog";
 
-function formatReadTime(sec: number): string {
-  const min = Math.floor(sec / 60);
-  if (min < 1) return `${sec} 秒`;
-  const h = Math.floor(min / 60);
-  return h > 0 ? `${h} 小时 ${min % 60} 分钟` : `${min} 分钟`;
-}
-
-function formatDate(ts: number): string {
-  const d = new Date(ts * 1000);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead, onSwitchSource }: {
+export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialTitle, onBack, onRead, onSwitchSource, onSearchAuthor, onEditSource }: {
   sourceId: number; sourceName: string; bookUrl: string; initialTitle: string;
   onBack: () => void; onRead: (index: number, url: string, name: string) => void;
   onSwitchSource?: (hit: SearchHit) => void;
+  onSearchAuthor?: (author: string) => void;
+  onEditSource?: (sourceId: number, sourceName: string) => void;
 }) {
   const [info, setInfo] = useState<{
     title: string; author: string; intro: string; coverUrl: string;
@@ -38,19 +28,21 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     setIntroExpanded(introExpandedRef.current);
   };
   const [toc, setToc] = useState<TocItem[]>([]);
-  const [tocExpanded, setTocExpanded] = useState(false);
+  const [showTocDialog, setShowTocDialog] = useState(false);
   const [loginUrl, setLoginUrl] = useState<string | undefined>(undefined);
   const [onShelf, setOnShelf] = useState(false);
   const [shelfBusy, setShelfBusy] = useState(false);
   const [showSwitch, setShowSwitch] = useState(false);
+  const [shelfGroups, setShelfGroups] = useState<string[]>([]);
+  const [showGroupDialog, setShowGroupDialog] = useState(false);
+  const [allGroups, setAllGroups] = useState<ShelfGroup[]>([]);
+  const [shelfItemId, setShelfItemId] = useState<number | null>(null);
   const [dl, setDl] = useState<{ busy: boolean; done: number; total: number; failed: number }>({ busy: false, done: 0, total: 0, failed: 0 });
   const dlSignalRef = useRef({ cancelled: false });
-  const [stats, setStats] = useState<ReadingStats | null>(null);
   const { showError } = useError();
 
   useEffect(() => () => { dlSignalRef.current.cancelled = true; }, []);
 
-  // 简介是否超过 3 行（决定是否显示"展开/收起"）；只在简介内容变化时测量一次
   useEffect(() => {
     const el = introRef.current;
     if (!el || !info.intro) return;
@@ -61,7 +53,6 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     const clampable = full > clamped + 4;
     setIntroClampable(clampable);
     if (!clampable) {
-      // 不满 3 行无需展开按钮
       introExpandedRef.current = true;
       setIntroExpanded(true);
     } else {
@@ -71,17 +62,10 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 
   useEffect(() => {
     let cancelled = false;
-    void getReadingStats(sourceId, bookUrl).then((s) => { if (!cancelled) setStats(s); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [sourceId, bookUrl]);
-
-  useEffect(() => {
-    let cancelled = false;
     (async () => {
       try {
         const r = await fetchToc({ sourceId, bookUrl, initialTitle });
         if (!cancelled) {
-          // 书名以用户打开/选中的书名为准（换源后保持同一本书），源解析书名仅作兜底
           setInfo((prev) => ({ ...r.info, title: prev.title || r.info.title || initialTitle }));
           setToc(r.toc);
           setLoginUrl(r.loginUrl);
@@ -96,7 +80,24 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
   useEffect(() => {
     let cancelled = false;
     void listShelfSourceBooks().then((l) => {
-      if (!cancelled) setOnShelf(l.some((s) => s.source_id === sourceId && s.book_url === bookUrl));
+      if (cancelled) return;
+      const hit = l.find((s) => s.source_id === sourceId && s.book_url === bookUrl);
+      if (!hit) return;
+      setOnShelf(true);
+      setShelfItemId(hit.id);
+      // 查询所属分组
+      void listShelfGroups().then(async (groups) => {
+        if (cancelled) return;
+        setAllGroups(groups);
+        const names: string[] = [];
+        for (const g of groups) {
+          const members = await listShelfGroupMembers(g.id);
+          if (members.some((m) => m.item_kind === "source" && m.item_id === hit.id)) {
+            names.push(g.name);
+          }
+        }
+        if (!cancelled) setShelfGroups(names);
+      }).catch(() => {});
     }).catch(() => {});
     return () => { cancelled = true; };
   }, [sourceId, bookUrl]);
@@ -110,6 +111,8 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         const hit = l.find((s) => s.source_id === sourceId && s.book_url === bookUrl);
         if (hit) await removeShelfSourceBook(hit.id);
         setOnShelf(false);
+        setShelfItemId(null);
+        setShelfGroups([]);
       } else {
         await addShelfSourceBook({ sourceId, bookUrl, title: info.title, author: info.author, coverUrl: info.coverUrl });
         setOnShelf(true);
@@ -118,6 +121,31 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
       showError(String(e));
     } finally {
       setShelfBusy(false);
+    }
+  };
+
+  const openGroupDialog = async () => {
+    try {
+      const groups = await listShelfGroups();
+      setAllGroups(groups);
+      setShowGroupDialog(true);
+    } catch (e) {
+      showError(String(e));
+    }
+  };
+
+  const toggleGroup = async (groupId: number, groupName: string) => {
+    if (!shelfItemId) return;
+    try {
+      if (shelfGroups.includes(groupName)) {
+        await removeShelfGroupMembers(groupId, [{ item_kind: "source", item_id: shelfItemId }]);
+        setShelfGroups((prev) => prev.filter((g) => g !== groupName));
+      } else {
+        await addShelfGroupMembers(groupId, [{ item_kind: "source", item_id: shelfItemId }]);
+        setShelfGroups((prev) => [...prev, groupName]);
+      }
+    } catch (e) {
+      showError(String(e));
     }
   };
 
@@ -149,82 +177,50 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
     void openLoginWindow(loginUrl, host);
   };
 
+  const latestChapter = info.lastChapter || toc[toc.length - 1]?.name;
+  const groups = info.kind ? info.kind.split(/\n|,/).filter((s) => s.trim()).map((s) => s.trim()) : [];
+
   return (
     <div className="source-book page">
       <header className="library-header">
-        <div className="brand"><h1>{sourceName}</h1></div>
+        <div className="brand" /> {/* 源名字已移除 */}
         <div className="library-actions">
           {loginUrl && <button className="btn btn-ghost" onClick={handleLogin}>登录</button>}
           <button className="btn btn-ghost" onClick={onBack}>返回</button>
         </div>
       </header>
 
-      {/* 头图区：封面背景模糊 + 前景封面/书名/作者/标签（参考 legado 详情页） */}
+      {/* 头图区 */}
       <div className="source-book-hero">
-        {info.coverUrl && (
-          <div
-            className="source-book-hero-bg"
-            style={{ backgroundImage: `url(${info.coverUrl})` }}
-            aria-hidden
+        {info.coverUrl ? (
+          <img
+            className="source-book-cover"
+            src={info.coverUrl}
+            alt={info.title || "封面"}
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
           />
+        ) : (
+          <div className="source-book-cover-ph" aria-hidden />
         )}
-        <div className="source-book-hero-inner">
-          {info.coverUrl ? (
-            <img
-              className="source-book-cover"
-              src={info.coverUrl}
-              alt={info.title || "封面"}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="source-book-cover-ph" aria-hidden />
-          )}
-          <div className="source-book-meta">
-            <h2 className="source-book-title">{info.title || sourceName}</h2>
-            <div className="source-book-sub">
-              {info.author && <span className="source-book-author">{info.author}</span>}
-            </div>
-            <div className="source-book-tags">
-              {info.status && (
-                <span className={`tag status-tag${/完/.test(info.status) ? " done" : ""}`}>{info.status}</span>
-              )}
-              {info.wordCount && <span className="tag">{info.wordCount}</span>}
-              {/* kind 按换行拆分为独立标签（legado kind 可返回多行，如 "科幻\n连载"） */}
-              {info.kind && info.kind.split(/\n|,/).filter((s) => s.trim()).map((t, i) => (
-                <span className="tag kind-tag" key={`kind-${i}`}>{t.trim()}</span>
-              ))}
-              {info.updateTime && <span className="tag">更新 {info.updateTime}</span>}
-              {stats && stats.read_seconds > 0 && (
-                <span className="tag">
-                  {formatReadTime(stats.read_seconds)} · 阅读 {stats.read_count} 次
-                  {stats.last_read_at ? ` · 最近 ${formatDate(stats.last_read_at)}` : ""}
-                </span>
-              )}
-            </div>
+        <div className="source-book-meta">
+          <h2 className="source-book-title">{info.title || sourceName}</h2>
+          <div className="source-info-list">
+            {info.author && <div className="source-info-item clickable" onClick={() => onSearchAuthor?.(info.author.replace(/^作者[：:]\s*/, ""))}><span className="source-info-lbl">作者</span><span className="source-info-val link">{info.author.replace(/^作者[：:]\s*/, "")}</span></div>}
+            <div className="source-info-item clickable" onClick={() => onEditSource?.(sourceId, sourceName)}><span className="source-info-lbl">来源</span><span className="source-info-val source-name link">{sourceName}</span></div>
+            {latestChapter && <div className="source-info-item"><span className="source-info-lbl">最新</span><span className="source-info-val latest-chapter">{latestChapter}</span></div>}
+            {shelfGroups.length > 0 && <div className="source-info-item"><span className="source-info-lbl">分组</span><div className="source-info-tags">{shelfGroups.map((g, i) => (<span className="source-info-tag" key={`shelf-${i}`}>{g}</span>))}{onShelf && <button className="source-info-tag-add" onClick={openGroupDialog}>+</button>}</div></div>}
+            {!onShelf && <div className="source-info-item"><span className="source-info-lbl">分组</span><span className="source-info-hint">加入书架后可管理</span></div>}
+            {onShelf && shelfGroups.length === 0 && <div className="source-info-item"><span className="source-info-lbl">分组</span><button className="source-info-tag-add" onClick={openGroupDialog}>+ 添加分组</button></div>}
+            {toc.length > 0 && <div className="source-info-item clickable" onClick={() => setShowTocDialog(true)}><span className="source-info-lbl">目录</span><span className="source-info-val link">{toc.length} 章 ▾</span></div>}
+            {groups.length > 0 && <div className="source-info-item"><span className="source-info-lbl">分类</span><div className="source-info-tags">{groups.map((t, i) => (<span className="source-info-tag kind" key={`kind-${i}`}>{t}</span>))}</div></div>}
+            {info.status && <div className="source-info-item"><span className="source-info-lbl">状态</span><span className={`source-info-val status ${/完/.test(info.status) ? "done" : "serial"}`}>{info.status}</span></div>}
+            {info.wordCount && <div className="source-info-item"><span className="source-info-lbl">字数</span><span className="source-info-val">{info.wordCount}</span></div>}
+            {info.updateTime && <div className="source-info-item"><span className="source-info-lbl">更新</span><span className="source-info-val">{info.updateTime}</span></div>}
           </div>
         </div>
       </div>
 
-      {/* 操作行：开始阅读 + 加入书架为主，缓存/换源 + 更多为辅 */}
-      <div className="source-book-actions">
-        <button className="btn btn-primary" onClick={() => onRead(-1, "", "")}>开始阅读</button>
-        <button className="btn btn-ghost" onClick={toggleShelf} disabled={shelfBusy}>
-          {onShelf ? "已在书架" : "加入书架"}
-        </button>
-        {onSwitchSource && (
-          <button className="btn btn-ghost" onClick={() => setShowSwitch(true)}>换源</button>
-        )}
-        <button className="btn btn-ghost" onClick={handleDownload} disabled={dl.busy || toc.length === 0}>
-          {dl.busy ? `缓存中 ${dl.done}/${dl.total}` : dl.done === dl.total && dl.total > 0 ? `已缓存 ${dl.total} 章` : "缓存全书"}
-        </button>
-        <button className="btn btn-ghost" onClick={() => {
-          // 复制书籍链接
-          const url = bookUrl || window.location.href;
-          navigator.clipboard?.writeText(url).then(() => showError("链接已复制"));
-        }}>复制链接</button>
-      </div>
-
-      {/* 简介（可展开） */}
+      {/* 简介 */}
       {info.intro && (
         <div className="source-book-intro">
           <p
@@ -242,32 +238,18 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
         </div>
       )}
 
-      {/* 目录：默认折叠，只显示前几章 */}
-      {toc.length > 0 && (
-        <div className="source-book-toc">
-          <div className="toc-header" onClick={() => setTocExpanded((v) => !v)}>
-            <span className="toc-title">目录（共 {toc.length} 章）</span>
-            <span className="toc-toggle">{tocExpanded ? "收起" : "展开"}</span>
-          </div>
-          {tocExpanded && (
-            <ol className="toc-list">
-              {toc.slice(0, 50).map((t, idx) => (
-                <li key={`${t.url}-${idx}`}>
-                  <button className="btn btn-ghost" onClick={() => onRead(idx, t.url, t.name)}>{t.name}</button>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-
-      {/* 最新章节：源规则 lastChapter 优先，无则用目录最后一章兜底 */}
-      {(info.lastChapter || toc[toc.length - 1]?.name) && (
-        <div className="source-book-last">
-          <span className="last-label">最新章节</span>
-          <span className="last-name">{info.lastChapter || toc[toc.length - 1]!.name}</span>
-        </div>
-      )}
+      {/* 操作按钮 */}
+      <div className="source-book-actions">
+        <button className="btn btn-primary source-btn-read" onClick={() => onRead(-1, "", "")}>开始阅读</button>
+        <button className="btn source-btn-shelf" onClick={toggleShelf} disabled={shelfBusy}>
+          {onShelf ? "已在书架 ✓" : "+ 加入书架"}
+        </button>
+        {onShelf && (
+          <button className="btn source-btn-dl" onClick={() => void handleDownload()} disabled={dl.busy || toc.length === 0}>
+            {dl.busy ? `下载中 ${dl.done}/${dl.total}` : "下载离线"}
+          </button>
+        )}
+      </div>
 
       {showSwitch && onSwitchSource && (
         <SwitchSourcePanel
@@ -277,6 +259,48 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
           onPick={(hit) => { setShowSwitch(false); onSwitchSource!(hit); }}
           onClose={() => setShowSwitch(false)}
         />
+      )}
+
+      {showGroupDialog && (
+        <div className="error-dialog-overlay" onClick={() => setShowGroupDialog(false)}>
+          <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
+            <h3>管理分组</h3>
+            <div className="group-dialog-list">
+              {allGroups.map((g) => (
+                <label key={g.id} className="group-dialog-item">
+                  <input
+                    type="checkbox"
+                    checked={shelfGroups.includes(g.name)}
+                    onChange={() => toggleGroup(g.id, g.name)}
+                  />
+                  <span>{g.name}</span>
+                </label>
+              ))}
+              {allGroups.length === 0 && <p className="group-dialog-empty">暂无分组，请先在书架中创建分组</p>}
+            </div>
+            <div className="group-dialog-actions">
+              <button className="btn btn-ghost" onClick={() => setShowGroupDialog(false)}>完成</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTocDialog && (
+        <div className="error-dialog-overlay" onClick={() => setShowTocDialog(false)}>
+          <div className="toc-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="toc-dialog-header">
+              <h3>目录（共 {toc.length} 章）</h3>
+              <button className="btn btn-ghost" onClick={() => setShowTocDialog(false)}>关闭</button>
+            </div>
+            <div className="toc-dialog-list">
+              {toc.map((t, idx) => (
+                <button key={`${t.url}-${idx}`} className="toc-dialog-item" onClick={() => { onRead(idx, t.url, t.name); setShowTocDialog(false); }}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

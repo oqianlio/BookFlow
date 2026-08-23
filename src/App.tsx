@@ -17,19 +17,23 @@ import { ErrorProvider } from "./components/ErrorDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "./App.css";
 
+type OverlayState =
+  | { kind: "sourceBook"; hit: SearchHit }
+  | { kind: "sourceManager" };
+
 type DetailState =
   | { area: "detail"; page: "reader"; book: Book; jumpTo?: string; back: AppState }
   | { area: "detail"; page: "explore"; sourceId: number; sourceName: string; back: AppState }
   | { area: "detail"; page: "debugSource"; sourceId: number; sourceName: string; back: AppState }
-  | { area: "detail"; page: "sourceManager"; back: AppState }
-  | { area: "detail"; page: "sourceBook"; hit: SearchHit; back: AppState }
   | { area: "detail"; page: "sourceReader"; sourceId: number; bookUrl: string; bookTitle: string; chapterIndex: number; chapterUrl: string; chapterName: string; back: AppState }
   | { area: "detail"; page: "rssArticle"; articleId: number; back: AppState }
   | { area: "detail"; page: "groupExplore"; groupName: string; sources: ExploreSource[]; back: AppState };
 
-type AppState = { area: AppArea } | DetailState;
+type AppState =
+  | { area: "bookshelf"; initialSearch?: string }
+  | { area: Exclude<AppArea, "bookshelf"> }
+  | DetailState;
 
-// 递归取根区域（侧边栏高亮）
 function rootArea(s: AppState): AppArea {
   return s.area === "detail" ? rootArea(s.back) : s.area;
 }
@@ -46,82 +50,97 @@ export default function App() {
 
 function AppInner() {
   const [state, setState] = useState<AppState>({ area: "bookshelf" });
+  const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const area = rootArea(state);
 
-  // 全局快捷键（所有页面生效；阅读页内部快捷键优先，此处跳过避免冲突）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (e.key === "Escape" && state.area === "detail") {
-        // 阅读页的 Esc 由 ReaderPage 处理（关面板）；这里只处理非阅读详情页返回
-        if (state.page === "sourceReader" || state.page === "reader") return;
-        e.preventDefault();
-        setState(state.back);
+      if (e.key === "Escape") {
+        if (overlay) { setOverlay(null); return; }
+        if (state.area === "detail") {
+          if (state.page === "sourceReader" || state.page === "reader") return;
+          e.preventDefault();
+          setState(state.back);
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [state]);
+  }, [state, overlay]);
+
+  const openOnlineBook = (hit: SearchHit) => setOverlay({ kind: "sourceBook", hit });
+  const openSourceManager = () => setOverlay({ kind: "sourceManager" });
+
+  const startReadSource = (sourceId: number, bookUrl: string, bookTitle: string, index: number, url: string, name: string) => {
+    setOverlay(null);
+    setState({
+      area: "detail", page: "sourceReader",
+      sourceId, bookUrl, bookTitle,
+      chapterIndex: index, chapterUrl: url, chapterName: name,
+      back: state,
+    });
+  };
 
   if (state.area === "detail") {
     const go = (back: AppState) => setState(back);
-    // 换源统一入口：无论从阅读页还是详情页进入，换源后书名一律以当前所读书名为准（保持同一本书）
-    // 换源链折叠：已在书籍详情/阅读页时替换 back（不无限嵌套），连续换源后一步返回
     const switchSource = (hit: SearchHit, currentTitle: string) => {
-      const isSourceFlow = state.page === "sourceBook" || state.page === "sourceReader";
-      setState({
-        area: "detail", page: "sourceBook",
-        hit: { ...hit, title: currentTitle },
-        back: isSourceFlow ? state.back : state,
-      });
+      setOverlay({ kind: "sourceBook", hit: { ...hit, title: currentTitle } });
     };
+    const sourceBookOverlay = overlay?.kind === "sourceBook" ? (
+      <div className="overlay-panel" onClick={() => setOverlay(null)}>
+        <div className="overlay-panel-content" onClick={(e) => e.stopPropagation()}>
+          <SourceBookPage
+            sourceId={overlay.hit.sourceId}
+            sourceName={overlay.hit.sourceName}
+            bookUrl={overlay.hit.bookUrl}
+            initialTitle={overlay.hit.title}
+            onBack={() => setOverlay(null)}
+            onRead={(index, url, name) => startReadSource(overlay.hit.sourceId, overlay.hit.bookUrl, overlay.hit.title, index, url, name)}
+            onSwitchSource={(hit) => setOverlay({ kind: "sourceBook", hit: { ...hit, title: overlay.hit.title } })}
+            onSearchAuthor={(author) => { setOverlay(null); setState({ area: "bookshelf", initialSearch: author }); }}
+            onEditSource={(sourceId, sourceName) => { setOverlay(null); setState({ area: "detail", page: "debugSource", sourceId, sourceName, back: state }); }}
+          />
+        </div>
+      </div>
+    ) : null;
+    const sourceManagerOverlay = overlay?.kind === "sourceManager" ? (
+      <div className="overlay-panel" onClick={() => setOverlay(null)}>
+        <div className="overlay-panel-content" onClick={(e) => e.stopPropagation()}>
+          <BookSourceManager
+            onBack={() => setOverlay(null)}
+            onDebug={(id, name) => {
+              setOverlay(null);
+              setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: state });
+            }}
+          />
+        </div>
+      </div>
+    ) : null;
     switch (state.page) {
       case "reader":
-        return <ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} jumpTo={state.jumpTo} />;
+        return (<>{sourceBookOverlay}{sourceManagerOverlay}<ReaderPage source={{ kind: "local", book: state.book }} onBack={() => go(state.back)} jumpTo={state.jumpTo} /></>);
       case "explore":
         return (
-          <ExplorePage
+          <>{sourceBookOverlay}{sourceManagerOverlay}<ExplorePage
             sourceId={state.sourceId}
             sourceName={state.sourceName}
             onBack={() => go(state.back)}
-            onOpenBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
-          />
+            onOpenBook={(hit) => openOnlineBook(hit)}
+          /></>
         );
       case "debugSource":
         return (
-          <DebugSourcePage
+          <>{sourceBookOverlay}{sourceManagerOverlay}<DebugSourcePage
             sourceId={state.sourceId}
             sourceName={state.sourceName}
             onBack={() => go(state.back)}
-          />
-        );
-      case "sourceManager":
-        return (
-          <BookSourceManager
-            onBack={() => go(state.back)}
-            onDebug={(id, name) => setState({ area: "detail", page: "debugSource", sourceId: id, sourceName: name, back: state })}
-          />
-        );
-      case "sourceBook":
-        return (
-          <SourceBookPage
-            sourceId={state.hit.sourceId}
-            sourceName={state.hit.sourceName}
-            bookUrl={state.hit.bookUrl}
-            initialTitle={state.hit.title}
-            onBack={() => go(state.back)}
-            onRead={(index, url, name) => setState({
-              area: "detail", page: "sourceReader", sourceId: state.hit.sourceId,
-              bookUrl: state.hit.bookUrl, bookTitle: state.hit.title,
-              chapterIndex: index, chapterUrl: url, chapterName: name, back: state,
-            })}
-            onSwitchSource={(hit) => switchSource(hit, state.hit.title)}
-          />
+          /></>
         );
       case "sourceReader":
         return (
-          <ReaderPage
+          <>{sourceBookOverlay}{sourceManagerOverlay}<ReaderPage
             source={{
               kind: "source",
               sourceId: state.sourceId,
@@ -133,20 +152,18 @@ function AppInner() {
             }}
             onBack={() => go(state.back)}
             onSwitchSource={(hit) => switchSource(hit, state.bookTitle)}
-          />
+          /></>
         );
       case "rssArticle":
-        return (
-          <RssArticlePage articleId={state.articleId} onBack={() => go(state.back)} />
-        );
+        return (<>{sourceBookOverlay}{sourceManagerOverlay}<RssArticlePage articleId={state.articleId} onBack={() => go(state.back)} /></>);
       case "groupExplore":
         return (
-          <GroupExplorePage
+          <>{sourceBookOverlay}{sourceManagerOverlay}<GroupExplorePage
             groupName={state.groupName}
             sources={state.sources}
             onBack={() => go(state.back)}
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
-          />
+          /></>
         );
     }
   }
@@ -158,13 +175,15 @@ function AppInner() {
         {state.area === "bookshelf" && (
           <LibraryPage
             key="bookshelf"
+            initialSearch={"initialSearch" in state ? state.initialSearch : undefined}
             onOpenBook={(b, jumpTo) => setState({ area: "detail", page: "reader", book: b, jumpTo, back: state })}
             onOpenSourceBook={(sb) => setState({
               area: "detail", page: "sourceReader",
               sourceId: sb.source_id, bookUrl: sb.book_url, bookTitle: sb.title,
               chapterIndex: -1, chapterUrl: "", chapterName: "", back: state,
             })}
-            onOpenOnlineBook={(hit) => setState({ area: "detail", page: "sourceBook", hit, back: state })}
+            onOpenOnlineBook={(hit) => openOnlineBook(hit)}
+            onOpenInfo={(hit) => openOnlineBook(hit)}
           />
         )}
         {state.area === "discover" && (
@@ -180,7 +199,7 @@ function AppInner() {
           />
         )}
         {state.area === "my" && (
-          <SettingsPage key="my" onOpenSourceManager={() => setState({ area: "detail", page: "sourceManager", back: state })} />
+          <SettingsPage key="my" onOpenSourceManager={openSourceManager} />
         )}
       </main>
     </div>

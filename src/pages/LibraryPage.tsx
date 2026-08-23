@@ -1,27 +1,74 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import BookCard, { type BookCardLayout, type ShelfItem } from "../components/BookCard";
+import BookCard, { formatLabel as formatLabelSafe, type BookCardLayout, type ShelfItem } from "../components/BookCard";
 import ConfirmDialog from "../components/ConfirmDialog";
 import GroupChips, { GroupManagerDialog, GroupPickerDialog } from "../components/GroupChips";
 import BookListPickerDialog from "../components/BookListPicker";
-import { BookIcon, GridIcon, ListIcon, SearchIcon } from "../components/icons";
+import { BookIcon, GridIcon, ListIcon, SearchIcon, CompactIcon, SortIcon, RefreshIcon } from "../components/icons";
 import { searchBookSources } from "../services/searchService";
 import type { SearchHit as OnlineHit } from "../services/searchService";
+import { clearTocCache, fetchToc } from "../services/sourceToc";
+import { downloadBook } from "../services/chapterCache";
+import { parseBookSourceJson } from "../services/bookSourceEngine";
 import {
-  importFiles, listBooks, listShelfSourceBooks,
+  importFiles, listBooks, listShelfSourceBooks, listBookSources,
   listShelfGroups, createShelfGroup, renameShelfGroup, deleteShelfGroup,
   listShelfGroupMembers, addShelfGroupMembers, removeShelfGroupMembers,
-  removeShelfItems, listBookLists, createBookList, deleteBookList,
-  addBookListItem, removeBookListItem, listBookListItems, type Book, type ShelfSourceBook,
+  removeShelfItems, reorderShelfItems, setShelfSourceTocInfo, listBookLists, createBookList, deleteBookList,
+  addBookListItem, removeBookListItem, listBookListItems, coverUrl, type Book, type ShelfSourceBook,
   type ShelfGroup, type ShelfMember,
 } from "../services/api";
 import { useError } from "../components/ErrorDialog";
 
 const LAYOUT_KEY = "library.layout";
+const SORT_KEY = "library.sort";
+
+// 对齐 legado sortBooks：0=阅读时间 1=更新时间 2=书名 3=最近活动 4=作者 5=手动排序
+const SORT_LABELS = ["阅读时间", "更新时间", "书名", "最近活动", "作者", "手动排序"];
+
+interface SortState { mode: number; desc: boolean }
 
 function loadLayout(): BookCardLayout {
   const v = localStorage.getItem(LAYOUT_KEY);
   return v === "list" ? "list" : "grid";
+}
+
+function loadSort(): SortState {
+  try {
+    const raw = localStorage.getItem(SORT_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as SortState;
+      if (typeof p.mode === "number" && typeof p.desc === "boolean") return p;
+    }
+  } catch { /* ignore */ }
+  return { mode: 0, desc: true };
+}
+
+function cnCompare(a: string, b: string): number {
+  return a.localeCompare(b, "zh-Hans-CN");
+}
+
+function sortShelfItems(items: ShelfItem[], mode: number, desc: boolean): ShelfItem[] {
+  const readTime = (it: ShelfItem) =>
+    ((it.kind === "local" ? it.book.last_opened_at : it.sb.last_opened_at) ?? 0);
+  const addedAt = (it: ShelfItem) => (it.kind === "local" ? it.book.added_at : it.sb.added_at);
+  const titleOf = (it: ShelfItem) => (it.kind === "local" ? it.book.title : it.sb.title);
+  const authorOf = (it: ShelfItem) => (it.kind === "source" ? (it.sb.author ?? "") : "");
+  const manualOrder = (it: ShelfItem) =>
+    (it.kind === "local" ? (it.book.sort_order ?? null) : (it.sb.sort_order ?? null)) ?? Number.MAX_SAFE_INTEGER;
+  const cmp = (a: ShelfItem, b: ShelfItem): number => {
+    switch (mode) {
+      case 1: return addedAt(a) - addedAt(b);
+      case 2: return cnCompare(titleOf(a), titleOf(b));
+      case 3: return Math.max(readTime(a), addedAt(a)) - Math.max(readTime(b), addedAt(b));
+      case 4: return cnCompare(authorOf(a), authorOf(b));
+      case 5: return manualOrder(a) - manualOrder(b) || addedAt(a) - addedAt(b);
+      default: return readTime(a) - readTime(b);
+    }
+  };
+  // 直接反转比较器而非 reverse()，保持同键值项的原始顺序（排序稳定）
+  if (mode === 5) return [...items].sort(cmp); // 手动排序忽略升降序
+  return [...items].sort((a, b) => (desc ? cmp(b, a) : cmp(a, b)));
 }
 
 function itemMember(item: ShelfItem): ShelfMember {
@@ -34,10 +81,12 @@ function memberKey(m: ShelfMember): string {
   return `${m.item_kind}:${m.item_id}`;
 }
 
-export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnlineBook }: {
+export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnlineBook, onOpenInfo, initialSearch }: {
   onOpenBook: (b: Book, jumpTo?: string) => void;
   onOpenSourceBook?: (sb: ShelfSourceBook) => void;
   onOpenOnlineBook?: (h: OnlineHit) => void;
+  onOpenInfo?: (hit: OnlineHit) => void;
+  initialSearch?: string;
 }) {
   const [items, setItems] = useState<ShelfItem[]>([]);
   const [groups, setGroups] = useState<ShelfGroup[]>([]);
@@ -52,6 +101,20 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   const [searchBusy, setSearchBusy] = useState(false);
   const searchSeqRef = useRef(0);
   const [layout, setLayout] = useState<BookCardLayout>(loadLayout);
+  const [sort, setSort] = useState<SortState>(loadSort);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  // legado gridStyle=1：标题叠加在封面底部（渐变遮罩）
+  const [gridOverlay, setGridOverlay] = useState(() => localStorage.getItem("library.gridOverlay") === "1");
+  const applyGridOverlay = (v: boolean) => {
+    setGridOverlay(v);
+    localStorage.setItem("library.gridOverlay", v ? "1" : "0");
+  };
+  // legado 文件夹模式：分组显示为封面拼贴卡片
+  const [groupCollage, setGroupCollage] = useState(() => localStorage.getItem("library.groupCollage") === "1");
+  const applyGroupCollage = (v: boolean) => {
+    setGroupCollage(v);
+    localStorage.setItem("library.groupCollage", v ? "1" : "0");
+  };
   // 多选模式
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -68,10 +131,43 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
 
   const toggleLayout = () => {
     setLayout((prev) => {
-      const next: BookCardLayout = prev === "grid" ? "list" : "grid";
+      const next: BookCardLayout = prev === "grid" ? "list" : prev === "list" ? "compact" : "grid";
       localStorage.setItem(LAYOUT_KEY, next);
       return next;
     });
+  };
+
+  const applySort = (next: SortState) => {
+    setSort(next);
+    localStorage.setItem(SORT_KEY, JSON.stringify(next));
+  };
+
+  const sortLabel = `${sort.desc ? "↓" : "↑"} ${SORT_LABELS[sort.mode] ?? SORT_LABELS[0]}`;
+
+  // legado 更新目录：清缓存后逐本刷新在线书目录，完成后重挂载卡片取新数据
+  const [refreshingToc, setRefreshingToc] = useState(false);
+  const [tocVersion, setTocVersion] = useState(0);
+  const handleRefreshToc = () => {
+    const sourceBooks = items.filter((i) => i.kind === "source");
+    if (sourceBooks.length === 0) { showError("书架中没有在线书籍"); return; }
+    if (refreshingToc) return;
+    setRefreshingToc(true);
+    clearTocCache();
+    void (async () => {
+      for (const it of sourceBooks) {
+        if (it.kind !== "source") continue;
+        try {
+          const r = await fetchToc({ sourceId: it.sb.source_id, bookUrl: it.sb.book_url, initialTitle: it.sb.title });
+          // legado hasUpdate：本次检查到的章节数多于上次记录 → NEW 标记；kind 同步保存
+          const prev = it.sb.total_chapters;
+          const grew = prev != null && r.toc.length > prev;
+          await setShelfSourceTocInfo(it.sb.id, r.toc.length, grew, r.info.kind || undefined).catch(() => {});
+        } catch { /* 单本失败继续 */ }
+      }
+      setRefreshingToc(false);
+      await refresh().catch(() => {});
+      setTocVersion((v) => v + 1);
+    })();
   };
 
   const loadGroups = useCallback(async () => {
@@ -197,6 +293,59 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
     else onOpenSourceBook?.(item.sb);
   };
 
+  // ==== 多选批量下载（legado 缓存选中书籍） ====
+  const [showBatchDlConfirm, setShowBatchDlConfirm] = useState(false);
+  const [batchDlLabel, setBatchDlLabel] = useState<string | null>(null);
+  const batchDlSignalRef = useRef({ cancelled: false });
+
+  const runBatchDownload = async () => {
+    setShowBatchDlConfirm(false);
+    const targets = items.filter((i) => i.kind === "source" && selected.has(memberKey(itemMember(i))));
+    if (targets.length === 0) { showError("选中的书籍中没有在线书"); return; }
+    batchDlSignalRef.current = { cancelled: false };
+    setBatchDlLabel("准备中…");
+    try {
+      const rows = await listBookSources();
+      for (let bi = 0; bi < targets.length; bi++) {
+        if (batchDlSignalRef.current.cancelled) break;
+        const it = targets[bi];
+        if (it.kind !== "source") continue;
+        const { source_id: sourceId, book_url: bookUrl, title } = it.sb;
+        setBatchDlLabel(`下载中 ${bi + 1}/${targets.length}：《${title}》`);
+        const row = rows.find((x) => x.id === sourceId);
+        if (!row) continue;
+        let src;
+        try { src = parseBookSourceJson(row.json); } catch { continue; }
+        const tocRes = await fetchToc({ sourceId, bookUrl, initialTitle: title }).catch(() => null);
+        if (!tocRes || tocRes.toc.length === 0) continue;
+        await downloadBook({
+          sourceId, bookUrl, toc: tocRes.toc,
+          getSrc: async () => src,
+          onProgress: (p) => setBatchDlLabel(`下载中 ${bi + 1}/${targets.length}：《${title}》 ${p.done}/${p.total} 章`),
+          signal: batchDlSignalRef.current,
+        });
+      }
+    } finally {
+      setBatchDlLabel(null);
+      setSelecting(false);
+      setSelected(new Set());
+      setTocVersion((v) => v + 1);
+    }
+  };
+
+  const handleInfo = (item: ShelfItem) => {
+    if (item.kind === "source") {
+      onOpenInfo?.({
+        title: item.sb.title,
+        author: item.sb.author || "",
+        coverUrl: item.sb.cover_url || "",
+        bookUrl: item.sb.book_url,
+        sourceId: item.sb.source_id,
+        sourceName: item.sb.source_name,
+      });
+    }
+  };
+
   const runSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setLocalHits([]); setOnlineHits([]); return; }
     const seq = ++searchSeqRef.current;
@@ -215,6 +364,15 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
       if (seq === searchSeqRef.current) setSearchBusy(false);
     }
   }, []);
+
+  // 从书籍详情点作者跳转：自动打开搜索并执行
+  useEffect(() => {
+    if (initialSearch && initialSearch.trim()) {
+      setShowSearch(true);
+      setSearchQuery(initialSearch);
+      void runSearch(initialSearch);
+    }
+  }, [initialSearch, runSearch]);
 
   const handleSearchJump = (h: { book_id: number; title: string; location: string }) => {
     const book = items.find((i) => i.kind === "local" && i.book.id === h.book_id) as { kind: "local"; book: Book } | undefined;
@@ -243,6 +401,46 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   }, [items, activeGroup, groups, groupMembers]);
 
   const visibleItems = filteredItems();
+  const sortedVisible = useMemo(
+    () => sortShelfItems(visibleItems, sort.mode, sort.desc),
+    [visibleItems, sort.mode, sort.desc]
+  );
+
+  // ==== 手动排序拖拽（legado 手动排序模式）====
+  const dragIndexRef = useRef<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const manualMode = sort.mode === 5;
+
+  // 分组拼贴：取组内前 4 本有封面的书
+  const showCollage = groupCollage && viewMode === "shelf" && activeGroup === "all" && layout === "grid";
+  const collageGroups = useMemo(() => {
+    if (!showCollage) return [];
+    return groups
+      .map((g) => {
+        const local = groupMembers.get(`local:${g.id}`) ?? new Set<number>();
+        const source = groupMembers.get(`source:${g.id}`) ?? new Set<number>();
+        const members = items.filter((i) =>
+          i.kind === "local" ? local.has(i.book.id) : source.has(i.sb.id)
+        );
+        return { group: g, members };
+      })
+      .filter((x) => x.members.length > 0);
+  }, [showCollage, groups, groupMembers, items]);
+  const handleDropAt = async (index: number) => {
+    setDragOverIndex(null);
+    const from = dragIndexRef.current;
+    dragIndexRef.current = null;
+    if (from == null || from === index) return;
+    const arr = [...sortedVisible];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(index, 0, moved);
+    try {
+      await reorderShelfItems(arr.map(itemMember));
+      await Promise.all([refresh(), loadGroups()]);
+    } catch (e) {
+      showError(String(e));
+    }
+  };
 
   const handleGroupPick = async (groupId: number | null) => {
     const targets = items.filter((i) => selected.has(memberKey(itemMember(i))));
@@ -395,12 +593,74 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
             {selecting ? "完成" : "多选"}
           </button>
           <button
+            className={`btn-icon${refreshingToc ? " active" : ""}`}
+            onClick={handleRefreshToc}
+            disabled={refreshingToc}
+            aria-label="更新目录"
+            title="更新目录（刷新在线书章节）"
+          >
+            <RefreshIcon size={17} />
+          </button>
+          <div className="sort-wrap">
+            <button
+              className={`btn-icon${showSortMenu ? " active" : ""}`}
+              onClick={() => setShowSortMenu((v) => !v)}
+              aria-label="排序"
+              title={`排序：${sortLabel}`}
+            >
+              <SortIcon size={17} />
+            </button>
+            {showSortMenu && (
+              <>
+                <div className="menu-backdrop" onClick={() => setShowSortMenu(false)} />
+                <div className="sort-menu card-menu" role="menu" aria-label="排序方式">
+                  <button
+                    className="card-menu-item"
+                    role="menuitemradio"
+                    aria-checked={sort.desc}
+                    onClick={() => applySort({ ...sort, desc: !sort.desc })}
+                  >
+                    {sort.desc ? "降序 ↓" : "升序 ↑"}
+                  </button>
+                  {SORT_LABELS.map((label, i) => (
+                    <button
+                      key={label}
+                      className={`card-menu-item${sort.mode === i ? " active" : ""}`}
+                      role="menuitemradio"
+                      aria-checked={sort.mode === i}
+                      onClick={() => { applySort({ ...sort, mode: i }); setShowSortMenu(false); }}
+                    >
+                      {label}{sort.mode === i ? ` ${sort.desc ? "↓" : "↑"}` : ""}
+                    </button>
+                  ))}
+                  <div className="sort-menu-divider" />
+                  <button
+                    className={`card-menu-item${gridOverlay ? " active" : ""}`}
+                    role="menuitemcheckbox"
+                    aria-checked={gridOverlay}
+                    onClick={() => applyGridOverlay(!gridOverlay)}
+                  >
+                    标题叠加封面{gridOverlay ? " ✓" : ""}
+                  </button>
+                  <button
+                    className={`card-menu-item${groupCollage ? " active" : ""}`}
+                    role="menuitemcheckbox"
+                    aria-checked={groupCollage}
+                    onClick={() => applyGroupCollage(!groupCollage)}
+                  >
+                    分组显示为卡片{groupCollage ? " ✓" : ""}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <button
             className="btn-icon"
             onClick={toggleLayout}
-            aria-label={layout === "grid" ? "切换为列表" : "切换为网格"}
-            title={layout === "grid" ? "列表视图" : "网格视图"}
+            aria-label={layout === "grid" ? "切换为列表" : layout === "list" ? "切换为紧凑" : "切换为网格"}
+            title={layout === "grid" ? "列表视图" : layout === "list" ? "紧凑视图" : "网格视图"}
           >
-            {layout === "grid" ? <ListIcon size={17} /> : <GridIcon size={17} />}
+            {layout === "grid" ? <ListIcon size={17} /> : layout === "list" ? <CompactIcon size={17} /> : <GridIcon size={17} />}
           </button>
           <button className="btn btn-primary" onClick={handleImport} disabled={busy}>
             {busy ? "导入中…" : "导入书籍"}
@@ -498,18 +758,51 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
           </div>
         ) : (
           <>
-            <div className={`book-${layout === "grid" ? "grid" : "list"}`}>
-              {visibleItems.map((item) => (
+                <div className={layout === "compact" ? "book-grid-compact" : `book-${layout === "grid" ? "grid" : "list"}`}>
+              {collageGroups.map(({ group, members }) => (
+                <button
+                  key={`collage-${group.id}`}
+                  className="group-collage"
+                  onClick={() => setActiveGroup(`g:${group.id}`)}
+                  aria-label={`打开分组 ${group.name}`}
+                  title={group.name}
+                >
+                  <div className="group-collage-grid">
+                    {members.slice(0, 4).map((m) => {
+                      const src = m.kind === "local" ? coverUrl(m.book.cover_path) : (m.sb.cover_url || undefined);
+                      const label = m.kind === "local" ? formatLabelSafe(m.book.format) : "在线";
+                      return src ? (
+                        <img key={`${m.kind}-${m.kind === "local" ? m.book.id : m.sb.id}`} className="gc-img" src={src} alt="" loading="lazy" />
+                      ) : (
+                        <div key={`${m.kind}-${m.kind === "local" ? m.book.id : m.sb.id}`} className="gc-ph"><span>{label}</span></div>
+                      );
+                    })}
+                    {Array.from({ length: Math.max(0, 4 - Math.min(4, members.length)) }, (_, i) => (
+                      <div key={`ph-${i}`} className="gc-ph empty" />
+                    ))}
+                  </div>
+                  <span className="group-collage-name">{group.name}</span>
+                  <span className="group-collage-count">{members.length} 本</span>
+                </button>
+              ))}
+              {sortedVisible.map((item, index) => (
                 <BookCard
-                  key={item.kind === "local" ? `local-${item.book.id}` : `source-${item.sb.id}`}
+                  key={`${item.kind === "local" ? `local-${item.book.id}` : `source-${item.sb.id}`}-v${tocVersion}`}
                   item={item}
                   layout={layout}
                   onOpen={handleOpen}
                   onRemove={handleRemove}
+                  onInfo={handleInfo}
                   selectable={selecting}
                   selected={selected.has(memberKey(itemMember(item)))}
                   onToggleSelect={toggleSelect}
                   onMenu={handleMenu}
+                  gridOverlay={gridOverlay && layout === "grid"}
+                  draggable={manualMode}
+                  draggingOver={manualMode && dragOverIndex === index}
+                  onDragStart={() => { dragIndexRef.current = index; }}
+                  onDragOver={() => setDragOverIndex(index)}
+                  onDrop={() => void handleDropAt(index)}
                 />
               ))}
             </div>
@@ -526,6 +819,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
                 <span className="batch-count">{selected.size} 本</span>
                 <button className="btn btn-ghost" disabled={selected.size === 0} onClick={() => setShowGroupPicker(true)}>移动到分组</button>
                 <button className="btn btn-ghost" disabled={selected.size === 0} onClick={() => { listTargetRef.current = null; void loadBookLists().then(() => setShowBookListPicker(true)); }}>加入书单</button>
+                <button className="btn btn-ghost" disabled={selected.size === 0} onClick={() => setShowBatchDlConfirm(true)}>下载离线</button>
                 <button className="btn btn-ghost danger" disabled={selected.size === 0} onClick={handleBatchRemove}>移除</button>
                 <button className="btn btn-ghost" onClick={() => { setSelecting(false); setSelected(new Set()); }}>取消</button>
               </div>
@@ -554,7 +848,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
                   <p>在书架卡片菜单中「加入书单」</p>
                 </div>
               ) : (
-                <div className={`book-${layout === "grid" ? "grid" : "list"}`}>
+            <div className={layout === "compact" ? "book-grid-compact" : `book-${layout === "grid" ? "grid" : "list"}`}>
                   {listItems.map((item) => (
                     <BookCard
                       key={item.kind === "local" ? `local-${item.book.id}` : `source-${item.sb.id}`}
@@ -596,6 +890,27 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
           onConfirm={() => void doRemove()}
           onCancel={() => { setConfirmMsg(null); pendingRemoveRef.current = null; }}
         />
+      )}
+
+      {showBatchDlConfirm && (
+        <ConfirmDialog
+          message={`确定下载选中的 ${items.filter((i) => i.kind === "source" && selected.has(memberKey(itemMember(i)))).length} 本在线书吗？已缓存章节会跳过。`}
+          onConfirm={() => void runBatchDownload()}
+          onCancel={() => setShowBatchDlConfirm(false)}
+        />
+      )}
+
+      {batchDlLabel && (
+        <div className="batch-dl-float" role="status">
+          <span className="spinner" />
+          <span className="batch-dl-label">{batchDlLabel}</span>
+          <button
+            className="btn btn-ghost"
+            onClick={() => { batchDlSignalRef.current.cancelled = true; }}
+          >
+            取消
+          </button>
+        </div>
       )}
 
       {showGroupManager && (

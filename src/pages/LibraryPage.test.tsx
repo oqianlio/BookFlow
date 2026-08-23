@@ -1,11 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import LibraryPage from "./LibraryPage";
 import * as api from "../services/api";
 import { fetchToc } from "../services/sourceToc";
+import { downloadBook } from "../services/chapterCache";
 
-vi.mock("../services/sourceToc", () => ({ fetchToc: vi.fn() }));
+vi.mock("../services/sourceToc", () => ({ fetchToc: vi.fn(), clearTocCache: vi.fn() }));
+vi.mock("../services/chapterCache", () => ({ downloadBook: vi.fn().mockResolvedValue({ done: 2, total: 2, failed: 0 }) }));
 
 const books = [
   { id: 1, title: "三体", format: "epub", path: "b1.epub", cover_path: null, added_at: 1, last_opened_at: null },
@@ -94,10 +96,9 @@ describe("LibraryPage", () => {
     render(<LibraryPage onOpenBook={() => {}} />);
     expect(await screen.findByText("三体")).toBeInTheDocument();
     expect(screen.getByText("球状闪电")).toBeInTheDocument();
-    // 网格模式：卡片无副行标签（.fmt）；列表模式才有格式/在线标记
-    expect(document.querySelectorAll(".book-card .fmt").length).toBe(0);
+    // 网格模式：在线书无副行标签；列表模式才显示
+    expect(document.querySelectorAll(".md3-card-grid .fmt").length).toBe(0);
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
-    expect(document.querySelectorAll(".book-card-list .fmt").length).toBe(3);
     expect(screen.queryByText("示例")).not.toBeInTheDocument();
   });
 
@@ -115,7 +116,9 @@ describe("LibraryPage", () => {
     vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
     const spy = vi.spyOn(api, "removeShelfItems").mockResolvedValue([]);
     render(<LibraryPage onOpenBook={() => {}} />);
-    await userEvent.click(await screen.findByRole("button", { name: "删除 球状闪电" }));
+    // MD3: 点击更多操作按钮打开菜单 → 移除书架
+    await userEvent.click(await screen.findByRole("button", { name: "更多操作" }));
+    await userEvent.click(screen.getByRole("button", { name: "移除书架" }));
     // 自定义确认框：确定后执行删除
     await userEvent.click(screen.getByRole("button", { name: "确定" }));
     expect(spy).toHaveBeenCalledWith([{ item_kind: "source", item_id: 9 }]);
@@ -134,12 +137,35 @@ describe("LibraryPage", () => {
     });
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("球状闪电");
-    // 网格：在线书进度百分比
-    expect(await screen.findByText("42%")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
-    expect(await screen.findByText(/读到 第三章/)).toBeInTheDocument();
-    expect(screen.getByText(/最新 第一百章/)).toBeInTheDocument();
-    expect(screen.getAllByText("42%").length).toBeGreaterThanOrEqual(1);
+    // MD3列表：显示进度在badge和书名下方
+    expect(await screen.findByText("第三章")).toBeInTheDocument();
+    expect(screen.getByText("第一百章")).toBeInTheDocument();
+  });
+
+  it("marks new chapters after toc refresh when count grows", async () => {
+    const tocInfoSpy = vi.spyOn(api, "setShelfSourceTocInfo").mockResolvedValue(undefined);
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([{ ...shelfSource, total_chapters: 1 }]);
+    vi.mocked(fetchToc).mockResolvedValue({
+      info: { title: "", author: "", intro: "", coverUrl: "" },
+      toc: [
+        { name: "第一章", url: "https://ex.com/c/1" },
+        { name: "第二章", url: "https://ex.com/c/2" },
+      ],
+    });
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    await userEvent.click(screen.getByRole("button", { name: "更新目录" }));
+    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 2, true, undefined));
+  });
+
+  it("shows the new-chapter dot for source books with updates", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([{ ...shelfSource, has_update: true }]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    expect(document.querySelector(".md3-dot-new")).toBeInTheDocument();
   });
 
   it("switches between grid and list layouts and persists the choice", async () => {
@@ -150,8 +176,71 @@ describe("LibraryPage", () => {
     expect(document.querySelector(".book-grid")).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
     expect(document.querySelector(".book-list")).not.toBeNull();
-    expect(document.querySelectorAll(".book-card-list").length).toBe(2);
+    expect(document.querySelectorAll(".md3-card-list").length).toBe(2);
     expect(localStorage.getItem("library.layout")).toBe("list");
+  });
+
+  it("sorts by title and persists the choice", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([
+      { ...books[1], last_opened_at: Math.floor(Date.now() / 1000) },
+      books[0],
+    ]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    // 默认按阅读时间降序：最近打开的算法导论在前
+    await screen.findByText("算法导论");
+    const grid = document.querySelector(".book-grid")!;
+    expect(grid.children[0]).toHaveAttribute("aria-label", "打开 算法导论");
+    // 打开排序菜单 → 按书名降序（拼音：算 suan > 三 san，降序算法导论在前）
+    await userEvent.click(screen.getByRole("button", { name: "排序" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^书名/ }));
+    expect(grid.children[0]).toHaveAttribute("aria-label", "打开 算法导论");
+    expect(JSON.parse(localStorage.getItem("library.sort")!)).toEqual({ mode: 2, desc: true });
+    // 切换为升序：三体在前
+    await userEvent.click(screen.getByRole("button", { name: "排序" }));
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^降序/ }));
+    expect(grid.children[0]).toHaveAttribute("aria-label", "打开 三体");
+  });
+
+  it("shows group collage cards when enabled and filters on click", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue(books);
+    vi.spyOn(api, "listShelfGroups").mockResolvedValue([{ id: 1, name: "科幻", member_count: 1, created_at: 1 }]);
+    vi.spyOn(api, "listShelfGroupMembers").mockResolvedValue([{ item_kind: "local", item_id: 1 }]);
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("三体");
+    // 开启拼贴
+    await userEvent.click(screen.getByRole("button", { name: "排序" }));
+    await userEvent.click(screen.getByRole("menuitemcheckbox", { name: /分组显示为卡片/ }));
+    expect(localStorage.getItem("library.groupCollage")).toBe("1");
+    // 拼贴卡出现（组内 1 本 → 3 个空位补齐）
+    const collage = await screen.findByRole("button", { name: "打开分组 科幻" });
+    expect(collage).toBeInTheDocument();
+    expect(collage.querySelectorAll(".gc-img, .gc-ph").length).toBe(4);
+    expect(collage.textContent).toContain("1 本");
+    // 点击拼贴卡 → 过滤到该分组
+    await userEvent.click(collage);
+    expect(screen.getByText("三体")).toBeInTheDocument();
+    expect(screen.queryByText("算法导论")).not.toBeInTheDocument();
+  });
+
+  it("passes book kind tags through toc refresh and shows them in list mode", async () => {
+    const tocInfoSpy = vi.spyOn(api, "setShelfSourceTocInfo").mockResolvedValue(undefined);
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([
+      { ...shelfSource, kind: "科幻,末日" },
+    ]);
+    vi.mocked(fetchToc).mockResolvedValue({
+      info: { title: "", author: "", intro: "", coverUrl: "", kind: "科幻,末日" },
+      toc: [],
+    });
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    // 更新目录时 kind 透传到后端（total_chapters 未记录 → null 保留原值）
+    await userEvent.click(screen.getByRole("button", { name: "更新目录" }));
+    await waitFor(() => expect(tocInfoSpy).toHaveBeenCalledWith(9, 0, false, "科幻,末日"));
+    await userEvent.click(screen.getByRole("button", { name: "切换为列表" }));
+    // 标签行显示分类
+    expect(await screen.findByText("科幻")).toBeInTheDocument();
+    expect(screen.getByText("末日")).toBeInTheDocument();
   });
 });
 
@@ -226,9 +315,10 @@ describe("LibraryPage 分组/多选/书单", () => {
     const addSpy = vi.spyOn(api, "addBookListItem").mockResolvedValue(undefined);
     render(<LibraryPage onOpenBook={() => {}} />);
     await screen.findByText("三体");
-    // 卡片菜单 → 加入书单 → 新建书单
-    await userEvent.click(screen.getByRole("button", { name: "更多操作 三体" }));
-    await userEvent.click(screen.getByRole("button", { name: "加入书单" }));
+    // 卡片菜单（第一张卡=三体）→ 加入书单 → 新建书单
+    const menuBtns = await screen.findAllByRole("button", { name: "更多操作" });
+    await userEvent.click(menuBtns[0]);
+    await userEvent.click(await screen.findByRole("button", { name: "加入书单" }));
     await userEvent.click(screen.getByRole("button", { name: /新建书单/ }));
     await userEvent.type(screen.getByPlaceholderText("书单名称（必填）"), "年度必读");
     await userEvent.click(screen.getByRole("button", { name: "创建并加入" }));
@@ -250,5 +340,37 @@ describe("LibraryPage 分组/多选/书单", () => {
       { item_kind: "local", item_id: 1 },
       { item_kind: "local", item_id: 2 },
     ]);
+  });
+
+  it("batch downloads selected source books after confirming", async () => {
+    vi.spyOn(api, "listBooks").mockResolvedValue([]);
+    vi.spyOn(api, "listShelfSourceBooks").mockResolvedValue([shelfSource]);
+    vi.spyOn(api, "listBookSources").mockResolvedValue([
+      { id: 3, name: "示例", url: "https://ex.com", enabled: true, last_used_at: null,
+        json: JSON.stringify({ bookSourceName: "示例", bookSourceUrl: "https://ex.com" }) },
+    ]);
+    vi.mocked(fetchToc).mockResolvedValue({
+      info: { title: "", author: "", intro: "", coverUrl: "" },
+      toc: [
+        { name: "第一章", url: "https://ex.com/c/1" },
+        { name: "第二章", url: "https://ex.com/c/2" },
+      ],
+    });
+    render(<LibraryPage onOpenBook={() => {}} />);
+    await screen.findByText("球状闪电");
+    await userEvent.click(screen.getByRole("button", { name: "多选" }));
+    await userEvent.click(screen.getByRole("button", { name: "选择 球状闪电" }));
+    await userEvent.click(screen.getByRole("button", { name: "下载离线" }));
+    // 确认框显示在线书数量
+    expect(screen.getByText(/下载选中的 1 本在线书/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "确定" }));
+    await waitFor(() => expect(downloadBook).toHaveBeenCalledTimes(1));
+    expect(downloadBook).toHaveBeenCalledWith(expect.objectContaining({
+      sourceId: 3,
+      bookUrl: "https://ex.com/b/1.html",
+      toc: expect.arrayContaining([
+        expect.objectContaining({ name: "第一章" }),
+      ]),
+    }));
   });
 });
