@@ -204,4 +204,24 @@ describe("fetchToc", () => {
     expect(applyInitResult("$.x", "not json")).toBe("not json");
     expect(applyInitResult(undefined, result)).toBe(result);
   });
+
+  it("strips ,{...} rule options from chapter URLs (找书神器 webView pattern)", async () => {
+    const src = JSON.stringify({
+      bookSourceUrl: "https://ex.com", bookSourceName: "找书神器",
+      ruleBookInfo: { name: "h1@text" },
+      ruleToc: { chapterList: "@css:ol>li", chapterName: "a@text",
+        chapterUrl: "a@href##$##,{'webView':true}" },
+    });
+    vi.mocked(api.listBookSources).mockResolvedValue([
+      { id: 9, name: "找书神器", url: "https://ex.com", json: src, enabled: true, last_used_at: null },
+    ]);
+    vi.mocked(api.httpGet).mockResolvedValue(
+      `<html><body><h1>书名</h1><ol><li><a href="/c/1.html">第一章</a></li></ol></body></html>`,
+    );
+    const r = await fetchToc({ sourceId: 9, bookUrl: "https://ex.com/book/1.html", initialTitle: "书名" });
+    expect(r.toc.length).toBe(1);
+    // URL 不含选项后缀
+    expect(r.toc[0].url).toBe("https://ex.com/c/1.html");
+    expect(r.toc[0].url).not.toContain("webView");
+  });
 });

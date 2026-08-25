@@ -139,7 +139,9 @@ export async function fetchTocBySource(s: BookSource, bookUrl: string, initialTi
     }, { baseUrl: curUrl, result: pageResult, sourceKey: s.bookSourceUrl, book: tocBook });
     for (const it of items) {
       if (!it.url) continue;
-      const abs = it.url.startsWith("http") ? it.url : new URL(it.url, curUrl).toString();
+      // 剥离 legado 规则选项（如 chapterUrl 提取结果带 ,{'webView':true}）
+      const rawUrl = it.url.includes(",{") ? it.url.slice(0, it.url.indexOf(",{")).trim() : it.url;
+      const abs = rawUrl.startsWith("http") ? rawUrl : new URL(rawUrl, curUrl).toString();
       if (seenChapter.has(abs)) continue;
       seenChapter.add(abs);
       toc.push({ name: it.name || "未命名章节", url: abs });

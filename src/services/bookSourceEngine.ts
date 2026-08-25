@@ -833,7 +833,12 @@ export async function extractSingle(doc: Document, rule: string, ctx?: ExtractCo
 
 function finalize(v: string, attr?: string, baseUrl?: string): string {
   if (!v) return "";
-  if (attr === "href" || attr === "src") return baseUrl ? resolveUrl(v, baseUrl) : v;
+  if (attr === "href" || attr === "src") {
+    // 剥离 legado 规则选项后缀（如 ##$##,{'webView':true} 替换产生的 ,{...}）
+    const commaIdx = v.indexOf(",{");
+    if (commaIdx > 0) v = v.slice(0, commaIdx).trim();
+    return baseUrl ? resolveUrl(v, baseUrl) : v;
+  }
   return v;
 }
 
