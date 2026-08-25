@@ -733,21 +733,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
               </div>
             )}
             {!tocLoading && !tocFailed && toc.length === 0 && <p className="panel-empty">暂无目录</p>}
-            {toc.length > 0 && (
-              <ol className="toc-list">
-                {toc.map((t, idx) => (
-                  <li key={`${t.url}-${idx}`}>
-                    <button
-                      type="button"
-                      className={`toc-item${chapter.index === idx || chapter.url === t.url ? " active" : ""}`}
-                      onClick={() => jumpToChapter(idx, t.url, t.name)}
-                    >
-                      {t.name}
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
+            {toc.length > 0 && <VirtualTocList toc={toc} currentIndex={chapter.index} currentUrl={chapter.url} onJump={jumpToChapter} />}
           </div>
         )}
         {!isLocal && panel === "switch" && onSwitchSource && (
@@ -903,6 +889,52 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   );
 }
 
+/** 轻量虚拟滚动目录列表：只渲染可见窗口 ±缓冲区，支持千章级目录流畅滚动 */
+const TOC_ITEM_HEIGHT = 36;
+const TOC_BUFFER = 10;
 
+function VirtualTocList({ toc, currentIndex, currentUrl, onJump }: {
+  toc: TocItem[];
+  currentIndex: number;
+  currentUrl: string;
+  onJump: (index: number, url: string, name: string) => void;
+}) {
+  const scrollRef = useRef<HTMLOListElement | null>(null);
+  const [range, setRange] = useState({ start: 0, end: Math.min(toc.length, 40) });
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || currentIndex < 0) return;
+    el.scrollTop = Math.max(0, currentIndex * TOC_ITEM_HEIGHT - el.clientHeight / 2 + TOC_ITEM_HEIGHT);
+  }, []); // 仅挂载时滚动到当前章节
 
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const start = Math.max(0, Math.floor(el.scrollTop / TOC_ITEM_HEIGHT) - TOC_BUFFER);
+    const visible = Math.ceil(el.clientHeight / TOC_ITEM_HEIGHT) + TOC_BUFFER * 2;
+    setRange({ start, end: Math.min(toc.length, start + visible) });
+  }, [toc.length]);
 
+  const items = [];
+  for (let i = range.start; i < range.end; i++) {
+    const t = toc[i];
+    items.push(
+      <li key={`${t.url}-${i}`} style={{ position: "absolute", top: i * TOC_ITEM_HEIGHT, left: 0, right: 0, height: TOC_ITEM_HEIGHT }}>
+        <button
+          type="button"
+          className={`toc-item${currentIndex === i || currentUrl === t.url ? " active" : ""}`}
+          onClick={() => onJump(i, t.url, t.name)}
+        >
+          {t.name}
+        </button>
+      </li>,
+    );
+  }
+  return (
+    <ol ref={scrollRef} className="toc-list toc-virtual" onScroll={onScroll}
+      style={{ position: "relative", height: "calc(100vh - 160px)" }}>
+      <div style={{ height: toc.length * TOC_ITEM_HEIGHT, pointerEvents: "none" }} />
+      {items}
+    </ol>
+  );
+}

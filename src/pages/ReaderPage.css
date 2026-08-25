@@ -696,6 +696,16 @@
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-direction: column; gap: 2px;
 }
+/* 虚拟滚动目录：固定高度 + 滚动，条目绝对定位 */
+.reader-toc-panel .toc-list.toc-virtual {
+  display: block;
+  overflow-y: auto;
+}
+.reader-toc-panel .toc-list.toc-virtual .toc-item {
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
 .reader-toc-panel .toc-item {
   display: block; width: 100%; text-align: left; padding: 8px 12px;
   border: none; background: transparent; color: var(--fg);
