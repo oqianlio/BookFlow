@@ -3,7 +3,7 @@ import { describe, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import * as api from "./api";
-import { parseBookSourceJson, resolveSearchUrl, extractBookList, resolveUrl, parseHtml } from "./bookSourceEngine";
+import { parseBookSourceJson, resolveSearchUrl, extractBookList, resolveUrl, parseHtml, hostOf } from "./bookSourceEngine";
 import { mergeUserAgent } from "./api";
 
 // 猫眼看书已禁用（App 签名认证，详情/目录打不开）
@@ -54,10 +54,10 @@ describe.skipIf(!ENABLED)("temp verify fixed JSON API sources", () => {
       try {
         const parsed = resolveSearchUrl(src.searchUrl ?? "", "斗破苍穹", 1, { sourceKey: src.bookSourceUrl, source: src });
         const url = resolveUrl(parsed.url, src.bookSourceUrl);
-        const host = (() => { try { return new URL(src.bookSourceUrl).hostname; } catch { return src.bookSourceUrl; } })();
-        const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000, parsed.method, parsed.body, undefined, host);
+        const host = hostOf(src.bookSourceUrl);
+        const html = await api.httpGet({ url, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), timeoutMs: 8000, method: parsed.method, body: parsed.body, cookieJar: host });
         const doc = parseHtml(html);
-        const items = await extractBookList(doc, src.ruleSearch ?? {}, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl, source: src });
+        const items = await extractBookList(doc, (src.ruleSearch ?? {}) as Record<string, string>, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl, source: src });
         console.log(`\n${target}: ${items.length > 0 ? `✅ ${items.length} 本（${items.slice(0, 3).map((i) => i.name).join("、")}）` : "❌ 仍无结果"}`);
       } catch (e) {
         console.log(`\n${target}: ❌ ${String(e).slice(0, 80)}`);

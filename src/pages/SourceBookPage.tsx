@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, listBookSources, listShelfGroups, listShelfGroupMembers, addShelfGroupMembers, removeShelfGroupMembers, type ShelfGroup } from "../services/api";
-import { parseBookSourceJson } from "../services/bookSourceEngine";
+import { parseBookSourceJson, hostOf } from "../services/bookSourceEngine";
 import { fetchToc, type TocItem } from "../services/sourceToc";
 import { downloadBook } from "../services/chapterCache";
 import type { SearchHit } from "../services/searchService";
@@ -172,9 +172,7 @@ export default function SourceBookPage({ sourceId, sourceName, bookUrl, initialT
 
   const handleLogin = () => {
     if (!loginUrl) return;
-    let host = "";
-    try { host = new URL(loginUrl).hostname; } catch { host = loginUrl; }
-    void openLoginWindow(loginUrl, host);
+    void openLoginWindow(loginUrl, hostOf(loginUrl));
   };
 
   const latestChapter = info.lastChapter || toc[toc.length - 1]?.name;

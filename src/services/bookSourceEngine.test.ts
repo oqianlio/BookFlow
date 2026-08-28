@@ -52,7 +52,7 @@ describe("bookSourceEngine", () => {
   it("parses a valid book source JSON", () => {
     const src = parseBookSourceJson(JSON.stringify(SAMPLE_SOURCE));
     expect(src.bookSourceName).toBe("示例书源");
-    expect(src.ruleSearch.name).toBe("a.b-name@text");
+    expect(src.ruleSearch?.name).toBe("a.b-name@text");
   });
 
   it("rejects invalid book source JSON", () => {
@@ -518,14 +518,14 @@ url="https://www.27jj.org/search/,"+JSON.stringify(option);`;
 
   it("supports $.. recursive descent (阅友/疯读 pattern)", () => {
     const j = { code: 0, data: { count: 439, list: [{ bookName: "灵破苍穹", id: 1 }] } };
-    const r = jsonGet(j, "$..list[*]");
+    const r = jsonGet(j, "$..list[*]") as unknown[];
     expect(Array.isArray(r)).toBe(true);
-    expect(r[0].bookName).toBe("灵破苍穹");
+    expect((r[0] as { bookName: string }).bookName).toBe("灵破苍穹");
     // 深层嵌套
     const j2 = { result: { sections: [{ type: "search", books: [] }, { type: "search", books: [{ name: "斗破" }] }] } };
-    const r2 = jsonGet(j2, "$..books[*]");
+    const r2 = jsonGet(j2, "$..books[*]") as unknown[];
     expect(Array.isArray(r2)).toBe(true);
-    expect(r2[0].name).toBe("斗破");
+    expect((r2[0] as { name: string }).name).toBe("斗破");
   });
 
   it("JSON field rule supports ## replace suffix (阅友 name pattern)", () => {
@@ -956,13 +956,11 @@ describe("jsBlock <js>...</js>", () => {
     const rule = "<js>java.ajax('https://ex.com/api/chapter');</js>.content@text";
     const out = await extractSingle(doc, rule, {
       baseUrl: "https://ex.com",
-      source: { httpHeaders: undefined, httpUserAgent: "TestUA" },
+      source: { bookSourceUrl: "https://ex.com", bookSourceName: "test", httpHeaders: undefined, httpUserAgent: "TestUA" },
       sourceKey: "ex.com",
     });
     expect(httpGetMock).toHaveBeenCalledWith(
-      "https://ex.com/api/chapter",
-      { "User-Agent": "TestUA" },
-      undefined, undefined, undefined, undefined, "",
+      expect.objectContaining({ url: "https://ex.com/api/chapter" }),
     );
     expect(out).toBe("ajax 响应正文");
   });
@@ -1032,7 +1030,7 @@ describe("legado JSON rules: wildcard and range", () => {
   };
 
   it("jsonGet supports [*] wildcard returning all items", () => {
-    const all = jsonGet(data, "$.list[*]");
+    const all = jsonGet(data, "$.list[*]") as unknown[];
     expect(Array.isArray(all)).toBe(true);
     expect(all.length).toBe(3);
   });
@@ -1046,16 +1044,16 @@ describe("legado JSON rules: wildcard and range", () => {
   });
 
   it("jsonGet supports [?(...)] filter with comparisons", () => {
-    const filtered = jsonGet(data, "$.list[?(@.id>=2)]");
+    const filtered = jsonGet(data, "$.list[?(@.id>=2)]") as unknown[];
     expect(Array.isArray(filtered)).toBe(true);
     expect(filtered.length).toBe(2);
-    expect(filtered[0].name).toBe("乙");
+    expect((filtered[0] as { name: string }).name).toBe("乙");
   });
 
   it("jsonGet supports [?(...)] with && combination and string compare", () => {
-    const filtered = jsonGet(data, "$.list[?(@.name=='乙'&&@.id==2)]");
+    const filtered = jsonGet(data, "$.list[?(@.name=='乙'&&@.id==2)]") as unknown[];
     expect(filtered.length).toBe(1);
-    expect(filtered[0].id).toBe(2);
+    expect((filtered[0] as { id: number }).id).toBe(2);
   });
 
   it("extractList works with @Json: filtered chapterList", async () => {

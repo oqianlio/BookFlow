@@ -325,7 +325,7 @@ export default function BookSourceManager({ onDebug, onBack }: {
   }, [showError]);
   useEffect(() => { void refreshSubs(); }, [refreshSubs]);
 
-  // 自动刷新：打开书源管理时，超过 24h 未检查的订阅自动同步（静默失败）
+  // 自动刷新：打开书源管理时，超过 24h 未检查的订阅自动同步（失败汇总提示）
   const AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
   useEffect(() => {
     let cancelled = false;
@@ -333,17 +333,26 @@ export default function BookSourceManager({ onDebug, onBack }: {
       try {
         const list = await listSubscriptions();
         if (cancelled) return;
-        for (const sub of list) {
+        const due = list.filter((sub) => {
           const last = sub.last_checked_at;
-          if (last == null || Date.now() - last * 1000 > AUTO_REFRESH_MS) {
-            void syncSubscription(sub).then((r) => {
-              if (cancelled) return;
-              void setSubscriptionChecked(sub.id).catch(() => {});
-              if (r.added > 0 || r.updated > 0) setImportMsg(`订阅「${sub.name}」自动同步：新增 ${r.added}，更新 ${r.updated}`);
-            }).catch(() => {});
+          return last == null || Date.now() - last * 1000 > AUTO_REFRESH_MS;
+        });
+        let failed = 0;
+        for (const sub of due) {
+          try {
+            const r = await syncSubscription(sub);
+            if (cancelled) return;
+            void setSubscriptionChecked(sub.id).catch(() => {});
+            if (r.added > 0 || r.updated > 0) setImportMsg(`订阅「${sub.name}」自动同步：新增 ${r.added}，更新 ${r.updated}`);
+          } catch {
+            failed++;
+            console.warn(`[sources] 订阅「${sub.name}」自动同步失败`);
           }
         }
-      } catch { /* 静默 */ }
+        if (!cancelled && failed > 0) {
+          setImportMsg(`${failed}/${due.length} 个订阅自动同步失败（网络或地址失效），可稍后手动同步`);
+        }
+      } catch { /* 列表加载失败静默（refreshSubs 已有错误提示路径） */ }
     })();
     return () => { cancelled = true; };
   }, [showError]);

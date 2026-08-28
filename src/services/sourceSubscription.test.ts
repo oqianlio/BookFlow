@@ -7,6 +7,7 @@ vi.mock("./api", () => ({
   listBookSources: vi.fn(),
   addBookSource: vi.fn().mockResolvedValue(1),
   updateBookSource: vi.fn().mockResolvedValue(undefined),
+  HTTP_TIMEOUT_IMPORT: 20000,
 }));
 
 const remoteJson = JSON.stringify([

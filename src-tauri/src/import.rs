@@ -39,12 +39,17 @@ pub fn unique_dest(books_root: &Path, file_name: &str) -> PathBuf {
         .map(|s| format!(".{}", s.to_string_lossy()))
         .unwrap_or_default();
     let mut i = 1;
+    const MAX_ATTEMPTS: i32 = 10000;
     loop {
         dest = books_root.join(format!("{stem}_{i}{ext}"));
         if !dest.exists() {
             return dest;
         }
         i += 1;
+        if i > MAX_ATTEMPTS {
+            // 安全限制：防止无限循环
+            return books_root.join(format!("{stem}_{i}_{:?}{ext}", std::time::SystemTime::now()));
+        }
     }
 }
 
@@ -64,5 +69,5 @@ pub fn import_file(src: &Path, books_root: &Path) -> Result<ImportedFile, String
 }
 
 pub fn open_app_db(app_data_dir: &Path) -> Result<Connection, String> {
-    init_db(&app_data_dir.join("reader.db")).map_err(|e| e.to_string())
+    init_db(app_data_dir.join("reader.db")).map_err(|e| e.to_string())
 }

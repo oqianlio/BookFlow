@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { httpGet, listBookSources, mergeUserAgent } from "../services/api";
-import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
+import { parseBookSourceJson, parseExploreUrl, extractBookList, parseHtml, resolveUrl, hostOf, type BookSource as Src } from "../services/bookSourceEngine";
 import { loadJsLib } from "../services/jsLib";
 import type { SearchHit } from "../services/searchService";
 import { useError } from "../components/ErrorDialog";
@@ -50,12 +50,11 @@ export default function ExplorePage({ sourceId, sourceName, onBack, onOpenBook }
     try {
       const rawUrl = cat.url.replace("{{page}}", String(pg));
       const url = resolveUrl(rawUrl, src.bookSourceUrl);
-      let cookieJarHost = "";
-      try { cookieJarHost = new URL(src.bookSourceUrl).hostname; } catch { cookieJarHost = src.bookSourceUrl; }
-      const html = await httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+      const cookieJarHost = hostOf(src.bookSourceUrl);
+      const html = await httpGet({ url, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), cookieJar: cookieJarHost });
       const doc = parseHtml(html);
       const rules = src.ruleExplore ?? {};
-      const items = await extractBookList(doc, rules, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
+      const items = await extractBookList(doc, rules as Record<string, string>, { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl });
       if (seq !== reqIdRef.current) return;
       const rendered = items.filter((i) => i.name).map((i) => ({
         title: i.name || "未命名", author: i.author ?? "", coverUrl: i.coverUrl ?? "",

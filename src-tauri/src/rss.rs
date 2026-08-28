@@ -140,7 +140,7 @@ fn parse_rfc822(s: &str) -> Option<i64> {
         [h, m, s] => (*h, *m, *s),
         _ => (0, 0, 0),
     };
-    Some(civil_to_ts(year, month, day, h, m, sec))
+    civil_to_ts(year, month, day, h, m, sec)
 }
 
 /// ISO8601（Atom updated）：2024-01-01T00:00:00Z → 时间戳
@@ -153,28 +153,35 @@ fn parse_iso8601(s: &str) -> Option<i64> {
     let month: i64 = dp[1].parse().ok()?;
     let day: i64 = dp[2].parse().ok()?;
     let tp = time_part.trim_end_matches('Z').trim_end_matches('z');
-    let hm: Vec<i64> = tp.split(':').filter_map(|x| x.split('.').next().unwrap_or("").parse().ok()).collect();
+    let hm: Vec<i64> = tp.split(':').filter_map(|x| x.split('.').next()?.parse().ok()).collect();
     let (h, m, sec) = match hm.as_slice() {
         [h, m] => (*h, *m, 0),
         [h, m, s] => (*h, *m, *s),
         _ => (0, 0, 0),
     };
-    Some(civil_to_ts(year, month, day, h, m, sec))
+    civil_to_ts(year, month, day, h, m, sec)
 }
 
-/// 简化公历→Unix 时间戳（1900-2100 有效）
-fn civil_to_ts(year: i64, month: i64, day: i64, h: i64, m: i64, s: i64) -> i64 {
+/// 简化公历→Unix 时间戳；任一字段越界（不可信 feed 输入）返回 None
+fn civil_to_ts(year: i64, month: i64, day: i64, h: i64, m: i64, s: i64) -> Option<i64> {
+    // 年份限定在 Unix epoch 之后，防止 1970..year 大循环/负数天数
+    if !(1970..=9999).contains(&year) { return None; }
+    if !(1..=12).contains(&month) { return None; }
+    const MDAY: [i64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut leap_feb = 0;
+    if month == 2 && is_leap(year) { leap_feb = 1; }
+    if day < 1 || day > MDAY[(month - 1) as usize] + leap_feb { return None; }
+    if !(0..=23).contains(&h) || !(0..=59).contains(&m) || !(0..=60).contains(&s) { return None; }
     let mut days = 0;
     for y in 1970..year {
         days += if is_leap(y) { 366 } else { 365 };
     }
-    const MDAY: [i64; 12] = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     for mo in 1..month {
         days += MDAY[(mo - 1) as usize];
     }
     if month > 2 && is_leap(year) { days += 1; }
     days += day - 1;
-    days * 86400 + h * 3600 + m * 60 + s
+    Some(days * 86400 + h * 3600 + m * 60 + s)
 }
 
 fn is_leap(y: i64) -> bool {
@@ -273,4 +280,38 @@ pub fn extract_first_source_name(text: &str) -> Option<String> {
     arr.iter().find_map(|v| {
         v.get("bookSourceName").and_then(|n| n.as_str()).map(|s| s.to_string())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_rfc822_and_iso8601() {
+        assert_eq!(parse_rfc822("Mon, 01 Jan 2024 00:00:00 GMT"), Some(1704067200));
+        assert_eq!(parse_iso8601("2024-01-01T00:00:00Z"), Some(1704067200));
+        assert_eq!(parse_iso8601("2024-02-29T12:30:00Z"), Some(1709209800));
+    }
+
+    #[test]
+    fn rejects_out_of_range_dates_from_untrusted_feeds() {
+        // 此前 month 越界会使 MDAY 数组越界 panic
+        assert_eq!(parse_iso8601("2024-99-01T00:00:00Z"), None);
+        assert_eq!(parse_iso8601("2024-00-01T00:00:00Z"), None);
+        assert_eq!(parse_iso8601("2024-01-32T00:00:00Z"), None);
+        assert_eq!(parse_iso8601("2024-01-00T00:00:00Z"), None);
+        assert_eq!(parse_rfc822("Mon, 32 Jan 2024 00:00:00 GMT"), None);
+        assert_eq!(parse_rfc822("Mon, 01 Xyz 2024 00:00:00 GMT"), None);
+        // 非闰年的 2 月 29 日
+        assert_eq!(parse_iso8601("2023-02-29T00:00:00Z"), None);
+        assert_eq!(parse_iso8601("2024-02-29T00:00:00Z"), Some(1709164800));
+    }
+
+    #[test]
+    fn rejects_out_of_range_time_and_year() {
+        assert_eq!(parse_iso8601("2024-01-01T25:00:00Z"), None);
+        assert_eq!(parse_iso8601("2024-01-01T00:99:00Z"), None);
+        assert_eq!(parse_iso8601("1969-12-31T23:59:59Z"), None);
+        assert_eq!(parse_iso8601("abc-01-01T00:00:00Z"), None);
+    }
 }

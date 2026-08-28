@@ -12,7 +12,8 @@ import { BackIcon, BookmarkIcon, HighlightIcon, SettingsIcon, TocIcon, SwitchIco
 import { addBookmark, removeBook, httpGet, listBookSources, getBookSourceProgress, saveBookSourceProgress, mergeUserAgent, openLoginWindow, listShelfSourceBooks, addShelfSourceBook, removeShelfSourceBook, getCachedChapter, saveCachedChapter, recordRead } from "../services/api";
 import { parseBookSourceJson, parseHtml, extractSingle, purifyContent, isImageChapter, extractImageUrls, hostOf, resolveUrl, type BookSource as Src } from "../services/bookSourceEngine";
 import { applyInitRule, fetchToc, type TocItem } from "../services/sourceToc";
-import { loadReadingSettings, saveReadingSettings, BG_THEMES, FONT_PRESETS, resolveFontCss, DEFAULT_READING_SETTINGS, PAGE_MARGIN_PX, type ReadingSettings } from "../services/readingSettings";
+import { loadReadingSettings, saveReadingSettings, BG_THEMES, resolveFontCss, DEFAULT_READING_SETTINGS, PAGE_MARGIN_PX, type ReadingSettings } from "../services/readingSettings";
+import ReaderSettingsPanel from "../components/ReaderSettingsPanel";
 import { convertText } from "../services/tradSimpl";
 import { getSessionChapter, setSessionChapter } from "../services/chapterSessionCache";
 import type { SearchHit } from "../services/searchService";
@@ -22,6 +23,9 @@ import { type ReaderSource } from "../services/reading";
 import "./ReaderPage.css";
 
 interface ChapterState { index: number; url: string; name: string }
+
+/** 同章节分页最大拼接页数（防病态源无限分页） */
+const MAX_CONTENT_PAGES = 20;
 
 export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
   source: ReaderSource; onBack: () => void; onSwitchSource?: (hit: SearchHit) => void;
@@ -65,7 +69,8 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       const next = { ...prev, ...patch };
       if (persistSettingsTimer.current) window.clearTimeout(persistSettingsTimer.current);
       persistSettingsTimer.current = window.setTimeout(() => {
-        void saveReadingSettings(next).catch(() => {});
+        // 失败记入开发者日志，避免静默丢失用户设置
+        void saveReadingSettings(next).catch((e) => console.warn("[reader] 保存阅读设置失败:", e));
       }, 400);
       return next;
     });
@@ -204,8 +209,9 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
 
   // ==== 本地书：移除损坏书籍 ====
   const handleRemoveBroken = async () => {
+    if (!isLocal) return;
     try {
-      await removeBook(book!.id);
+      await removeBook(source.book.id);
     } catch (e) {
       setOpenError(String(e));
       return;
@@ -239,8 +245,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     }
     const src = parsed.src;
     const cookieJarHost = hostOf(src.bookSourceUrl);
-    const html = await httpGet(c.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
-    console.warn("[sourcereader] chapterUrl=", c.url, "len=", html.length, "head=", html.slice(0, 100));
+    const html = await httpGet({ url: c.url, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), cookieJar: cookieJarHost });
     let doc = parseHtml(html);
     const rules = src.ruleContent ?? {};
     // ruleContent.init（legado init 规则）：JSON 路径取子对象 / @put:@get 落变量
@@ -258,13 +263,13 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     const isSameChapterPage = (a: string, base: string) =>
       a !== base && a.startsWith(base.replace(/\.html?$/, ""));
     let pageGuard = 0;
-    while (next && pageGuard < 20) {
+    while (next && pageGuard < MAX_CONTENT_PAGES) {
       const nextAbs = resolveUrl(next, c.url);
       const tocNext = tocRef.current[c.index + 1]?.url;
       if (tocNext && nextAbs === tocNext) break; // 指向目录下一章：非分页，停止拼接
       if (!isSameChapterPage(nextAbs, c.url)) break; // 非同章节分页（实为下一章链接）
       pageGuard++;
-      const pageHtml = await httpGet(nextAbs, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+      const pageHtml = await httpGet({ url: nextAbs, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), cookieJar: cookieJarHost });
       doc = parseHtml(pageHtml);
       const initPage = applyInitRule(doc, rules.init, pageHtml, { sourceKey: src.bookSourceUrl, source: src, baseUrl: nextAbs });
       const pageResult = typeof initPage === "string" ? initPage : await initPage;
@@ -276,9 +281,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         ? await extractSingle(doc, rules.nextContentUrl, { baseUrl: nextAbs, result: pageResult, sourceKey: src.bookSourceUrl })
         : "";
       if (next && next === prevNext) break; // 死循环保护：URL 不变
-      void console.warn(`[sourcereader] 分页拼接 ${pageGuard}: ${nextAbs} → 累计 ${text.length}`);
     }
-    console.warn("[sourcereader] content len=", text.length, "head=", text.slice(0, 100));
     // 下一章判定（优先级）：
     // 1. 目录中的下一章最可靠（tocRef 已加载时）
     // 2. nextContentUrl 的非分页值仅作无目录时的兜底候选，且排除：
@@ -349,7 +352,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
         setLoading(false);
         // 缓存命中同样推进预加载链（可能用户跳读，需补齐后续章节）
         const n = tocRef.current[c.index + 1];
-        if (n && c.index + 1 <= c.index + PREFETCH_DEPTH) {
+        if (n) {
           void prefetchChapter({ index: c.index + 1, url: n.url, name: n.name });
         }
         return;
@@ -389,9 +392,11 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
     if (isLocal) return;
     const c = chapterRef.current;
     if (!c.url) return;
-    void saveBookSourceProgress({
+    saveBookSourceProgress({
       sourceId, bookUrl, title: bookTitle, chapterIndex: c.index,
       chapterUrl: c.url, chapterName: c.name, percent: 0,
+    }).catch((e) => {
+      console.warn("[ReaderPage] 保存书源进度失败:", e);
     });
   }, [isLocal, sourceId, bookUrl, bookTitle]);
 
@@ -504,7 +509,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           w.__requestBookmark();
         } else {
           // EPUB 走 request-bookmark 事件；其余格式直接使用已发布的 __readerLocation
-          void addBookmark({ bookId: book!.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
+          void addBookmark({ bookId: source.book.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
           w.dispatchEvent(new CustomEvent("bookmark-changed"));
         }
       }
@@ -524,7 +529,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
       const detail = (e as CustomEvent).detail as string | undefined;
       const loc = detail || w.__bookmarkLocation || "";
       if (!loc) return;
-      void addBookmark({ bookId: book!.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
+      void addBookmark({ bookId: source.book.id, location: loc, label: `书签 ${new Date().toLocaleString("zh-CN")}` });
       w.dispatchEvent(new CustomEvent("bookmark-changed"));
     };
     window.addEventListener("request-bookmark", onRequestBookmark);
@@ -554,7 +559,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           <BackIcon size={18} />
         </button>
         <h2>
-          {isLocal ? book!.title : (
+          {isLocal ? source.book.title : (
             <span className="reader-title">{bookTitle}</span>
           )}
           {!isLocal && chapter.name && <> · <span className="reader-chapter">{chapter.name}</span></>}
@@ -587,9 +592,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                   className="btn btn-ghost"
                   onClick={() => {
                     if (!src?.loginUrl) return;
-                    let host = "";
-                    try { host = new URL(src.bookSourceUrl).hostname; } catch { host = src.bookSourceUrl; }
-                    void openLoginWindow(src.loginUrl, host);
+                    void openLoginWindow(src.loginUrl, hostOf(src.bookSourceUrl));
                   }}
                 >登录</button>
               )}
@@ -620,10 +623,21 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
             className={`btn-icon${panel === "settings" ? " active" : ""}`}
             onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
             aria-label="阅读设置"
-            title="阅读设置"
+            title="阅读设置 (S)"
           >
             <SettingsIcon size={17} />
           </button>
+          {!isLocal && (
+            <div className="keyboard-hint" title="键盘快捷键：T 目录 | S 设置 | ↑/↓ 切章 | Esc 返回">
+              <span className="keyboard-hint-icon">?</span>
+              <div className="keyboard-hint-tooltip">
+                <div className="keyboard-hint-row"><kbd>T</kbd> 目录</div>
+                <div className="keyboard-hint-row"><kbd>S</kbd> 设置</div>
+                <div className="keyboard-hint-row"><kbd>↑</kbd><kbd>↓</kbd> 切章</div>
+                <div className="keyboard-hint-row"><kbd>Esc</kbd> 返回</div>
+              </div>
+            </div>
+          )}
         </div>
       </header>
       <div className="reader-body">
@@ -662,10 +676,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
                   <button className="btn-primary" onClick={handleRemoveBroken}>移除该书</button>
                 </div>
               )}
-              {!openError && book!.format === "epub" && <EpubReader path={book!.path} bookId={book!.id} onError={setOpenError} settings={settings} />}
-              {!openError && book!.format === "pdf" && <PdfReader path={book!.path} bookId={book!.id} onError={setOpenError} />}
-              {!openError && book!.format === "md" && <MdReader path={book!.path} bookId={book!.id} onError={setOpenError} conversion={settings.conversion} />}
-              {!openError && book!.format === "txt" && <TxtReader path={book!.path} bookId={book!.id} onError={setOpenError} conversion={settings.conversion} />}
+              {!openError && source.book.format === "epub" && <EpubReader path={source.book.path} bookId={source.book.id} onError={setOpenError} settings={settings} />}
+              {!openError && source.book.format === "pdf" && <PdfReader path={source.book.path} bookId={source.book.id} onError={setOpenError} />}
+              {!openError && source.book.format === "md" && <MdReader path={source.book.path} bookId={source.book.id} onError={setOpenError} conversion={settings.conversion} />}
+              {!openError && source.book.format === "txt" && <TxtReader path={source.book.path} bookId={source.book.id} onError={setOpenError} conversion={settings.conversion} />}
             </>
           ) : (
             <>
@@ -717,10 +731,10 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           {panel ? "›" : "‹"}
         </button>
         {isLocal && panel === "annotations" && (
-          <AnnotationPanel bookId={book!.id} format={book!.format} onJump={jump} onChanged={() => jumpKey.current += 1} />
+          <AnnotationPanel bookId={source.book.id} format={source.book.format} onJump={jump} onChanged={() => jumpKey.current += 1} />
         )}
         {isLocal && panel === "bookmarks" && (
-          <BookmarkPanel bookId={book!.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
+          <BookmarkPanel bookId={source.book.id} onJump={jump} onChanged={() => jumpKey.current += 1} />
         )}
         {!isLocal && panel === "toc" && (
           <div className="panel reader-toc-panel">
@@ -746,131 +760,7 @@ export default function ReaderPage({ source, onBack, onSwitchSource, jumpTo }: {
           />
         )}
         {panel === "settings" && (
-          <div className="panel reader-settings-panel">
-            <h3>阅读设置</h3>
-            {!isLocal && (
-              <div className="settings-group">
-                <label className="settings-label">翻页模式</label>
-                <div className="segmented" role="group" aria-label="翻页模式">
-                  {(["cover", "slide", "scroll"] as const).map((m) => (
-                    <button key={m} type="button" className={settings.pageMode === m ? "active" : ""}
-                      onClick={() => updateSetting({ pageMode: m })}>
-                      {{ cover: "覆盖", slide: "滑动", scroll: "滚动" }[m]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="settings-group">
-              <label className="settings-label">字号 {settings.fontSizePx}px</label>
-              <div className="range-row font-size-row">
-                <button type="button" className="btn btn-ghost btn-step" aria-label="减小字号"
-                  onClick={() => updateSetting({ fontSizePx: Math.max(14, settings.fontSizePx - 1) })}>A−</button>
-                <input type="range" min={14} max={24} value={settings.fontSizePx} aria-label="字号"
-                  onChange={(e) => updateSetting({ fontSizePx: Number(e.target.value) })} />
-                <button type="button" className="btn btn-ghost btn-step" aria-label="增大字号"
-                  onClick={() => updateSetting({ fontSizePx: Math.min(24, settings.fontSizePx + 1) })}>A+</button>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">行距 {settings.lineHeight.toFixed(1)}</label>
-              <div className="range-row">
-                <input type="range" min={1.4} max={2.4} step={0.1} value={settings.lineHeight} aria-label="行距"
-                  onChange={(e) => updateSetting({ lineHeight: Number(e.target.value) })} />
-                <span className="range-value">{settings.lineHeight.toFixed(1)}</span>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">字间距 {settings.letterSpacingPx.toFixed(1)}px</label>
-              <div className="range-row">
-                <input type="range" min={0} max={4} step={0.1} value={settings.letterSpacingPx} aria-label="字间距"
-                  onChange={(e) => updateSetting({ letterSpacingPx: Number(e.target.value) })} />
-                <span className="range-value">{settings.letterSpacingPx.toFixed(1)}</span>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">段间距 {settings.paragraphSpacingPx}px</label>
-              <div className="range-row">
-                <input type="range" min={0} max={24} step={1} value={settings.paragraphSpacingPx} aria-label="段间距"
-                  onChange={(e) => updateSetting({ paragraphSpacingPx: Number(e.target.value) })} />
-                <span className="range-value">{settings.paragraphSpacingPx}</span>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">首行缩进 {settings.indentEm.toFixed(1)}em</label>
-              <div className="range-row">
-                <input type="range" min={0} max={2} step={0.1} value={settings.indentEm} aria-label="首行缩进"
-                  onChange={(e) => updateSetting({ indentEm: Number(e.target.value) })} />
-                <span className="range-value">{settings.indentEm.toFixed(1)}</span>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">加粗</label>
-              <div className="segmented" role="group" aria-label="加粗">
-                <button type="button" className={!settings.bold ? "active" : ""} onClick={() => updateSetting({ bold: false })}>正常</button>
-                <button type="button" className={settings.bold ? "active" : ""} onClick={() => updateSetting({ bold: true })}>加粗</button>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">字体</label>
-              <div className="segmented" role="group" aria-label="字体">
-                {FONT_PRESETS.map((f) => (
-                  <button key={f.id} type="button" className={settings.fontFamily === f.id ? "active" : ""}
-                    onClick={() => updateSetting({ fontFamily: f.id })}>{f.name}</button>
-                ))}
-              </div>
-              <input className="font-custom-input" placeholder="自定义字体名（CSS font-family）"
-                value={FONT_PRESETS.some((f) => f.id === settings.fontFamily) ? "" : settings.fontFamily}
-                onChange={(e) => updateSetting({ fontFamily: e.target.value || "serif" })} aria-label="自定义字体" />
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">背景</label>
-              <div className="bg-theme-options">
-                {BG_THEMES.map((t) => (
-                  <button key={t.id} type="button" className={`bg-theme-swatch${settings.bgTheme === t.id ? " active" : ""}`}
-                    style={{ background: t.bg }} aria-label={t.name} title={t.name}
-                    onClick={() => updateSetting({ bgTheme: t.id })} />
-                ))}
-                {settings.customBg && (
-                  <button type="button"
-                    className={`bg-theme-swatch bg-theme-swatch-custom${settings.bgTheme === "custom" ? " active" : ""}`}
-                    style={{ background: settings.customBg }} aria-label="自定义" title="自定义"
-                    onClick={() => updateSetting({ bgTheme: "custom" })} />
-                )}
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">简繁</label>
-              <div className="segmented" role="group" aria-label="简繁">
-                <button type="button" className={settings.conversion === "none" ? "active" : ""}
-                  onClick={() => updateSetting({ conversion: "none" })}>原样</button>
-                <button type="button" className={settings.conversion === "simp" ? "active" : ""}
-                  onClick={() => updateSetting({ conversion: "simp" })}>简体</button>
-                <button type="button" className={settings.conversion === "trad" ? "active" : ""}
-                  onClick={() => updateSetting({ conversion: "trad" })}>繁体</button>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">对齐</label>
-              <div className="segmented" role="group" aria-label="对齐">
-                <button type="button" className={settings.textAlign === "left" ? "active" : ""}
-                  onClick={() => updateSetting({ textAlign: "left" })}>左对齐</button>
-                <button type="button" className={settings.textAlign === "justify" ? "active" : ""}
-                  onClick={() => updateSetting({ textAlign: "justify" })}>两端</button>
-              </div>
-            </div>
-            <div className="settings-group">
-              <label className="settings-label">页边距</label>
-              <div className="segmented" role="group" aria-label="页边距">
-                <button type="button" className={settings.pageMargin === "narrow" ? "active" : ""}
-                  onClick={() => updateSetting({ pageMargin: "narrow" })}>窄</button>
-                <button type="button" className={settings.pageMargin === "medium" ? "active" : ""}
-                  onClick={() => updateSetting({ pageMargin: "medium" })}>中</button>
-                <button type="button" className={settings.pageMargin === "wide" ? "active" : ""}
-                  onClick={() => updateSetting({ pageMargin: "wide" })}>宽</button>
-              </div>
-            </div>
-          </div>
+          <ReaderSettingsPanel settings={settings} onUpdate={updateSetting} isLocal={isLocal} />
         )}
       </div>
       {!isLocal && (

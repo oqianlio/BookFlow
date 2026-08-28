@@ -26,7 +26,7 @@ export async function downloadBook(opts: DownloadOpts): Promise<DownloadProgress
   for (const t of pending) {
     if (opts.signal?.cancelled) break;
     try {
-      const html = await httpGet(t.url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+      const html = await httpGet({ url: t.url, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), cookieJar: cookieJarHost });
       const doc = parseHtml(html);
       const rules = src.ruleContent ?? {};
       const text = await extractSingle(doc, rules.content ?? "body", { baseUrl: t.url, result: html, sourceKey: src.bookSourceUrl });

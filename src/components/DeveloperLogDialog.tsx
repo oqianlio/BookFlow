@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readLogs, clearLogs, logFileSize } from "../services/api";
+import { formatBytes } from "../utils/format";
 import { useError } from "./ErrorDialog";
 
 type Level = "all" | "error" | "warn";
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
 
 /** 从日志行解析级别：`[2026-08-16 14:00:00] [error] msg` */
 function levelOf(line: string): Level {

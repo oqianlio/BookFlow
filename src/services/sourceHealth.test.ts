@@ -15,7 +15,9 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    httpGet: vi.fn(async (url: string, headers?: Record<string, string>, timeoutMs?: number, method?: string, body?: string) => {
+    httpGet: vi.fn(async (options: string | { url: string; headers?: Record<string, string>; timeoutMs?: number; method?: string; body?: string }) => {
+      const { url, headers, timeoutMs, method, body } =
+        typeof options === "string" ? { url: options, headers: undefined, timeoutMs: undefined, method: undefined, body: undefined } : options;
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), timeoutMs ?? 8000);
       try {
@@ -53,10 +55,10 @@ async function checkOne(s: { id: number; name: string; url: string; json: string
     if (!parsed.url) return { name: s.name, ok: false, count: 0, reason: "无搜索URL", ms: Date.now() - t0 };
     // 相对 searchUrl 基于书源域名解析（与 searchService 一致）
     const url = resolveUrl(parsed.url, src.bookSourceUrl);
-    const html = await api.httpGet(url, mergeUserAgent(src.httpHeaders, src.httpUserAgent), 8000, parsed.method, parsed.body);
+    const html = await api.httpGet({ url, headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent), timeoutMs: 8000, method: parsed.method, body: parsed.body });
     if (!html || html.length < 80) return { name: s.name, ok: false, count: 0, reason: "响应过短", ms: Date.now() - t0 };
     const doc = new DOMParser().parseFromString(html, "text/html");
-    const items = await extractBookList(doc, src.ruleSearch ?? {}, {
+    const items = await extractBookList(doc, (src.ruleSearch ?? {}) as Record<string, string>, {
       baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl,
     });
     if (items.length === 0) {
@@ -77,7 +79,7 @@ describe.skipIf(!ENABLED)("source health check", () => {
     let sources = JSON.parse(fs.readFileSync(file, "utf-8")) as Array<{ id: number; name: string; url: string; json: string }>;
     if (NAME_FILTER) sources = sources.filter((s) => s.name.includes(NAME_FILTER));
     console.log(`\n检查 ${sources.length} 个书源，关键词：${KEYWORD}${NAME_FILTER ? `，过滤：${NAME_FILTER}` : ""}\n`);
-    const results: any[] = [];
+    const results: Array<{ name: string; ok: boolean; count: number; reason?: string; ms: number }> = [];
     const CHUNK = 30;
     for (let i = 0; i < sources.length; i += CHUNK) {
       const chunk = sources.slice(i, i + CHUNK);

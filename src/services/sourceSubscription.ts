@@ -1,11 +1,11 @@
-import { addBookSource, httpGet, listBookSources, updateBookSource } from "./api";
+import { addBookSource, httpGet, listBookSources, updateBookSource, HTTP_TIMEOUT_IMPORT } from "./api";
 import { parseBookSourceCollection } from "./bookSourceImport";
 import type { SubscriptionRow } from "./api";
 
 export interface SyncResult { added: number; updated: number; removed: number; failed: number }
 
 export async function syncSubscription(sub: SubscriptionRow): Promise<SyncResult> {
-  const text = await httpGet(sub.url, undefined, 20000);
+  const text = await httpGet({ url: sub.url, timeoutMs: HTTP_TIMEOUT_IMPORT });
   const remote = parseBookSourceCollection(text);
   const local = await listBookSources();
   const localByUrl = new Map(local.map((s) => [s.url, s]));

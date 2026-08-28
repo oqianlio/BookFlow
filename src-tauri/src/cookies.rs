@@ -36,14 +36,23 @@ impl CookieJar {
     pub fn save(&self) {
         let store = match self.store.read() {
             Ok(s) => s,
-            Err(_) => return,
+            Err(poisoned) => {
+                eprintln!("[cookies] cookie store 锁已损坏，跳过持久化: {poisoned}");
+                return;
+            }
         };
-        if let Ok(file) = std::fs::File::create(&self.file) {
-            let mut writer = BufWriter::new(file);
-            let _ = cookie_store::serde::json::save_incl_expired_and_nonpersistent(
-                &store,
-                &mut writer,
-            );
+        // 写失败（磁盘满/目录被删）不中断请求，但记录日志便于排查"登录态丢失"问题
+        match std::fs::File::create(&self.file) {
+            Ok(file) => {
+                let mut writer = BufWriter::new(file);
+                if let Err(e) = cookie_store::serde::json::save_incl_expired_and_nonpersistent(
+                    &store,
+                    &mut writer,
+                ) {
+                    eprintln!("[cookies] cookie 持久化失败 {:?}: {e}", self.file);
+                }
+            }
+            Err(e) => eprintln!("[cookies] cookie 文件创建失败 {:?}: {e}", self.file),
         }
     }
 }
@@ -104,7 +113,18 @@ impl CookieJarManager {
     /// 无反向嵌套，不会死锁。
     pub fn jar_for(&self, key: &str) -> Arc<CookieJar> {
         let sani = sanitize_key(key);
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = match self.cache.lock() {
+            Ok(c) => c,
+            Err(_) => {
+                // Mutex poisoned，创建新的缓存
+                let mut new_cache = HashMap::new();
+                let file = self.dir.join(format!("{sani}.json"));
+                let jar = Arc::new(CookieJar::load(file));
+                new_cache.insert(sani.clone(), jar.clone());
+                *self.cache.lock().unwrap_or_else(|e| e.into_inner()) = new_cache;
+                return jar;
+            }
+        };
         match cache.entry(sani) {
             std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
             std::collections::hash_map::Entry::Vacant(e) => {

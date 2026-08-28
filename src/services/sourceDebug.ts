@@ -1,4 +1,4 @@
-import { parseBookSourceJson, parseHtml, extractSingle, extractList, resolveSearchUrl, type BookSource as Src } from "./bookSourceEngine";
+import { parseBookSourceJson, parseHtml, extractSingle, extractList, resolveSearchUrl, hostOf, type BookSource as Src } from "./bookSourceEngine";
 import { httpGet, mergeUserAgent } from "./api";
 
 export interface DebugResult {
@@ -13,15 +13,14 @@ export async function debugSource(
 ): Promise<DebugResult> {
   const src: Src = parseBookSourceJson(bs.json);
   const ua = mergeUserAgent(src.httpHeaders, src.httpUserAgent);
-  let host = "";
-  try { host = new URL(src.bookSourceUrl).hostname; } catch { /* ignore */ }
+  const host = hostOf(src.bookSourceUrl);
 
   let html: string;
   if (stage === "search") {
     const parsed = resolveSearchUrl(src.searchUrl ?? "", urlOrKey, 1, { sourceKey: src.bookSourceUrl, source: src });
-    html = await httpGet(parsed.url, ua, undefined, parsed.method, parsed.body, undefined, host);
+    html = await httpGet({ url: parsed.url, headers: ua, method: parsed.method, body: parsed.body, cookieJar: host });
   } else {
-    html = await httpGet(urlOrKey, ua, undefined, undefined, undefined, undefined, host);
+    html = await httpGet({ url: urlOrKey, headers: ua, cookieJar: host });
   }
   const doc = parseHtml(html);
   const ctx = { baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl };

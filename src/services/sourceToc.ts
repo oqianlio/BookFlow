@@ -97,7 +97,7 @@ export async function fetchTocBySource(s: BookSource, bookUrl: string, initialTi
   const base = s.bookSourceUrl || bookUrl;
   const resolvedBookUrl = bookUrl.startsWith("http") ? bookUrl : new URL(bookUrl, base).toString();
   const cookieJarHost = hostOf(s.bookSourceUrl);
-  const html = await httpGet(resolvedBookUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+  const html = await httpGet({ url: resolvedBookUrl, headers: mergeUserAgent(s.httpHeaders, s.httpUserAgent), cookieJar: cookieJarHost });
   const doc = parseHtml(html);
   const bi = s.ruleBookInfo ?? {};
   // init：legado init 规则（JSON 路径取子对象；@put/@get 落变量）——后续规则相对处理后的 result 执行
@@ -119,7 +119,7 @@ export async function fetchTocBySource(s: BookSource, bookUrl: string, initialTi
   const tocUrlRaw = (bi.tocUrl ? await extractSingle(doc, bi.tocUrl, { baseUrl: resolvedBookUrl, result: biResult, sourceKey: s.bookSourceUrl, book }) : "") || resolvedBookUrl;
   // 相对 tocUrl（JSON API 源常见，如 `/qbread/...`）相对 bookSourceUrl 解析为完整 URL
   const tocUrl = tocUrlRaw.startsWith("http") ? tocUrlRaw : new URL(tocUrlRaw, base).toString();
-  const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet(tocUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+  const tocHtml = tocUrl === resolvedBookUrl ? html : await httpGet({ url: tocUrl, headers: mergeUserAgent(s.httpHeaders, s.httpUserAgent), cookieJar: cookieJarHost });
   const tocDoc = parseHtml(tocHtml);
   const rules = s.ruleToc ?? {};
   const tocBook = { ...book, name: title, author, tocUrl };
@@ -155,7 +155,7 @@ export async function fetchTocBySource(s: BookSource, bookUrl: string, initialTi
     if (seenPage.has(nextUrl)) break; // 防循环
     seenPage.add(nextUrl);
     curUrl = nextUrl;
-    curHtml = await httpGet(nextUrl, mergeUserAgent(s.httpHeaders, s.httpUserAgent), undefined, undefined, undefined, undefined, cookieJarHost);
+    curHtml = await httpGet({ url: nextUrl, headers: mergeUserAgent(s.httpHeaders, s.httpUserAgent), cookieJar: cookieJarHost });
   }
   return {
     info: {

@@ -328,7 +328,7 @@ pub fn snippet(text: &str, query: &str, radius: usize) -> String {
     let idx = idx.unwrap_or(0);
     let start = char_boundary(text, idx.saturating_sub(radius));
     let end = char_boundary(text, (idx + needle.len() + radius).min(text.len()));
-    let mut s = text[start..end].replace('\n', " ").replace('\r', " ");
+    let mut s = text[start..end].replace(['\n', '\r'], " ");
     let words: Vec<&str> = s.split_whitespace().collect();
     s = words.join(" ");
     if start > 0 {

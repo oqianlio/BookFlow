@@ -6,6 +6,7 @@ vi.mock("./api", () => ({
   httpGet: vi.fn(),
   readFileContent: vi.fn(),
   addBookSource: vi.fn(),
+  HTTP_TIMEOUT_IMPORT: 20000,
 }));
 
 const VALID = { bookSourceName: "测试书源", bookSourceUrl: "https://ex.com" };
@@ -85,7 +86,7 @@ describe("bookSourceImport async functions", () => {
     vi.mocked(api.httpGet).mockResolvedValue(JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com" }));
     vi.mocked(api.addBookSource).mockResolvedValue(1);
     const r = await importBookSourceFromUrl("  https://x.com/src.json  ");
-    expect(api.httpGet).toHaveBeenCalledWith("https://x.com/src.json", undefined, 20000);
+    expect(api.httpGet).toHaveBeenCalledWith({ url: "https://x.com/src.json", timeoutMs: 20000 });
     expect(r.bookSources[0]).toMatchObject({ bookSourceName: "X", bookSourceUrl: "https://x.com" });
     await commitBookSource(r.bookSources[0]);
     expect(api.addBookSource).toHaveBeenCalledWith("X", "https://x.com", JSON.stringify({ bookSourceName: "X", bookSourceUrl: "https://x.com" }));

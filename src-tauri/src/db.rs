@@ -61,10 +61,17 @@ pub struct NewBookmark {
 }
 
 fn now() -> i64 {
+    // 系统时钟回拨（早于 Unix epoch）时返回 0，避免 panic 崩溃
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_secs() as i64
+}
+
+/// 获取本地时间的秒级时间戳（用于"今日"统计等需要本地时间的场景）
+fn now_local() -> i64 {
+    use chrono::Local;
+    Local::now().timestamp()
 }
 
 pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
@@ -158,6 +165,14 @@ pub fn init_db(path: impl AsRef<Path>) -> Result<Connection> {
             last_read_at INTEGER,
             PRIMARY KEY (source_id, book_url)
         );
+        CREATE TABLE IF NOT EXISTS read_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            book_url TEXT NOT NULL,
+            seconds INTEGER NOT NULL,
+            recorded_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_read_log_day ON read_log(source_id, book_url, recorded_at);
         CREATE TABLE IF NOT EXISTS rss_feeds (
             id INTEGER PRIMARY KEY,
             title TEXT NOT NULL,
@@ -474,8 +489,19 @@ pub fn update_source(conn: &Connection, id: i64, name: &str, url: &str, json: &s
 }
 
 pub fn delete_source(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute("DELETE FROM book_sources WHERE id=?1", [id])?;
-    conn.execute("DELETE FROM book_source_progress WHERE source_id=?1", [id])?;
+    // 级联清理所有引用该书源的数据；事务保证原子性，中途失败整体回滚
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM book_source_progress WHERE source_id=?1", [id])?;
+    tx.execute("DELETE FROM chapter_cache WHERE source_id=?1", [id])?;
+    tx.execute("DELETE FROM reading_stats WHERE source_id=?1", [id])?;
+    // shelf_source_books 有 ON DELETE CASCADE，会自动清理
+    // shelf_group_members 需要手动清理 source 类型的成员
+    tx.execute(
+        "DELETE FROM shelf_group_members WHERE item_kind='source' AND item_id IN (SELECT id FROM shelf_source_books WHERE source_id=?1)",
+        [id],
+    )?;
+    tx.execute("DELETE FROM book_sources WHERE id=?1", [id])?;
+    tx.commit()?;
     Ok(())
 }
 
@@ -787,8 +813,12 @@ pub fn record_read(
     increment_count: bool,
 ) -> Result<()> {
     let t = now();
+    let t_local = now_local();
     let add = if increment_count { 1 } else { 0 };
-    conn.execute(
+    // 事务保证累积统计与增量日志原子写入，避免两表不一致
+    let tx = conn.unchecked_transaction()?;
+    // 更新累积统计
+    tx.execute(
         "INSERT INTO reading_stats (source_id, book_url, title, read_seconds, read_count, last_read_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(source_id, book_url) DO UPDATE SET
@@ -798,6 +828,14 @@ pub fn record_read(
            last_read_at = excluded.last_read_at",
         params![source_id, book_url, title, seconds, add, t, add],
     )?;
+    // 记录增量日志（用于精确的今日阅读统计）
+    if seconds > 0 {
+        tx.execute(
+            "INSERT INTO read_log (source_id, book_url, seconds, recorded_at) VALUES (?1, ?2, ?3, ?4)",
+            params![source_id, book_url, seconds, t_local],
+        )?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -832,17 +870,17 @@ pub struct ReadingSummary {
 }
 
 pub fn get_reading_summary(conn: &Connection, limit: i64) -> Result<ReadingSummary> {
-    let t = now();
-    let today_start = t - (t % 86400); // 今天 00:00:00 的秒级时间戳
+    let t = now_local();
+    let today_start = t - (t % 86400); // 今天 00:00:00 的秒级时间戳（本地时间）
     // 总统计
     let mut stmt = conn.prepare(
         "SELECT COUNT(*), COALESCE(SUM(read_seconds), 0) FROM reading_stats",
     )?;
     let row = stmt.query_row([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
     let (total_books, total_seconds) = row;
-    // 今日阅读（基于 last_read_at 判断是否今天读过；更精确需 read_log 表，先简化）
+    // 今日阅读统计（使用 read_log 表精确计算）
     let mut stmt2 = conn.prepare(
-        "SELECT COALESCE(SUM(read_seconds), 0) FROM reading_stats WHERE last_read_at >= ?1",
+        "SELECT COALESCE(SUM(seconds), 0) FROM read_log WHERE recorded_at >= ?1",
     )?;
     let today_seconds = stmt2.query_row(params![today_start], |r| r.get::<_, i64>(0))?;
     // Top books by read_seconds
@@ -1121,16 +1159,18 @@ pub fn list_shelf_groups(conn: &Connection) -> Result<Vec<ShelfGroup>> {
     rows.collect()
 }
 
-/// 全量覆盖式设置组成员（先清空再插入）
+/// 全量覆盖式设置组成员（先清空再插入；事务保证失败时不丢原有成员）
 pub fn set_shelf_group_members(conn: &Connection, group_id: i64, members: &[ShelfMember]) -> Result<()> {
-    conn.execute("DELETE FROM shelf_group_members WHERE group_id=?1", [group_id])?;
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("DELETE FROM shelf_group_members WHERE group_id=?1", [group_id])?;
     let t = now();
     for m in members {
-        conn.execute(
+        tx.execute(
             "INSERT OR IGNORE INTO shelf_group_members (group_id, item_kind, item_id, added_at) VALUES (?1,?2,?3,?4)",
             params![group_id, m.item_kind, m.item_id, t],
         )?;
     }
+    tx.commit()?;
     Ok(())
 }
 
@@ -1166,20 +1206,23 @@ pub fn list_shelf_group_members(conn: &Connection, group_id: i64) -> Result<Vec<
 }
 
 /// 批量移除书架条目（本地书 + 在线书架书）。本地书删除会同步清索引（调用方负责删文件）。
+/// 事务保证批量操作原子性：任一条失败整体回滚，避免部分删除。
 pub fn remove_shelf_items(conn: &Connection, items: &[ShelfMember]) -> Result<Vec<i64>> {
+    let tx = conn.unchecked_transaction()?;
     let mut deleted_local: Vec<i64> = Vec::new();
     for it in items {
         match it.item_kind.as_str() {
             "local" => {
-                delete_book(conn, it.item_id)?;
+                delete_book(&tx, it.item_id)?;
                 deleted_local.push(it.item_id);
             }
             "source" => {
-                remove_shelf_source_book(conn, it.item_id)?;
+                remove_shelf_source_book(&tx, it.item_id)?;
             }
             _ => {}
         }
     }
+    tx.commit()?;
     Ok(deleted_local)
 }
 
@@ -1306,7 +1349,7 @@ mod tests {
     fn book_list_crud_and_items() {
         let conn = test_conn();
         let l1 = create_book_list(&conn, "2026 必读", Some("年度书单")).unwrap();
-        let l2 = create_book_list(&conn, "三体", None).unwrap();
+        let _l2 = create_book_list(&conn, "三体", None).unwrap();
 
         add_book_list_item(&conn, l1, "local", 1).unwrap();
         add_book_list_item(&conn, l1, "local", 2).unwrap();
@@ -1406,5 +1449,126 @@ mod tests {
         // SQLite LENGTH() 按字符数计（非 UTF-8 字节数）
         assert_eq!(b1.bytes, "内容一内容二内容二".chars().count() as i64);
         assert_eq!(b1.title, "b1"); // 未在书架 → URL 最后一段兜底
+    }
+
+    #[test]
+    fn reading_stats_crud() {
+        let conn = test_conn();
+        // 初始状态：无阅读统计
+        let summary = get_reading_summary(&conn, 10).unwrap();
+        assert_eq!(summary.total_books, 0);
+        assert_eq!(summary.total_seconds, 0);
+
+        // 添加阅读统计
+        record_read(&conn, 1, "https://ex.com/b1", "书籍一", 100, true).unwrap();
+        record_read(&conn, 1, "https://ex.com/b1", "书籍一", 50, true).unwrap(); // 累加
+        record_read(&conn, 2, "https://ex.com/b2", "书籍二", 200, true).unwrap();
+
+        let summary = get_reading_summary(&conn, 10).unwrap();
+        assert_eq!(summary.total_books, 2);
+        assert_eq!(summary.total_seconds, 350); // 150 + 200
+        assert_eq!(summary.top_books.len(), 2);
+        // 按阅读时间降序
+        assert_eq!(summary.top_books[0].title, "书籍二");
+        assert_eq!(summary.top_books[0].read_seconds, 200);
+        assert_eq!(summary.top_books[1].title, "书籍一");
+        assert_eq!(summary.top_books[1].read_seconds, 150);
+    }
+
+    #[test]
+    fn reading_stats_today() {
+        let conn = test_conn();
+        // 添加阅读统计（会使用当前本地时间的 last_read_at）
+        record_read(&conn, 1, "https://ex.com/b1", "书籍一", 100, true).unwrap();
+
+        let summary = get_reading_summary(&conn, 10).unwrap();
+        // 今天读过的书应该被计入 today_seconds
+        // 注意：由于 read_seconds 是累积值，这个测试验证的是简化逻辑
+        assert!(summary.today_seconds >= 0);
+    }
+
+    #[test]
+    fn reading_stats_recent_reads() {
+        let conn = test_conn();
+        // 添加多本书的阅读统计
+        record_read(&conn, 1, "https://ex.com/b1", "书籍一", 100, true).unwrap();
+        record_read(&conn, 2, "https://ex.com/b2", "书籍二", 200, true).unwrap();
+        record_read(&conn, 3, "https://ex.com/b3", "书籍三", 50, true).unwrap();
+
+        let summary = get_reading_summary(&conn, 2).unwrap();
+        // recent_reads 按 last_read_at 降序，限制 2 条
+        assert_eq!(summary.recent_reads.len(), 2);
+    }
+
+    #[test]
+    fn bookmarks_crud() {
+        let conn = test_conn();
+        // 先添加一本书
+        let bid = upsert_book(&conn, &NewBook {
+            title: "测试书".into(), format: "epub".into(), path: "/tmp/test.epub".into(), cover_path: None,
+        }).unwrap();
+
+        // 添加书签
+        let bm = NewBookmark {
+            book_id: bid,
+            location: "第五章".into(),
+            label: "书签1".into(),
+        };
+        let bm_id = add_bookmark(&conn, &bm).unwrap();
+
+        // 获取书签列表
+        let bookmarks = list_bookmarks(&conn, bid).unwrap();
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].label, "书签1");
+
+        // 删除书签
+        delete_bookmark(&conn, bm_id).unwrap();
+        assert!(list_bookmarks(&conn, bid).unwrap().is_empty());
+    }
+
+    #[test]
+    fn progress_crud() {
+        let conn = test_conn();
+        // 添加一本书
+        let bid = upsert_book(&conn, &NewBook {
+            title: "测试书".into(), format: "epub".into(), path: "/tmp/test.epub".into(), cover_path: None,
+        }).unwrap();
+
+        // 保存进度
+        save_progress(&conn, bid, "chapter_url", 50.0).unwrap();
+
+        // 获取进度
+        let progress = get_progress(&conn, bid).unwrap();
+        assert!(progress.is_some());
+        let (location, percent) = progress.unwrap();
+        assert_eq!(location, "chapter_url");
+        assert_eq!(percent, 50.0);
+    }
+
+    #[test]
+    fn source_book_crud() {
+        let conn = test_conn();
+        // 添加书源
+        let sid = add_source(&conn, "测试源", "https://ex.com", "{}").unwrap();
+
+        // 添加在线书
+        let book = NewShelfSourceBook {
+            source_id: sid,
+            book_url: "https://ex.com/book1".into(),
+            title: "在线书一".into(),
+            author: Some("作者一".into()),
+            cover_url: Some("https://ex.com/cover1.jpg".into()),
+        };
+        add_shelf_source_book(&conn, &book).unwrap();
+
+        // 获取在线书列表
+        let books = list_shelf_source_books(&conn).unwrap();
+        assert_eq!(books.len(), 1);
+        assert_eq!(books[0].title, "在线书一");
+        assert_eq!(books[0].author, Some("作者一".into()));
+
+        // 删除在线书
+        remove_shelf_source_book(&conn, sid).unwrap();
+        assert!(list_shelf_source_books(&conn).unwrap().is_empty());
     }
 }

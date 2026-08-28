@@ -5,7 +5,7 @@ import * as api from "./api";
 vi.mock("./api", () => ({
   httpGet: vi.fn(),
   listBookSources: vi.fn(),
-  mergeUserAgent: vi.fn((h?: any) => h),
+  mergeUserAgent: vi.fn((h?: Record<string, string>) => h),
 }));
 
 const sourceJson = JSON.stringify({

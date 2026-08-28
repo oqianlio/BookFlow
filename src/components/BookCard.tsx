@@ -103,11 +103,13 @@ function BookCard({ item, onOpen, onRemove, onInfo, layout = "grid", selectable 
         if (p.percent > 0) setPercent(Math.round(p.percent * 100));
       }
       if (r) {
-        const last = r.toc[r.toc.length - 1];
+        // 防御：toc 字段缺失或非数组时按空目录处理（部分源/异常响应可能返回不完整结构）
+        const toc = Array.isArray(r.toc) ? r.toc : [];
+        const last = toc[toc.length - 1];
         if (last) setLatestChapter(last.name);
         // legado getUnreadChapterNum: 总章数 - 当前章 - 1
         const idx = p ? p.chapter_index : -1;
-        const unreadNum = Math.max(0, r.toc.length - (idx + 1));
+        const unreadNum = Math.max(0, toc.length - (idx + 1));
         if (unreadNum > 0 && p) setUnread(unreadNum);
       }
     });

@@ -70,7 +70,7 @@ describe("backup", () => {
       theme: { scheme: "yuuka", mode: "dark" },
     });
     const sum = await importBackupData(text);
-    expect(sum).toEqual({ sources: 1, shelf: 1, progress: 1 });
+    expect(sum).toEqual({ sources: 1, shelf: 1, progress: 1, failed: { sources: 0, shelf: 0, progress: 0, settings: 0 } });
     expect(api.addBookSource).toHaveBeenCalledWith("源A", "https://a.com", "{}");
     expect(api.addShelfSourceBook).toHaveBeenCalledWith(expect.objectContaining({ bookUrl: "https://a.com/b1" }));
     expect(api.saveBookSourceProgress).toHaveBeenCalledWith(expect.objectContaining({ chapterName: "第三章" }));

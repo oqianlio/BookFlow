@@ -49,7 +49,8 @@ describe("downloadBook", () => {
 
   it("continues when a single chapter fails", async () => {
     vi.mocked(api.listCachedChapters).mockResolvedValue([]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url.endsWith("1.html")) throw new Error("网络错误");
       return `<html><body><div id="content"><p>正文二</p></div></body></html>`;
     });

@@ -129,7 +129,7 @@ describe("SourceBookPage", () => {
     await screen.findByText(/第一章/);
     const calls = vi.mocked(api.httpGet).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    for (const c of calls) expect(c[6]).toBe("ex.com");
+    for (const c of calls) expect((c[0] as { cookieJar?: string }).cookieJar).toBe("ex.com");
   });
 
   it("renders cover image when ruleBookInfo provides coverUrl", async () => {
@@ -218,7 +218,8 @@ describe("SourceBookPage", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url === "https://ex.com/book/1.html") {
         return `<html><body><h1>三体</h1><ol>
           <li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;

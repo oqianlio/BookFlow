@@ -9,6 +9,7 @@ vi.mock("./api", () => ({
     ua && !Object.keys(h ?? {}).some((k) => k.toLowerCase() === "user-agent")
       ? { ...(h ?? {}), "User-Agent": ua }
       : h,
+  HTTP_TIMEOUT_SEARCH: 10000,
 }));
 
 beforeEach(() => vi.clearAllMocks());
@@ -28,11 +29,12 @@ describe("searchBookSources", () => {
       { id: 1, name: "源A", url: "https://a.com", json: srcJson("a"), enabled: true, last_used_at: null },
       { id: 2, name: "源B", url: "https://b.com", json: srcJson("b"), enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) =>
-      url.startsWith("https://a.com")
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
+      return url.startsWith("https://a.com")
         ? hitHtml("三体", "刘慈欣", "/a/1.html")
-        : hitHtml("三体", "刘慈欣", "/b/2.html"),
-    );
+        : hitHtml("三体", "刘慈欣", "/b/2.html");
+    });
     const hits = await searchBookSources("三体");
     expect(hits.length).toBe(2);
     expect(hits.map((h) => h.sourceName).sort()).toEqual(["源A", "源B"]);
@@ -55,7 +57,8 @@ describe("searchBookSources", () => {
       { id: 1, name: "源A", url: "https://a.com", json: srcJson("a"), enabled: true, last_used_at: null },
       { id: 2, name: "源B", url: "https://b.com", json: srcJson("b"), enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url.startsWith("https://a.com")) throw new Error("网络错误");
       return hitHtml("三体", "刘慈欣", "/b/2.html");
     });

@@ -6,11 +6,16 @@
 // 3) 检测结果写入书源分组（bookSourceGroup）：失败加标记（搜索失效/网站失效/校验超时/
 //    js失效/搜索链接规则为空/搜索目录失效/搜索正文失效），成功清除全部失效标记；
 // 4) "删除失效源"按含"失效"/"校验超时"的分组筛选（legado getInvalidGroupNames）。
-import { httpGet, mergeUserAgent, updateBookSource, type BookSource } from "./api";
+import { httpGet, mergeUserAgent, updateBookSource, HTTP_TIMEOUT_HEALTH, type BookSource } from "./api";
 import { parseBookSourceJson, parseHtml, resolveSearchUrl, extractBookList, extractSingle, hostOf, resolveUrl, type BookSource as Src } from "./bookSourceEngine";
 import { fetchTocBySource } from "./sourceToc";
 
 export const CHECK_KEYWORD = "我的";
+
+/** 搜索响应判定有效的最小 HTML 长度 */
+const MIN_SEARCH_HTML_LENGTH = 80;
+/** 正文判定有效的最小字符数 */
+const MIN_CONTENT_LENGTH = 30;
 
 /** 原版 CheckSourceService 写入分组的失败标记（与 legado 文案一致） */
 export const FAILURE_GROUPS = [
@@ -117,12 +122,12 @@ async function checkTocAndContent(src: Src, bookUrl: string, checks: VerifyCheck
       const chUrl = toc[0].url;
       const cookieJarHost = hostOf(src.bookSourceUrl);
       const ua = mergeUserAgent(src.httpHeaders, src.httpUserAgent);
-      const chHtml = await httpGet(chUrl, ua, 8000, undefined, undefined, undefined, cookieJarHost);
+      const chHtml = await httpGet({ url: chUrl, headers: ua, timeoutMs: HTTP_TIMEOUT_HEALTH, cookieJar: cookieJarHost });
       const chDoc = parseHtml(chHtml);
       const content = await extractSingle(chDoc, src.ruleContent.content, {
         baseUrl: chUrl, result: chHtml, sourceKey: src.bookSourceUrl, source: src,
       });
-      if (!content || content.trim().length < 30) marks.push("搜索正文失效");
+      if (!content || content.trim().length < MIN_CONTENT_LENGTH) marks.push("搜索正文失效");
     }
   } catch {
     // 网络失败 → 目录环节失败（分类由外层 reason 判定）
@@ -143,18 +148,17 @@ export async function verifySource(bs: BookSource, opts?: VerifySourceOptions): 
     const parsed = resolveSearchUrl(src.searchUrl ?? "", kw, 1, { sourceKey: src.bookSourceUrl, source: src });
     if (!parsed.url) return fail("无搜索URL");
     const url = resolveUrl(parsed.url, src.bookSourceUrl);
-    const html = await httpGet(
+    const html = await httpGet({
       url,
-      mergeUserAgent(src.httpHeaders, src.httpUserAgent),
-      8000,
-      parsed.method,
-      parsed.body,
-      undefined,
-      hostOf(src.bookSourceUrl),
-    );
-    if (!html || html.length < 80) return fail("响应过短");
+      headers: mergeUserAgent(src.httpHeaders, src.httpUserAgent),
+      timeoutMs: HTTP_TIMEOUT_HEALTH,
+      method: parsed.method,
+      body: parsed.body,
+      cookieJar: hostOf(src.bookSourceUrl),
+    });
+    if (!html || html.length < MIN_SEARCH_HTML_LENGTH) return fail("响应过短");
     const doc = new DOMParser().parseFromString(html, "text/html");
-    const items = await extractBookList(doc, src.ruleSearch ?? {}, {
+    const items = await extractBookList(doc, (src.ruleSearch ?? {}) as Record<string, string>, {
       baseUrl: src.bookSourceUrl, result: html, sourceKey: src.bookSourceUrl, source: src,
     });
     if (items.length === 0) return fail("无结果");
@@ -207,7 +211,7 @@ export async function verifySources(sources: BookSource[], opts?: VerifyOptions)
   const groups = new Map<string, Array<{ i: number; bs: BookSource }>>();
   for (let i = 0; i < sources.length; i++) {
     let host = "unknown";
-    try { host = new URL(sources[i].url || (JSON.parse(sources[i].json) as any).bookSourceUrl || "").hostname; } catch { /* 保持 unknown */ }
+    try { host = hostOf(sources[i].url || (JSON.parse(sources[i].json) as { bookSourceUrl?: string }).bookSourceUrl || ""); } catch { /* 保持 unknown */ }
     if (!groups.has(host)) groups.set(host, []);
     groups.get(host)!.push({ i, bs: sources[i] });
   }

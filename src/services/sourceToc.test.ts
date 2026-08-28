@@ -115,8 +115,8 @@ describe("fetchToc", () => {
       <a class="next" href="/toc/2.html">下一页</a></body></html>`;
     const page2 = `<html><body><ol><li><a href="/c/2.html">第二章</a></li><li><a href="/c/3.html">第三章</a></li></ol>
       <a class="next" href="/toc/1.html">上一页</a></body></html>`;
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
-      const u = String(url);
+    vi.mocked(api.httpGet).mockImplementation(async (a) => {
+      const u = typeof a === "string" ? a : a.url;
       if (u.includes("/toc/2.html")) return page2;
       return page1;
     });
@@ -157,7 +157,10 @@ describe("fetchToc", () => {
     expect(r.toc.length).toBe(2);
     // 只请求一次（书页本身），绝不请求空 URL
     expect(api.httpGet).toHaveBeenCalledTimes(1);
-    expect(api.httpGet).toHaveBeenCalledWith("https://ex.com/book/1.html", undefined, undefined, undefined, undefined, undefined, "ex.com");  });
+    expect(api.httpGet).toHaveBeenCalledWith(
+      expect.objectContaining({ url: "https://ex.com/book/1.html", cookieJar: "ex.com" }),
+    );
+  });
 
   it("applies init rule for JSON sources (南极 bookInfo pattern)", async () => {
     // ruleBookInfo.init = $.data.bookInfo：书名/作者/tocUrl 相对子对象提取
@@ -179,8 +182,8 @@ describe("fetchToc", () => {
     const allChapter = JSON.stringify({
       rows: [{ serialID: 1, serialName: "第一章 陨石" }, { serialID: 2, serialName: "第二章 罗峰" }],
     });
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
-      const u = String(url);
+    vi.mocked(api.httpGet).mockImplementation(async (a) => {
+      const u = typeof a === "string" ? a : a.url;
       if (u.includes("bookInfo")) return bookInfo;
       if (u.includes("all-chapter")) return allChapter;
       return "{}";
@@ -189,8 +192,10 @@ describe("fetchToc", () => {
     expect(r.info.title).toBe("吞噬星空");
     // tocUrl 模板 {{$.resourceID}} 在 init 后能提取到 → 请求 all-chapter API
     expect(api.httpGet).toHaveBeenCalledWith(
-      expect.stringContaining("all-chapter?bookId=1100474235"),
-      undefined, undefined, undefined, undefined, undefined, "so.html5.qq.com",
+      expect.objectContaining({
+        url: expect.stringContaining("all-chapter?bookId=1100474235"),
+        cookieJar: "so.html5.qq.com",
+      }),
     );
     expect(r.toc.map((t) => t.name)).toEqual(["第一章 陨石", "第二章 罗峰"]);
     // 相对 URL 会按 all-chapter 基址解析

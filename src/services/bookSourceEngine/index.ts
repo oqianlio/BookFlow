@@ -1,9 +1,9 @@
 /**
- * 书源引擎 - 统一导出入口
- * 重构后拆分为多个模块，此文件保持向后兼容性
+ * 书源引擎模块
+ * 统一导出所有功能
  */
 
-// 类型导出
+// 规则解析 - 类型导出
 export type {
   EngineResult,
   ParsedRule,
@@ -11,14 +11,10 @@ export type {
   BookSourceRules,
   ExtractContext,
   BookInfo,
-  JsContext,
-  JsSource,
-  SearchResult,
-} from "./bookSourceEngine/index";
+} from "./ruleParser";
 
-// 值导出
+// 规则解析 - 值导出
 export {
-  // 规则解析
   parseRule,
   cachedParseRule,
   resetRuleCache,
@@ -32,35 +28,58 @@ export {
   parseBookSourceJson,
   applyReplacements,
   applyRegexReplace,
+} from "./ruleParser";
 
-  // 选择器
+// 选择器
+export {
   normalizeSelector,
   selectNodes,
   selectNodesSafe,
   queryIndexed,
   resolveTagIndex,
   nodeValue,
+} from "./ruleSelector";
 
-  // 内容净化
+// 内容净化
+export {
   purifyContent,
   isImageChapter,
   extractImageUrls,
+} from "./contentPurifier";
 
-  // 规则提取
+// JSON Path
+export { jsonGet } from "./jsonPath";
+
+// 规则提取
+export {
   hostOf,
-  jsonGet,
   extractSingle,
   extractList,
   extractBookList,
   extractFromElement,
   extractFromJsObject,
   extractFromJsonObject,
+} from "./ruleExtractor";
 
-  // JS 执行
+// JS 执行 - 类型导出
+export type {
+  JsContext,
+  JsSource,
+} from "./jsEvaluator";
+
+// JS 执行 - 值导出
+export {
   evalJs,
+} from "./jsEvaluator";
 
-  // 搜索和探索
+// 搜索和探索 - 类型导出
+export type {
+  SearchResult,
+} from "./searchEngine";
+
+// 搜索和探索 - 值导出
+export {
   parseSearchUrl,
   resolveSearchUrl,
   parseExploreUrl,
-} from "./bookSourceEngine/index";
+} from "./searchEngine";

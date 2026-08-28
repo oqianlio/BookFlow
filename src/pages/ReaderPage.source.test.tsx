@@ -50,6 +50,9 @@ const sourceJson = JSON.stringify({
   ruleContent: { content: "#content", nextContentUrl: "a#next@href" },
 });
 
+/** httpGet 现接受 HttpGetOptions 对象（兼容旧字符串），测试里统一取 URL */
+const urlOf = (a: unknown): string => (typeof a === "string" ? a : (a as { url: string }).url);
+
 const ch1 = `<html><body><div id="content"><p>第一章正文内容。</p></div><a id="next" href="/c/2.html">下一章</a></body></html>`;
 const ch2 = `<html><body><div id="content"><p>第二章正文内容。</p></div><a id="next" href="/c/3.html">下一章</a></body></html>`;
 const ch3 = `<html><body><div id="content"><p>第三章正文内容。</p></div><a id="next" href="/c/4.html">下一章</a></body></html>`;
@@ -84,7 +87,7 @@ describe("ReaderPage (source)", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
       return ch3;
@@ -141,7 +144,8 @@ describe("ReaderPage (source)", () => {
     ]);
     // 目录预取（bookUrl）成功；章节第一次失败、重试成功
     let chapterCalls = 0;
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url === "https://ex.com/book/1.html") {
         return `<html><body><h1>三体</h1></body></html>`;
       }
@@ -211,7 +215,7 @@ describe("ReaderPage (source)", () => {
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
     ]);
     vi.mocked(api.getBookSourceProgress).mockResolvedValue(null);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/book/1.html") return tocHtml;
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
@@ -232,7 +236,7 @@ describe("ReaderPage (source)", () => {
     await screen.findByText("第一章正文内容。");
     const calls = vi.mocked(api.httpGet).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    for (const c of calls) expect(c[6]).toBe("ex.com");
+    for (const c of calls) expect((c[0] as { cookieJar?: string }).cookieJar).toBe("ex.com");
   });
 
   it("renders manga viewer for image chapters", async () => {
@@ -404,7 +408,8 @@ describe("ReaderPage (source) toc panel", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url === "https://ex.com/book/1.html") return tocHtml;
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
@@ -442,7 +447,8 @@ describe("ReaderPage (source) toc panel", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url === "https://ex.com/c/1.html") return ch1;
       throw new Error("目录网络错误");
     });
@@ -451,7 +457,8 @@ describe("ReaderPage (source) toc panel", () => {
     await userEvent.click(screen.getByRole("button", { name: "目录" }));
     expect(await screen.findByText("目录加载失败")).toBeInTheDocument();
     // 恢复后重试成功
-    vi.mocked(api.httpGet).mockImplementation(async (url: string) => {
+    vi.mocked(api.httpGet).mockImplementation(async (options) => {
+      const url = typeof options === "string" ? options : options.url;
       if (url === "https://ex.com/book/1.html") return tocHtml;
       if (url === "https://ex.com/c/1.html") return ch1;
       return ch2;
@@ -520,7 +527,7 @@ describe("ReaderPage (source) switch source", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/book/1.html") {
         return `<html><body><h1>三体</h1><div class="author">刘慈欣</div><ol><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
       }
@@ -544,7 +551,7 @@ describe("ReaderPage (source) chapter cache", () => {
     renderReader();
     expect(await screen.findByText("缓存正文内容。")).toBeInTheDocument();
     // 章节 URL 未被请求（目录预取的 bookUrl 请求允许存在）
-    const chapterCalls = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html"));
+    const chapterCalls = vi.mocked(api.httpGet).mock.calls.filter((c) => urlOf(c[0]).includes("/c/1.html"));
     expect(chapterCalls.length).toBe(0);
   });
 
@@ -570,14 +577,14 @@ describe("ReaderPage (source) chapter cache", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
       return ch3;
     });
     const { unmount } = renderReader();
     expect(await screen.findByText("第一章正文内容。")).toBeInTheDocument();
-    const callsBefore = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html")).length;
+    const callsBefore = vi.mocked(api.httpGet).mock.calls.filter((c) => urlOf(c[0]).includes("/c/1.html")).length;
     // 退出阅读页再重新打开（组件卸载 → 重新挂载）
     unmount();
     const reopened = renderReader();
@@ -585,7 +592,7 @@ describe("ReaderPage (source) chapter cache", () => {
     await waitFor(() => expect(reopened.container.textContent).toContain("第一章正文内容。"));
     expect(reopened.container.textContent).not.toContain("加载中…");
     // 章节 URL 未被重新请求
-    const callsAfter = vi.mocked(api.httpGet).mock.calls.filter((c) => String(c[0]).includes("/c/1.html")).length;
+    const callsAfter = vi.mocked(api.httpGet).mock.calls.filter((c) => urlOf(c[0]).includes("/c/1.html")).length;
     expect(callsAfter).toBe(callsBefore);
   });
 });
@@ -644,7 +651,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
       return ch3;
@@ -663,7 +670,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: tocSourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/book/1.html") return tocHtml;
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
@@ -691,7 +698,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/book/1.html") return tocHtml;
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
@@ -715,7 +722,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: sourceJson, enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/c/1.html") return ch1;
       if (url === "https://ex.com/c/2.html") return ch2;
       return ch3;
@@ -741,7 +748,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     vi.mocked(api.listBookSources).mockResolvedValue([
       { id: 1, name: "示例", url: "https://ex.com", json: JSON.stringify(src), enabled: true, last_used_at: null },
     ]);
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://ex.com/c/1.html") {
         return `<html><body><div class="content"><img src="/img/1.jpg"><img src="/img/2.jpg"></div><a id="next" href="/c/2.html">下一话</a></body></html>`;
       }
@@ -774,7 +781,7 @@ describe("ReaderPage (source) auto next chapter at page end", () => {
     const p1 = `<html><body><div id="content"><p>第004章第一页内容。</p></div><a id="next" href="/56/56445/6516910_1.html">下一页</a></body></html>`;
     const p2 = `<html><body><div id="content"><p>第004章第二页内容。</p></div><a id="next" href="/56/56445/6516910_2.html">下一页</a></body></html>`;
     const p3 = `<html><body><div id="content"><p>第004章第三页内容。</p></div></body></html>`;
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
+    vi.mocked(api.httpGet).mockImplementation(async (a) => { const url = urlOf(a);
       if (url === "https://www.36xs.net/56/56445/6516910.html") return p1;
       if (url === "https://www.36xs.net/56/56445/6516910_1.html") return p2;
       return p3;
