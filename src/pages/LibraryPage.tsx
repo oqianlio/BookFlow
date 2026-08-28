@@ -100,6 +100,9 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   const [onlineHits, setOnlineHits] = useState<OnlineHit[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const searchSeqRef = useRef(0);
+  // 搜索结果排序/过滤
+  const [onlineSort, setOnlineSort] = useState<"default" | "title" | "source">("default");
+  const [onlineSourceFilter, setOnlineSourceFilter] = useState<string>("");
   // 搜索历史（localStorage 持久化，最多 20 条）
   const SEARCH_HISTORY_KEY = "library.searchHistory";
   const [searchHistory, setSearchHistory] = useState<string[]>(() => {
@@ -803,7 +806,32 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
                     <h4 style={{ margin: 0, fontSize: 14 }}>在线书源</h4>
                     <span className="section-sub">{onlineHits.length} 条</span>
                   </div>
-                  {onlineHits.map((h, i) => (
+                  <div className="search-sort-row">
+                    <select value={onlineSort} onChange={(e) => setOnlineSort(e.target.value as typeof onlineSort)}>
+                      <option value="default">默认排序</option>
+                      <option value="title">按书名</option>
+                      <option value="source">按来源</option>
+                    </select>
+                    {(() => {
+                      const sourceNames = [...new Set(onlineHits.map((h) => h.sourceName))];
+                      return sourceNames.length > 1 ? (
+                        <select value={onlineSourceFilter} onChange={(e) => setOnlineSourceFilter(e.target.value)}>
+                          <option value="">全部来源</option>
+                          {sourceNames.map((n) => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      ) : null;
+                    })()}
+                  </div>
+                  {onlineHits
+                    .filter((h) => !onlineSourceFilter || h.sourceName === onlineSourceFilter)
+                    .sort((a, b) => {
+                      if (onlineSort === "title") return a.title.localeCompare(b.title, "zh-CN");
+                      if (onlineSort === "source") return a.sourceName.localeCompare(b.sourceName, "zh-CN");
+                      return 0;
+                    })
+                    .map((h, i) => (
                     <div className="hit-card" key={`online-${i}`}>
                       <div className="hit-info" onClick={() => onOpenOnlineBook?.(h)} role="button" tabIndex={0}
                         onKeyDown={(e) => { if (e.key === "Enter") onOpenOnlineBook?.(h); }}>

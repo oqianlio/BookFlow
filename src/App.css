@@ -1231,6 +1231,22 @@ button {
   color: var(--primary);
 }
 
+/* 搜索结果排序/过滤 */
+.search-sort-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.search-sort-row select {
+  padding: 4px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .search-panel ul {
   list-style: none;
   margin: 16px 0 0;
