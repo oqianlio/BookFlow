@@ -1459,6 +1459,27 @@ html[data-mode="dark"] .verify-badge.warn {
   max-width: 720px;
   margin: 20px 0 24px;
 }
+.discover-filter {
+  width: 100%;
+  max-width: 400px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-full);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.discover-filter:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+.discover-filter::placeholder {
+  color: var(--on-surface-variant);
+}
 
 .discover-search input {
   flex: 1;

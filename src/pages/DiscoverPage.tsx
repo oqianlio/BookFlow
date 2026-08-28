@@ -60,6 +60,7 @@ export default function DiscoverPage({ onOpenExplore }: {
   onOpenExplore?: (sourceId: number, sourceName: string) => void;
 }) {
   const [sources, setSources] = useState<Array<{ id: number; name: string }>>([]);
+  const [filter, setFilter] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -90,8 +91,11 @@ export default function DiscoverPage({ onOpenExplore }: {
             <h2 className="home-section">书源浏览</h2>
             <span className="section-sub">{sources.length} 个书源可浏览</span>
           </div>
+          <input className="discover-filter" type="text" placeholder="搜索书源…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           <div className="channel-grid">
-            {sources.map((s) => (
+            {sources
+              .filter((s) => !filter || s.name.includes(filter))
+              .map((s) => (
               <button key={s.id} className="channel-card" onClick={() => onOpenExplore(s.id, s.name)}>
                 <span className="channel-icon">{emojiOf(s.name)}</span>
                 <div className="channel-body">
