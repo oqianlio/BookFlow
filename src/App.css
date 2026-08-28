@@ -1198,6 +1198,39 @@ button {
   color: var(--on-surface-variant);
 }
 
+/* 搜索历史 */
+.search-history {
+  margin: 8px 0 12px;
+}
+.search-history .section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.history-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.history-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.history-item:hover {
+  background: var(--secondary-container);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .search-panel ul {
   list-style: none;
   margin: 16px 0 0;

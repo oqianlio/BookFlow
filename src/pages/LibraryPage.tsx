@@ -100,6 +100,19 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   const [onlineHits, setOnlineHits] = useState<OnlineHit[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const searchSeqRef = useRef(0);
+  // 搜索历史（localStorage 持久化，最多 20 条）
+  const SEARCH_HISTORY_KEY = "library.searchHistory";
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) ?? "[]"); } catch { return []; }
+  });
+  const [showHistory, setShowHistory] = useState(false);
+  const saveToHistory = (q: string) => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    const next = [trimmed, ...searchHistory.filter((h) => h !== trimmed)].slice(0, 20);
+    setSearchHistory(next);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+  };
   const [layout, setLayout] = useState<BookCardLayout>(loadLayout);
   const [sort, setSort] = useState<SortState>(loadSort);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -177,12 +190,18 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
     try {
       const gs = await listShelfGroups();
       setGroups(gs);
+      // 并行获取所有分组成员（消除 N+1 查询）
+      const memberResults = await Promise.all(
+        gs.map(async (g) => ({
+          groupId: g.id,
+          members: await listShelfGroupMembers(g.id).catch(() => []),
+        }))
+      );
       // 分组 → 成员 id 集合（local 与 source 分开存）
       const map = new Map<string, Set<number>>();
-      for (const g of gs) {
-        const members = await listShelfGroupMembers(g.id);
-        map.set(`local:${g.id}`, new Set(members.filter((m) => m.item_kind === "local").map((m) => m.item_id)));
-        map.set(`source:${g.id}`, new Set(members.filter((m) => m.item_kind === "source").map((m) => m.item_id)));
+      for (const { groupId, members } of memberResults) {
+        map.set(`local:${groupId}`, new Set(members.filter((m) => m.item_kind === "local").map((m) => m.item_id)));
+        map.set(`source:${groupId}`, new Set(members.filter((m) => m.item_kind === "source").map((m) => m.item_id)));
       }
       setGroupMembers(map);
     } catch (e) {
@@ -353,6 +372,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
     if (!q.trim()) { setLocalHits([]); setOnlineHits([]); return; }
     const seq = ++searchSeqRef.current;
     setSearchBusy(true);
+    setShowHistory(false);
     try {
       const [local, online] = await Promise.allSettled([
         invoke<Array<{ book_id: number; title: string; format: string; text: string; location: string }>>("search_books", { query: q }),
@@ -361,12 +381,14 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
       if (seq !== searchSeqRef.current) return;
       setLocalHits(local.status === "fulfilled" ? local.value : []);
       setOnlineHits(online.status === "fulfilled" ? online.value : []);
+      // 保存搜索历史
+      saveToHistory(q);
     } catch {
       // 旧响应被丢弃
     } finally {
       if (seq === searchSeqRef.current) setSearchBusy(false);
     }
-  }, []);
+  }, [searchHistory]);
 
   // 从书籍详情点作者跳转：自动打开搜索并执行
   useEffect(() => {
@@ -384,7 +406,7 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
   };
 
   // ==== 分组过滤 ====
-  const filteredItems = useCallback(() => {
+  const visibleItems = useMemo(() => {
     if (activeGroup === "all") return items;
     if (activeGroup === "default") {
       return items.filter((i) => {
@@ -402,8 +424,6 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
       return groupMembers.get(`${m.item_kind}:${gid}`)?.has(m.item_id) ?? false;
     });
   }, [items, activeGroup, groups, groupMembers]);
-
-  const visibleItems = filteredItems();
   // 书架内过滤：书名/作者/来源名包含关键字（不区分大小写）
   const filterText = shelfFilter.trim().toLowerCase();
   const filteredVisible = useMemo(() => {
@@ -731,11 +751,29 @@ export default function LibraryPage({ onOpenBook, onOpenSourceBook, onOpenOnline
             <input aria-label="搜索关键词" value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && void runSearch(searchQuery)}
+              onFocus={() => !searchQuery.trim() && setShowHistory(true)}
+              onBlur={() => setTimeout(() => setShowHistory(false), 200)}
               placeholder="输入书名，搜索本地书和在线书源" />
             <button className="btn btn-primary" onClick={() => void runSearch(searchQuery)} disabled={searchBusy || !searchQuery.trim()}>
               {searchBusy ? "搜索中…" : "搜索"}
             </button>
           </div>
+          {/* 搜索历史 */}
+          {showHistory && searchHistory.length > 0 && !searchQuery.trim() && (
+            <div className="search-history">
+              <div className="section-head">
+                <span className="section-sub">最近搜索</span>
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 6px' }} onClick={() => { setSearchHistory([]); localStorage.removeItem(SEARCH_HISTORY_KEY); }}>清除</button>
+              </div>
+              <div className="history-list">
+                {searchHistory.map((h, i) => (
+                  <button key={i} className="history-item" onClick={() => { setSearchQuery(h); setShowHistory(false); void runSearch(h); }}>
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {searchBusy ? (
             <p className="panel-empty"><span className="loading-state"><span className="spinner" /><span>搜索中…</span></span></p>
           ) : searchQuery.trim() && localHits.length === 0 && onlineHits.length === 0 ? (
