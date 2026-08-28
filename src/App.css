@@ -1247,6 +1247,49 @@ button {
   cursor: pointer;
 }
 
+/* TTS 睡眠定时 */
+.tts-sleep-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  padding: 8px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  min-width: 110px;
+}
+.tts-sleep-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  padding: 4px 8px 6px;
+}
+.tts-sleep-option {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--on-surface);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+.tts-sleep-option:hover {
+  background: var(--secondary-container);
+}
+.tts-sleep-cancel {
+  color: var(--error);
+  border-top: 1px solid var(--outline-variant);
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
 .search-panel ul {
   list-style: none;
   margin: 16px 0 0;
