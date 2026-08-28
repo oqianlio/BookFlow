@@ -16,6 +16,7 @@ import type { Book } from "./services/api";
 import { ErrorProvider } from "./components/ErrorDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { checkAllSources, type SourceHealth } from "./services/sourceHealth";
+import { autoBackupIfDue } from "./services/backup";
 import "./App.css";
 
 type OverlayState =
@@ -64,7 +65,9 @@ function AppInner() {
         if (done === total) setHealthChecking(false);
       }).then(setSourceHealth).catch(() => {});
     }, 3000);
-    return () => clearTimeout(timer);
+    // 自动备份（延迟 10 秒，超 24h 未备份才执行）
+    const backupTimer = setTimeout(() => { void autoBackupIfDue().catch(() => {}); }, 10000);
+    return () => { clearTimeout(timer); clearTimeout(backupTimer); };
   }, []);
 
   useEffect(() => {

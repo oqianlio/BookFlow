@@ -70,7 +70,7 @@ pub async fn import_books(files: Vec<String>, state: State<'_, AppState>) -> Res
     // 导入后重建全文索引（锁外重活，不阻塞 DB 与 UI）
     if !imported.is_empty() {
         let app_data_dir = state.app_data_dir.clone();
-        let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+        let books = state.with_db(crate::search::collect_books)?;
         if let Err(e) = tauri::async_runtime::spawn_blocking(move || {
             crate::search::build_index_from_books(&app_data_dir, &books)
         })
@@ -227,7 +227,7 @@ pub async fn search_books(query: String, state: State<'_, AppState>) -> Result<V
     // 懒构建：仅当索引缺失（如首次搜索）时自动重建；查询语法等真实错误原样返回。
     // 锁内只收集书籍列表，索引构建在 blocking 线程执行（不阻塞 DB 与 UI）
     if !crate::search::index_exists(&app_data_dir) {
-        let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+        let books = state.with_db(crate::search::collect_books)?;
         let dir = app_data_dir.clone();
         tauri::async_runtime::spawn_blocking(move || {
             crate::search::build_index_from_books(&dir, &books)
@@ -243,7 +243,7 @@ pub async fn search_books(query: String, state: State<'_, AppState>) -> Result<V
 #[tauri::command]
 pub async fn reindex(state: State<'_, AppState>) -> Result<(), String> {
     let app_data_dir = state.app_data_dir.clone();
-    let books = state.with_db(|conn| crate::search::collect_books(conn))?;
+    let books = state.with_db(crate::search::collect_books)?;
     tauri::async_runtime::spawn_blocking(move || {
         crate::search::build_index_from_books(&app_data_dir, &books)
     })
@@ -293,6 +293,8 @@ pub fn get_book_source_progress(source_id: i64, book_url: String, state: State<'
 }
 
 #[tauri::command]
+// 参数由前端 IPC 契约决定，8 个字段整体对应一条进度记录，不宜强行合并
+#[allow(clippy::too_many_arguments)]
 pub fn save_book_source_progress(
     source_id: i64,
     book_url: String,
@@ -330,7 +332,7 @@ pub fn open_login_window(url: String, cookie_jar: String, app: tauri::AppHandle)
 
     let mgr = app.state::<AppState>().cookies.clone();
     let jar_key = cookie_jar;
-    let _ = window.on_window_event(move |event| {
+    window.on_window_event(move |event| {
         if !matches!(event, tauri::WindowEvent::Destroyed) || jar_key.is_empty() {
             return;
         }
@@ -685,6 +687,44 @@ pub fn write_text_file(path: String, content: String, state: State<'_, AppState>
     std::fs::write(&p, content).map_err(|e| format!("写入文件失败: {e}"))
 }
 
+#[tauri::command]
+pub fn get_app_data_dir(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.app_data_dir.display().to_string())
+}
+
+#[tauri::command]
+pub fn list_auto_backups(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let dir = state.app_data_dir.join("backups");
+    if !dir.is_dir() { return Ok(vec![]); }
+    let mut files: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |x| x == "json"))
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+    files.sort();
+    files.reverse(); // 最新的排前面
+    Ok(files)
+}
+
+#[tauri::command]
+pub fn clean_old_backups(keep: usize, state: State<'_, AppState>) -> Result<usize, String> {
+    let dir = state.app_data_dir.join("backups");
+    if !dir.is_dir() { return Ok(0); }
+    let mut files: Vec<_> = std::fs::read_dir(&dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |x| x == "json"))
+        .collect();
+    files.sort_by_key(|e| e.file_name()); // 按文件名（含日期）排序
+    let to_delete = files.len().saturating_sub(keep);
+    let mut deleted: usize = 0;
+    for f in files.iter().take(to_delete) {
+        if std::fs::remove_file(f.path()).is_ok() { deleted += 1; }
+    }
+    Ok(deleted)
+}
+
 #[derive(serde::Serialize)]
 pub struct FontFileRow {
     pub name: String,
@@ -747,14 +787,14 @@ pub fn list_shelf_groups(state: State<'_, AppState>) -> Result<Vec<crate::db::Sh
 pub fn create_shelf_group(name: String, state: State<'_, AppState>) -> Result<i64, String> {
     let name = name.trim().to_string();
     if name.is_empty() { return Err("分组名称不能为空".to_string()); }
-    crate::db::create_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name).map_err(|e| friendly_unique_error(e))
+    crate::db::create_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, &name).map_err(friendly_unique_error)
 }
 
 #[tauri::command]
 pub fn rename_shelf_group(id: i64, name: String, state: State<'_, AppState>) -> Result<(), String> {
     let name = name.trim().to_string();
     if name.is_empty() { return Err("分组名称不能为空".to_string()); }
-    crate::db::rename_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, &name).map_err(|e| friendly_unique_error(e))
+    crate::db::rename_shelf_group(&*state.db.lock().map_err(|_| "数据库锁已损坏".to_string())?, id, &name).map_err(friendly_unique_error)
 }
 
 #[tauri::command]
@@ -800,13 +840,11 @@ pub fn remove_shelf_items(items: Vec<ShelfMemberInput>, state: State<'_, AppStat
     drop(conn);
     // 删除本地书文件 + 封面 + 全文索引
     for id in &deleted {
-        if let Ok(path) = state.with_db(|c| crate::db::get_book(c, *id).map_err(|e| e.to_string())) {
-            if let Some(path) = path {
-                let _ = std::fs::remove_file(&path.path);
-                let _ = std::fs::remove_file(format!("{}.jpg", path.path));
-                if let Some(cp) = &path.cover_path {
-                    let _ = std::fs::remove_file(cp);
-                }
+        if let Ok(Some(path)) = state.with_db(|c| crate::db::get_book(c, *id).map_err(|e| e.to_string())) {
+            let _ = std::fs::remove_file(&path.path);
+            let _ = std::fs::remove_file(format!("{}.jpg", path.path));
+            if let Some(cp) = &path.cover_path {
+                let _ = std::fs::remove_file(cp);
             }
         }
         if let Err(e) = crate::search::delete_book_from_index(&state.app_data_dir, *id) {

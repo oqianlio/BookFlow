@@ -13,9 +13,6 @@ pub mod tts;
 use commands::*;
 use cookies::CookieJarManager;
 use tauri::Manager;
-use tauri_plugin_dialog;
-use tauri_plugin_fs;
-use tauri_plugin_opener;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -68,6 +65,7 @@ pub fn run() {
             export_rss_opml, import_rss_opml,
             add_subscription, list_subscriptions, delete_subscription,
             set_subscription_checked, get_source_by_url, write_text_file,
+            get_app_data_dir, list_auto_backups, clean_old_backups,
             copy_font_file, list_font_files,
             list_shelf_groups, create_shelf_group, rename_shelf_group, delete_shelf_group,
             set_shelf_group_members, add_shelf_group_members, remove_shelf_group_members,

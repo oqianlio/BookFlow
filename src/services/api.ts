@@ -82,15 +82,58 @@ export interface BookSource {
   enabled: boolean; last_used_at: number | null;
 }
 
-export async function httpGet(
-  url: string,
-  headers?: Record<string, string>,
-  timeoutMs?: number,
-  method?: string,
-  body?: string,
-  contentType?: string,
-  cookieJar?: string,
-): Promise<string> {
+export interface HttpGetOptions {
+  url: string;
+  headers?: Record<string, string>;
+  timeoutMs?: number;
+  method?: string;
+  body?: string;
+  contentType?: string;
+  cookieJar?: string;
+}
+
+/** 书源校验/健康检查默认超时（ms） */
+export const HTTP_TIMEOUT_HEALTH = 8000;
+/** 搜索请求超时（ms） */
+export const HTTP_TIMEOUT_SEARCH = 10000;
+/** 书源导入/订阅等较大内容的请求超时（ms） */
+export const HTTP_TIMEOUT_IMPORT = 20000;
+
+/**
+ * 通过 Tauri 后端发起 HTTP 请求（统一 cookie jar / UA / 日志 / 超时）。
+ * 推荐用法：`httpGet({ url, headers?, timeoutMs?, method?, body?, contentType?, cookieJar? })`。
+ * 旧的位置参数形式（httpGet(url, headers, ...)）仅为兼容保留，新代码请勿使用。
+ */
+export async function httpGet(options: HttpGetOptions | string, headers?: Record<string, string>, timeoutMs?: number, method?: string, body?: string, contentType?: string, cookieJar?: string): Promise<string> {
+  // 支持新旧两种调用方式：选项对象或位置参数
+  let url: string;
+  let h: Record<string, string> | undefined;
+  let t: number | undefined;
+  let m: string | undefined;
+  let b: string | undefined;
+  let ct: string | undefined;
+  let cj: string | undefined;
+
+  if (typeof options === "string") {
+    // 旧的位置参数方式（向后兼容）
+    url = options;
+    h = headers;
+    t = timeoutMs;
+    m = method;
+    b = body;
+    ct = contentType;
+    cj = cookieJar;
+  } else {
+    // 新的选项对象方式
+    url = options.url;
+    h = options.headers;
+    t = options.timeoutMs;
+    m = options.method;
+    b = options.body;
+    ct = options.contentType;
+    cj = options.cookieJar;
+  }
+
   // 空 URL 直接拒绝（书源规则提取失败时调用方应回退），避免无效请求
   if (!url.trim()) {
     console.error("[httpGet] 拒绝空 URL 请求（书源规则提取为空）");
@@ -100,17 +143,17 @@ export async function httpGet(
   const short = url.length > 100 ? url.slice(0, 100) + "…" : url;
   try {
     const r = await invoke<string>("http_get", {
-      url, headers: headers ?? null, timeoutMs: timeoutMs ?? null,
-      method: method ?? null, body: body ?? null, contentType: contentType ?? null,
-      cookieJar: cookieJar ?? null,
+      url, headers: h ?? null, timeoutMs: t ?? null,
+      method: m ?? null, body: b ?? null, contentType: ct ?? null,
+      cookieJar: cj ?? null,
     });
     const ms = Math.round(performance.now() - t0);
     // 慢请求（>3s）记 warning，正常请求 Rust 侧已有日志，前端不重复
-    if (ms > 3000) console.warn(`[httpGet] 慢请求 ${ms}ms ${method ?? "GET"} ${short}`);
+    if (ms > 3000) console.warn(`[httpGet] 慢请求 ${ms}ms ${m ?? "GET"} ${short}`);
     return r;
   } catch (e) {
     const ms = Math.round(performance.now() - t0);
-    console.error(`[httpGet] 失败 ${ms}ms ${method ?? "GET"} ${short}: ${String(e)}`);
+    console.error(`[httpGet] 失败 ${ms}ms ${m ?? "GET"} ${short}: ${String(e)}`);
     throw e;
   }
 }
@@ -355,6 +398,15 @@ export async function getSourceByUrl(url: string): Promise<BookSource | null> {
 }
 export async function writeTextFile(path: string, content: string): Promise<void> {
   await invoke("write_text_file", { path, content });
+}
+export async function getAppDataDir(): Promise<string> {
+  return invoke<string>("get_app_data_dir");
+}
+export async function listAutoBackups(): Promise<string[]> {
+  return invoke<string[]>("list_auto_backups");
+}
+export async function cleanOldBackups(keep: number): Promise<number> {
+  return invoke<number>("clean_old_backups", { keep });
 }
 
 export interface FontFileRow { name: string; file: string }

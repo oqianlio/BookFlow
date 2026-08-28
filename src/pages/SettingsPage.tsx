@@ -5,18 +5,13 @@ import { getFontSize, setFontSize } from "../components/theme";
 import { getTtsRate, setTtsRate } from "../components/TtsBar";
 import { loadEyeCare, saveEyeCare, type EyeCareSettings } from "../services/eyeCare";
 import { loadReadingSettings, saveReadingSettings } from "../services/readingSettings";
-import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, readFileContent, writeTextFile, getReadingSummary, type FontFileRow, type CacheSummary, type CachedBook, type ReadingSummary } from "../services/api";
+import { copyFontFile, listFontFiles, cacheSummary, clearAllCache, listCachedBooks, deleteBookCache, exportDiagnostics, readFileContent, writeTextFile, getReadingSummary, getSetting, setSetting, type FontFileRow, type CacheSummary, type CachedBook, type ReadingSummary } from "../services/api";
 import { injectFontFaces } from "../services/fontFiles";
 import { exportBackupData, importBackupData } from "../services/backup";
 import { useError } from "../components/ErrorDialog";
 import ConfirmDialog from "../components/ConfirmDialog";
 import DeveloperLogDialog from "../components/DeveloperLogDialog";
-
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
+import { formatBytes } from "../utils/format";
 
 export default function SettingsPage({ onOpenSourceManager }: {
   onOpenSourceManager?: () => void;
@@ -39,7 +34,17 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const [confirmRestore, setConfirmRestore] = useState(false);
   const [restoreText, setRestoreText] = useState<string | null>(null);
   const [readingStats, setReadingStats] = useState<ReadingSummary | null>(null);
+  const [autoBackup, setAutoBackup] = useState(false);
   const { showError } = useError();
+
+  useEffect(() => {
+    void getSetting("backup.autoEnabled").then((v) => setAutoBackup(v === "1")).catch(() => {});
+  }, []);
+
+  const setAutoBackupEnabled = async (on: boolean) => {
+    setAutoBackup(on);
+    await setSetting("backup.autoEnabled", on ? "1" : "0");
+  };
 
   const handleExportBackup = async () => {
     if (backupBusy) return;
@@ -85,7 +90,10 @@ export default function SettingsPage({ onOpenSourceManager }: {
     setBackupBusy(true);
     try {
       const sum = await importBackupData(restoreText);
-      showError(`恢复完成：${sum.sources} 个书源、${sum.shelf} 本在线书、${sum.progress} 条进度`);
+      const failTotal = sum.failed.sources + sum.failed.shelf + sum.failed.progress + sum.failed.settings;
+      showError(failTotal > 0
+        ? `恢复完成：${sum.sources} 个书源、${sum.shelf} 本在线书、${sum.progress} 条进度；⚠ ${failTotal} 项失败（书源 ${sum.failed.sources}、书架 ${sum.failed.shelf}、进度 ${sum.failed.progress}、设置 ${sum.failed.settings}）`
+        : `恢复完成：${sum.sources} 个书源、${sum.shelf} 本在线书、${sum.progress} 条进度`);
     } catch (e) {
       showError(String(e));
     } finally {
@@ -187,7 +195,8 @@ export default function SettingsPage({ onOpenSourceManager }: {
   const updateEyeCare = (patch: Partial<EyeCareSettings>) => {
     setEyeCareState((prev) => {
       const next = { ...prev, ...patch };
-      void saveEyeCare(next);
+      // 失败记入开发者日志（console.warn 会转发到 Rust 日志）
+      void saveEyeCare(next).catch((e) => console.warn("[settings] 保存护眼设置失败:", e));
       return next;
     });
   };
@@ -196,7 +205,9 @@ export default function SettingsPage({ onOpenSourceManager }: {
     try {
       const s = await loadReadingSettings();
       await saveReadingSettings({ ...s, bgTheme: "custom", customBg, customFg });
-    } catch { /* 静默 */ }
+    } catch (e) {
+      showError(String(e));
+    }
   };
 
   return (
@@ -375,6 +386,16 @@ export default function SettingsPage({ onOpenSourceManager }: {
                 </button>
               </div>
             </div>
+            <div className="settings-row">
+              <div className="settings-row-label">
+                <div className="label">自动备份</div>
+                <div className="hint">每 24 小时自动备份到数据目录（保留最近 5 份）</div>
+              </div>
+              <div className="segmented" role="group" aria-label="自动备份">
+                <button type="button" className={autoBackup ? "active" : ""} onClick={() => void setAutoBackupEnabled(true)}>开启</button>
+                <button type="button" className={!autoBackup ? "active" : ""} onClick={() => void setAutoBackupEnabled(false)}>关闭</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -440,7 +461,10 @@ export default function SettingsPage({ onOpenSourceManager }: {
             <div className="settings-row">
               <div className="settings-row-label">
                 <div className="label">关于</div>
-                <div className="hint">枕书 · 基于 legado 3.0 规则的桌面阅读器</div>
+                <div className="hint">枕书 v0.1.0 · 基于 legado 3.0 规则的桌面阅读器</div>
+              </div>
+              <div className="settings-group-actions">
+                <button className="btn btn-soft" onClick={() => {}}>检查更新</button>
               </div>
             </div>
           </div>
