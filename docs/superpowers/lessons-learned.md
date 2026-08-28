@@ -602,3 +602,33 @@
 - 下次：修正规则解析的"默认值"（裸词→属性/标签），用白名单比黑名单更安全；
   任何"排除列表"都要问"列表是否完备"。
 
+### 3.52 API 签名变更必须同步测试 mock（2026-08-17）
+- 场景：httpGet 从字符串参数改为 HttpGetOptions 对象后，sourceVerify
+  测试用 `String(url)` 检查 URL，结果变成 `[object Object]`。
+- 认知：**API 签名变更时，测试 mock 的参数提取逻辑也要同步更新**。
+  正确做法：`typeof input === "string" ? input : input?.url ?? ""`。
+- 下次：改函数签名时 grep 所有 `vi.mocked(...).mock.calls` 的参数
+  提取代码，确保兼容新旧两种调用方式。
+
+### 3.53 主题模式向后兼容（2026-08-17）
+- 场景：加 "system" 模式后，`parseTheme("dark")` 返回 `light`（旧格式被跳过）。
+- 认知：**扩展枚举值时必须处理旧格式**。"dark"/"light" 无 scheme 前缀的
+  旧格式必须显式判断：`if (saved === "dark") return { scheme: "sora", mode: "dark" }`。
+- 下次：加新 enum 值（如 system）时，先在 parse/dispatch 函数里处理所有
+  旧格式边界情况，写测试覆盖。
+
+### 3.54 localStorage 持久化用 JSON 序列化（2026-08-17）
+- 场景：搜索历史需要跨 session 保存（最多 20 条）。
+- 认知：简单列表数据直接 `JSON.stringify`/`JSON.parse` 存 localStorage
+  最可靠；需要 try-catch 防损坏；需要防重复（`filter(h => h !== trimmed)`）。
+- 下次：类似"最近 N 条"的缓存用 `数组.slice(0, N)` 控制上限 + 
+  去重用 `filter` + `unshift` 插入头部。
+
+### 3.55 legado 功能覆盖率 80%，补齐需按优先级（2026-08-17）
+- 场景：对比 legado 发现覆盖率约 80%，需补齐关键缺失功能。
+- 认知：**对比原版时用功能矩阵分级**（核心/体验/锦上添花），
+  而非逐条罗列。核心：WebDAV备份、自动更新、搜索历史/排序。
+  体验：跟随系统暗色、排行榜、睡眠定时。
+  非核心：多语言、书评。
+- 下次：功能规划用"影响面×实现成本"矩阵排序，核心功能优先。
+
