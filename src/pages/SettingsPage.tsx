@@ -228,6 +228,7 @@ export default function SettingsPage({ onOpenSourceManager }: {
               <div className="segmented" role="group" aria-label="明暗模式">
                 <button type="button" className={theme.mode === "light" ? "active" : ""} onClick={() => toggleMode("light")}>白天</button>
                 <button type="button" className={theme.mode === "dark" ? "active" : ""} onClick={() => toggleMode("dark")}>夜间</button>
+                <button type="button" className={theme.mode === "system" ? "active" : ""} onClick={() => toggleMode("system")}>跟随系统</button>
               </div>
             </div>
             <div className="settings-row">

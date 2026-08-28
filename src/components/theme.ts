@@ -1,7 +1,7 @@
 import { getSetting, setSetting } from "../services/api";
 
 export type ThemeScheme = "sora" | "koharu" | "yuuka" | "phoebe" | "wh";
-export type ThemeMode = "light" | "dark";
+export type ThemeMode = "light" | "dark" | "system";
 export interface Theme { scheme: ThemeScheme; mode: ThemeMode }
 
 export const SCHEMES: ThemeScheme[] = ["sora", "koharu", "yuuka", "phoebe", "wh"];
@@ -11,9 +11,12 @@ export const SCHEME_NAMES: Record<ThemeScheme, string> = {
 
 export function parseTheme(saved: string | null): Theme {
   if (!saved) return { scheme: "sora", mode: "light" };
+  // Legacy: "dark" or "light" without scheme prefix
+  if (saved === "dark") return { scheme: "sora", mode: "dark" };
+  if (saved === "light") return { scheme: "sora", mode: "light" };
   const [rawScheme, rawMode] = saved.split(":");
   const scheme: ThemeScheme = (SCHEMES as string[]).includes(rawScheme) ? rawScheme as ThemeScheme : "sora";
-  const mode: ThemeMode = rawMode === "dark" || saved === "dark" ? "dark" : "light";
+  const mode: ThemeMode = rawMode === "dark" ? "dark" : rawMode === "system" ? "system" : "light";
   return { scheme, mode };
 }
 
@@ -23,6 +26,18 @@ export function applyTheme(t: Theme) {
   const root = document.documentElement;
   root.setAttribute("data-scheme", t.scheme);
   root.setAttribute("data-mode", t.mode);
+  // 如果是 system 模式，监听系统深色模式变化
+  if (t.mode === "system") {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => root.setAttribute("data-mode", mq.matches ? "dark" : "light");
+    update();
+    mq.addEventListener("change", update);
+    // 清理之前的监听器
+    const prev = (window as any).__themeMediaQuery;
+    if (prev) prev.removeEventListener("change", (window as any).__themeListener);
+    (window as any).__themeMediaQuery = mq;
+    (window as any).__themeListener = update;
+  }
   listeners.forEach((l) => l());
 }
 
