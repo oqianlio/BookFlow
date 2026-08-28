@@ -106,7 +106,9 @@ describe("sourceVerify", () => {
     expect(r.groups).toEqual([]);
     // 默认关键字 "我的"（原版 CheckSource.keyword）
     expect(api.httpGet).toHaveBeenCalledTimes(1);
-    expect(String(vi.mocked(api.httpGet).mock.calls[0][0])).toContain(encodeURIComponent("我的"));
+    const callArg = vi.mocked(api.httpGet).mock.calls[0][0];
+    const url = typeof callArg === "string" ? callArg : callArg.url;
+    expect(url).toContain(encodeURIComponent("我的"));
   });
 
   it("uses ruleSearch.checkKeyWord to override the keyword (legado getCheckKeyword)", async () => {
@@ -115,7 +117,9 @@ describe("sourceVerify", () => {
     </body></html>`);
     const src = bs(1, "定制", okJson({ ruleSearch: { bookList: ".bookbox", name: ".bookname a@text", checkKeyWord: "斗破苍穹" } }));
     await verifySource(src);
-    expect(String(vi.mocked(api.httpGet).mock.calls[0][0])).toContain(encodeURIComponent("斗破苍穹"));
+    const callArg = vi.mocked(api.httpGet).mock.calls[0][0];
+    const url = typeof callArg === "string" ? callArg : callArg.url;
+    expect(url).toContain(encodeURIComponent("斗破苍穹"));
   });
 
   it("marks a source failed with failure group when search returns no matching items", async () => {
@@ -150,10 +154,10 @@ describe("sourceVerify", () => {
       <li class="bookname"><a href="/b/1.html">我的</a></li></ul></body></html>`;
     const tocHtml = `<html><body><ol class="chapters"><li><a href="/c/1.html">第一章</a></li><li><a href="/c/2.html">第二章</a></li></ol></body></html>`;
     const contentHtml = `<html><body><div class="content"><p>这是第一章的正文内容，足够长以通过最小长度校验，讲述故事的开端与人物登场。</p></div></body></html>`;
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
-      const u = String(url);
-      if (u.includes("/search")) return searchHtml;
-      if (u.includes("/c/")) return contentHtml;
+    vi.mocked(api.httpGet).mockImplementation(async (input: any) => {
+      const url = typeof input === "string" ? input : input?.url ?? "";
+      if (url.includes("/search")) return searchHtml;
+      if (url.includes("/c/")) return contentHtml;
       return tocHtml;
     });
     const src = bs(5, "全链源", okJson({
@@ -171,9 +175,9 @@ describe("sourceVerify", () => {
     const searchHtml = `<html><body><ul class="bookbox">
       <li class="bookname"><a href="/b/1.html">我的</a></li></ul></body></html>`;
     const tocHtml = `<html><body><div>目录为空，章节列表加载失败</div></body></html>`;
-    vi.mocked(api.httpGet).mockImplementation(async (url) => {
-      const u = String(url);
-      if (u.includes("/search")) return searchHtml;
+    vi.mocked(api.httpGet).mockImplementation(async (input: any) => {
+      const url = typeof input === "string" ? input : input?.url ?? "";
+      if (url.includes("/search")) return searchHtml;
       return tocHtml;
     });
     const src = bs(6, "目录坏", okJson({
