@@ -632,3 +632,21 @@
   非核心：多语言、书评。
 - 下次：功能规划用"影响面×实现成本"矩阵排序，核心功能优先。
 
+### 3.56 Rust 无 ++ 运算符（2026-08-17）
+- 场景：从 JS 转 Rust 时写了 `deleted++`，编译报错
+  "Rust has no postfix increment operator"。
+- 认知：**Rust 用 `+= 1` 代替 `++`**；`let mut deleted: usize = 0` 需显式
+  类型标注（否则后续 `Ok(deleted)` 可能推断不准）。
+- 下次：从 JS/TS 切换到 Rust 时，自增/自减运算符需要切换为
+  `+= 1` / `-= 1`。
+
+### 3.57 自动备份：延迟触发 + 双开关（2026-08-17）
+- 场景：自动备份在应用启动时延迟 10s 触发（避免阻塞启动），
+  设置页可开关（backup.autoEnabled）。
+- 认知：**后台任务用 setTimeout 延迟启动**，避免影响首屏渲染；
+  开关状态存 DB（getSetting/setSetting），跨 session 持久化。
+  自动备份写入 `app_data_dir/backups/auto-YYYY-MM-DD.json`，
+  保留最近 5 份（clean_old_backups）。
+- 下次：任何"自动执行"功能都要有开关 + 间隔控制 + 清理策略；
+  延迟启动防阻塞。
+
