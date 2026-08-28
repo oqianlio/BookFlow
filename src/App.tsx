@@ -15,6 +15,7 @@ import RssArticlePage from "./pages/RssArticlePage";
 import type { Book } from "./services/api";
 import { ErrorProvider } from "./components/ErrorDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { checkAllSources, type SourceHealth } from "./services/sourceHealth";
 import "./App.css";
 
 type OverlayState =
@@ -51,7 +52,20 @@ export default function App() {
 function AppInner() {
   const [state, setState] = useState<AppState>({ area: "bookshelf" });
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
+  const [sourceHealth, setSourceHealth] = useState<SourceHealth[]>([]);
+  const [healthChecking, setHealthChecking] = useState(false);
   const area = rootArea(state);
+
+  // 应用启动时自动检测源健康状态（延迟 3 秒避免阻塞 UI）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHealthChecking(true);
+      checkAllSources("我的", (done, total) => {
+        if (done === total) setHealthChecking(false);
+      }).then(setSourceHealth).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -191,6 +205,33 @@ function AppInner() {
             key="discover"
             onOpenExplore={(id, name) => setState({ area: "detail", page: "explore", sourceId: id, sourceName: name, back: state })}
           />
+        )}
+        {state.area === "discover" && sourceHealth.length > 0 && (
+          <div className="health-status">
+            <h3>源健康状态</h3>
+            {healthChecking ? (
+              <p>检查中...</p>
+            ) : (
+              <div className="health-grid">
+                <div className="health-stat">
+                  <span className="health-value">{sourceHealth.filter(h => h.searchOk).length}</span>
+                  <span className="health-label">搜索可用</span>
+                </div>
+                <div className="health-stat">
+                  <span className="health-value">{sourceHealth.filter(h => h.tocOk === true).length}</span>
+                  <span className="health-label">目录可用</span>
+                </div>
+                <div className="health-stat">
+                  <span className="health-value">{sourceHealth.filter(h => h.contentOk === true).length}</span>
+                  <span className="health-label">正文可用</span>
+                </div>
+                <div className="health-stat">
+                  <span className="health-value">{sourceHealth.filter(h => h.error).length}</span>
+                  <span className="health-label">检查失败</span>
+                </div>
+              </div>
+            )}
+          </div>
         )}
         {state.area === "rss" && (
           <RssPage

@@ -2189,10 +2189,18 @@ html[data-mode="dark"] .verify-badge.warn {
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius-sm);
   background: var(--surface-container-lowest);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.rss-feed-item:hover {
+  border-color: var(--outline);
+  background: var(--surface-container-low);
 }
 .rss-feed-item.active {
   border-color: var(--primary);
   background: var(--secondary-container);
+}
+.rss-feed-item.active:hover {
+  background: color-mix(in srgb, var(--secondary-container) 92%, var(--primary));
 }
 .rss-feed-title {
   flex: 1;
@@ -2216,6 +2224,73 @@ html[data-mode="dark"] .verify-badge.warn {
 .rss-feed-actions .btn {
   font-size: 11.5px;
   padding: 3px 8px;
+}
+.rss-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.rss-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-right: 6px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.hit-card.read {
+  opacity: 0.7;
+}
+.hit-card.read .hit-title {
+  color: var(--on-surface-variant);
+  font-weight: 500;
+}
+
+/* RSS 文章加载骨架 */
+.rss-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rss-skeleton-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+}
+.rss-skeleton-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--skeleton-base);
+  flex-shrink: 0;
+}
+.rss-skeleton-line {
+  height: 12px;
+  background: var(--skeleton-base);
+  border-radius: 4px;
+  flex: 1;
+}
+.rss-skeleton-line.short {
+  max-width: 120px;
+}
+.rss-skeleton-line.date {
+  max-width: 80px;
 }
 
 /* ============ 探索浏览页（左右分栏） ============ */
@@ -3127,6 +3202,45 @@ html[data-mode="dark"] .side-nav-item::before {
   font-size: 12px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* 书源健康状态卡片 */
+.health-status {
+  margin: 20px 0;
+  padding: 16px;
+  background: var(--surface-container-lowest);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--outline-variant);
+}
+.health-status h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.health-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  background: var(--surface-container-low);
+  border-radius: var(--radius-sm);
+}
+.health-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.health-label {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
+}
 }
 
 /* ============ 响应式优化 ============ */
